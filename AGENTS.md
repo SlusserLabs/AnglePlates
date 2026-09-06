@@ -23,6 +23,8 @@
 
 - Follow `.editorconfig`; avoid unrelated formatting and changes
 - Prefer focused implementations; avoid unnecessary abstractions, helper layers, and boilerplate
+- Add repository assets and processes only for the user's workflow; never persist agent-only verification helpers, scripts, reports, or tooling
+- The user runs coverage in Visual Studio 2026; do not add coverage scripts, configuration, dedicated packages, or CI gates unless explicitly requested
 - Remove unused code instead of commenting it out
 - Correct spelling errors without changing meaning
 - Do not include or reference publicly available code unless explicitly requested
@@ -107,15 +109,22 @@
 
 - Use TUnit with its awaited built-in assertions; do not introduce xUnit, Moq, or additional assertion libraries
 - Use Imposter only when a mock is needed; prefer concrete implementations or small fakes where practical
-- Use `Verify.TUnit` and `Verify.SourceGenerators` for generated-source and diagnostic snapshots; review changed snapshots before accepting them
-- Compile generated output before snapshot verification and execute generated renderers to verify runtime behavior
+- Keep test dependencies pinned; retain Roslyn 4.14.0 until a deliberate host-compatibility change is tested
+- Use `Verify.TUnit` and `Verify.SourceGenerators`; initialize once in `Infrastructure/ModuleInitializer.cs` and keep snapshots under `Snapshots`
+- Exclude snapshot C# from compilation; preserve LF snapshot settings and ignore `*.received.*`
+- Review every changed source and diagnostic snapshot manually; never enable automatic acceptance
+- Use `Infrastructure/GeneratorTestHelper` for consumer compilations, additional templates, analyzer options and tracked generator drivers
+- Compile generated output before snapshot verification; assert expected failure diagnostics and locations explicitly
+- Reuse the returned driver with the original consumer compilation for incremental reruns; never feed generated output back as input
+- Execute generated renderers to verify exact text and bytes
 - Prefer parameterized cases when only inputs and expected results differ; consolidate argument-validation cases into one method per class
 - Mirror source folders and namespaces; name classes `{ClassName}Tests` and methods `{MethodName}_{Scenario}_{Outcome}`
 - Use arrange/act/assert sections where useful and static helpers for repetitive setup; keep test logic out of constructors and lifecycle hooks
 - Isolate mutable state and mocks per test; dispose test and helper resources
 - Add assembly-level coverage exclusion in each test project's `Properties/AssemblyInfo.cs`
 - Cover valid inputs, boundaries, malformed templates, failures, diagnostics, and both rendering paths
-- Target 100% coverage through public entry points, including branches and emitted runtime code; report measured coverage separately from this target
+- Target 100% line and branch coverage separately for generator sources and emitted runtime code; report measured coverage separately from this target
+- Do not lower coverage thresholds or exclude product code to compensate for missing tests; keep test infrastructure excluded
 - For test-only tasks, do not change production behavior merely to make tests pass; report implementation defects
 - Keep package-consumer tests separate from the normal solution run and execute them after packing, using the freshly built package without source-tree imports or analyzer project references
 

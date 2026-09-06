@@ -64,7 +64,7 @@ There are limits to what this baseline establishes. Its `global.json` selects Mi
 | `Boilerplate.cs` | Source strings for runtime options and the two generic base classes, injected into consumer compilations. |
 | `buildTransitive/*.props`, `*.targets` | Template discovery and one compiler-visible access setting. |
 | `samples/HelloWorld` | Named .NET 10 console sample with C# 11, explicit imports, both renderers, and an analyzer project reference. |
-| `tests/AnglePlates.Tests` | Focused generated-compilation, diagnostic-contract and invalid-template tests; full regression suite remains planned. |
+| `tests/AnglePlates.Tests` | Focused tests plus generator and snapshot scaffolding; full regression suite remains planned. |
 | `tests/AnglePlates.PackageTests` | Separate package-consumer scaffold outside the solution; package wiring remains incomplete. |
 | `README.md` | Repository build/test instructions, sample link and current compatibility limits. |
 | `AGENTS.md` | Repository instructions migrated from the obsolete Copilot instructions on 2026-09-05; distinguishes current structure from planned test and release conventions. |
@@ -255,15 +255,17 @@ The correctness findings above remain prerequisites. The release work below is a
 
 ### 2. Make behavior and generated output regression-tested
 
-- [ ] Configure the TUnit project as a nonpackable .NET 10 executable and select `Microsoft.Testing.Platform` through `global.json`. Use TUnit's awaited built-in assertions and parameterized tests, with Verify for generated-source and diagnostic snapshots. The executable project model and built-in reporting/coverage extensions are documented in [TUnit installation](https://tunit.dev/docs/getting-started/installation/).
-- [ ] Mirror source folders/namespaces in tests. Name classes `{ClassName}Tests` and methods `{MethodName}_{Scenario}_{Outcome}`; test method names do not need an additional `Async` suffix. Use arrange/act/assert sections, static setup helpers, isolated per-test state and properly disposed resources. Group argument-validation cases per class. Add `Properties/AssemblyInfo.cs` with assembly-level coverage exclusion for test infrastructure, following the baseline.
-- [ ] Add a `GeneratorTestHelper` under `Infrastructure` that provides in-memory additional templates, analyzer options and consumer source, runs the real generator, and checks the resulting compilation before snapshot verification. Model/template failures must assert the expected diagnostics and locations rather than broadly accepting compilation errors.
-- [ ] Initialize Verify once through `Infrastructure/ModuleInitializer.cs` and store reviewed `*.g.verified.cs` and `*.verified.txt` artifacts in `Snapshots`. Require manual review of changed sources and diagnostics; a text snapshot alone does not prove compilation or correct rendering.
+Scaffolding prepared on 2026-09-05: the existing .NET 10 TUnit executable now has pinned Verify dependencies, reusable generator/consumer infrastructure and snapshot initialization. See [testing guidance](testing.md). No additional regression tests or reviewed snapshots were created in this preparation step. Coverage is performed in Visual Studio 2026; repository coverage tooling and CI gates are not requested.
+
+- [x] Configure the TUnit project as a nonpackable .NET 10 executable and select `Microsoft.Testing.Platform` through `global.json`. Use TUnit's awaited built-in assertions and parameterized tests, with Verify for generated-source and diagnostic snapshots. The executable project model and built-in reporting/coverage extensions are documented in [TUnit installation](https://tunit.dev/docs/getting-started/installation/).
+- [x] Mirror source folders/namespaces in tests. Name classes `{ClassName}Tests` and methods `{MethodName}_{Scenario}_{Outcome}`; test method names do not need an additional `Async` suffix. Use arrange/act/assert sections, static setup helpers, isolated per-test state and properly disposed resources. Group argument-validation cases per class. Add `Properties/AssemblyInfo.cs` with assembly-level coverage exclusion for test infrastructure, following the baseline.
+- [x] Add a `GeneratorTestHelper` under `Infrastructure` that provides in-memory additional templates, analyzer options and consumer source, runs the real generator, and checks the resulting compilation before snapshot verification. Model/template failures must assert the expected diagnostics and locations rather than broadly accepting compilation errors.
+- [x] Initialize Verify once through `Infrastructure/ModuleInitializer.cs` and store reviewed `*.g.verified.cs` and `*.verified.txt` artifacts in `Snapshots`. Require manual review of changed sources and diagnostics; a text snapshot alone does not prove compilation or correct rendering.
 - [ ] Cover parser token boundaries, comments, trim flags, false bracket starts, empty/unclosed blocks, delimiter-containing C# strings, directives, render selection, imports, class accessibility, duplicate names and invalid-file isolation. Snapshot both renderers and generated support types.
 - [ ] Execute generated methods and assert exact text and bytes for literals, expressions, loops, HTML escaping, raw writes, Unicode, null/culture behavior, multiple chunks and shared-writer child rendering. Count pool rents/returns, including exceptions and large values. Test writer ownership, final flush and cancellation according to the documented API contract.
 - [ ] Exercise incremental reruns: no input changes, one template changed, file added/removed, options changed and unrelated files changed. Assert output correctness and tracked-step reuse where caching is intended; AssemblyInfo's value-equatable inputs and stable hashed hint names provide useful implementation patterns.
-- [ ] Implement the baseline's 100% coverage target as a measurable check: collect compatible Microsoft.Testing.Platform coverage, define line/branch scope and exclusions, publish results, and fail CI below the agreed threshold. Cover renderer code that is emitted into consumer assemblies explicitly; generator-source coverage alone misses its runtime behavior. The baseline workflow does not already implement this gate.
-- [ ] Pin compatible package versions. At inspection, AssemblyInfo used Roslyn 5.6.0, TUnit 1.65.0, Verify.SourceGenerators 2.5.0 and Verify.TUnit 31.27.0. These are reference versions, not a requirement to choose the newest Roslyn API: select a Roslyn floor supported by the advertised compiler/IDE hosts and prove it in the compatibility tests.
+- [ ] Measure the 100% line/branch coverage target in Visual Studio 2026, including emitted renderer code. Do not add repository coverage tooling or CI gates unless explicitly requested.
+- [x] Pin compatible package versions. At inspection, AssemblyInfo used Roslyn 5.6.0, TUnit 1.65.0, Verify.SourceGenerators 2.5.0 and Verify.TUnit 31.27.0. These are reference versions, not a requirement to choose the newest Roslyn API: select a Roslyn floor supported by the advertised compiler/IDE hosts and prove it in the compatibility tests.
 
 ### 3. Define and validate the package contract
 
@@ -292,14 +294,14 @@ Create `.github/workflows/nuget.yml` following AssemblyInfo's three-job structur
 
 | Trigger | Version source | Required result |
 | --- | --- | --- |
-| Pull request to `main` | `Directory.Build.props` | Restore/build/test in Release, coverage and compatibility checks, pack, inspect, run package consumer, upload validated artifacts; no publishing. |
+| Pull request to `main` | `Directory.Build.props` | Restore/build/test in Release, compatibility checks, pack, inspect, run package consumer, upload validated artifacts; no publishing. |
 | Push to `main` | `Directory.Build.props` | Same verification sequence. |
 | Manual `workflow_dispatch` | `<VersionPrefix>-ci.<run number>` | Verify, then publish the validated artifact to the NuGet integration feed. |
 | GitHub Release `published` | Validated `vX.Y.Z` or prerelease tag with `v` removed | Verify the tagged commit, then publish to nuget.org when enabled and attach release artifacts. A tag push alone does not publish. |
 
 - [ ] Set the workflow SDK to the tested .NET 10 baseline and use supported versions of checkout, setup-dotnet and artifact actions. Pin explicit versions in implementation; the inspected action versions are evidence of AssemblyInfo's configuration, not a compatibility guarantee for a later setup.
 - [ ] Check out the release tag for release runs. Validate tag syntax before deriving the package version, and require the committed version and intended release version to agree. Reject malformed tags before packing.
-- [ ] Run all unit, generated-compilation, rendering, coverage, package-layout and package-consumer checks before uploading `artifacts/package` as the `nuget-package` artifact. Retain test/coverage reports and failed snapshot output for diagnosis.
+- [ ] Run all unit, generated-compilation, rendering, package-layout and package-consumer checks before uploading `artifacts/package` as the `nuget-package` artifact. Retain test reports and failed snapshot output for diagnosis.
 - [ ] Make both publish jobs depend on `verify`, download its artifacts, and publish those exact files without rebuilding. Preserve the baseline's per-ref concurrency grouping and `cancel-in-progress: false` so a later run does not interrupt an active release.
 - [ ] Use read-only repository permissions by default. Limit `id-token: write` to publishing jobs; grant `contents: write` to the production job that uploads release assets. PR verification must not require publishing credentials.
 - [ ] Use `NuGet/login` trusted publishing for short-lived credentials. Keep production gated by repository variable `NUGET_PUBLISH_ENABLED == 'true'` and environment `nuget-release`, matching AssemblyInfo. Manual runs target the integration feed, not production.
@@ -326,6 +328,6 @@ These are maintainer setup tasks outside the repository. No current AnglePlates 
 
 ### Release acceptance criteria
 
-A release candidate is ready when the existing correctness findings are fixed, the selected syntax/API contract is stable, the adopted conventions and documentation agree, all required tests and coverage gates pass, and a clean consumer runs using only the newly packed package. Package contents, symbols, source metadata and supported compiler/framework combinations must be verified automatically. The integration-feed rehearsal must pass before production is enabled, and production must publish the same validated artifact from the intended tag.
+A release candidate is ready when the existing correctness findings are fixed, the selected syntax/API contract is stable, the adopted conventions and documentation agree, all required tests pass and coverage is reviewed in Visual Studio 2026, and a clean consumer runs using only the newly packed package. Package contents, symbols, source metadata and supported compiler/framework combinations must be verified automatically. The integration-feed rehearsal must pass before production is enabled, and production must publish the same validated artifact from the intended tag.
 
 Post-release verification completes the process: the exact version restores from nuget.org, renders correctly in the clean consumer, and has matching release artifacts and documented changes. Until these checks exist and pass, successful local rendering or `dotnet pack` alone does not establish release readiness.
