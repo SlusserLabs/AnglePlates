@@ -54,7 +54,7 @@ There are limits to what this baseline establishes. Its `global.json` selects Mi
 | `sandbox/WebApplication1` | .NET 9 sample with a concrete model, one template, and explicit analyzer project reference. |
 | `tmp/template.html`, `tmp/generated.cs` | Tracked historical experiments; not current API examples. |
 | `README.md` | Untouched placeholder. |
-| `.github/copilot-instructions.md` | Claims tests and frameworks that are not present in the tracked repository. |
+| `AGENTS.md` | Repository instructions migrated from the obsolete Copilot instructions on 2026-09-05; distinguishes current structure from planned test and release conventions. |
 
 The generator project targets `netstandard2.0`; the sample targets `net9.0`. There is no `global.json`. Package references float at `4.*` for Roslyn and its analyzers, and `9.*` for .NET analyzers. Existing assets resolved Roslyn 4.14.0. Builds are therefore not pinned to one SDK or one future restore result.
 
@@ -225,7 +225,7 @@ Loading must be defined: resolving a compiled template by name is a comparativel
 
 ## Roadmap
 
-The correctness findings above remain prerequisites. The release work below is additionally required even after those defects are fixed. All checklist items represent outstanding work, not completed release guarantees.
+The correctness findings above remain prerequisites. The release work below is additionally required even after those defects are fixed. Unchecked items represent outstanding work; checked items record completed work, not release guarantees.
 
 ### 1. Establish the repository and API conventions
 
@@ -236,7 +236,7 @@ The correctness findings above remain prerequisites. The release work below is a
 - [ ] Prefer explicit `using` directives outside namespaces over fully qualified names; sort `System` first and remove unused imports. Generated sources must supply their own required imports. Where consumer-name ambiguity requires it, use explicit aliases and cover the collision in a compilation test. Implicit imports in the generator project do not make its generated code self-contained.
 - [ ] Use CRLF and UTF-8 for normal source/configuration files, with AssemblyInfo's explicit LF/UTF-8 normalization for Verify snapshot artifacts in `.gitattributes` and `.editorconfig`. Test template CRLF/LF semantics separately: snapshot normalization must not hide changes to rendered output.
 - [ ] Document public types and members with concise XML summaries; omit documentation boilerplate on internal/private implementation details. Keep generator-only helpers internal and use `Properties/AssemblyInfo.cs` for test visibility where needed. Remove abandoned commented code and stale `tmp` examples; replace the misleading WebApplication1 demo with a named, documented sample.
-- [ ] Replace contradictory repository instructions, particularly the claims about existing tests and xUnit/Moq. Record TUnit and Imposter as the selected conventions, with Imposter used only when a test actually needs a mock.
+- [x] Replace contradictory repository instructions with root `AGENTS.md` and remove `.github/copilot-instructions.md`. Record TUnit and Imposter as selected conventions, with Imposter used only when a test actually needs a mock; explicitly note that the test suite is not yet implemented.
 - [ ] Establish stable diagnostic IDs and category `SlusserLabs.AnglePlates` in `DiagnosticDescriptors.cs`, following AssemblyInfo's product-prefixed scheme. `SLAP001` onward is a proposed AnglePlates prefix, not an existing ID. If replacing `ANGLE001`–`ANGLE003`, do so before the first stable release and document the mapping. Add `AnalyzerReleases.Shipped.md` and `AnalyzerReleases.Unshipped.md` as analyzer additional files; the generator must ignore them as templates.
 
 ### 2. Make behavior and generated output regression-tested
