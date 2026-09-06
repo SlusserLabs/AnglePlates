@@ -2,19 +2,57 @@ root = true
 
 [*]
 spelling_exclusion_path = exclusion.dic
-vsspell_section_id = a7973c7026e0422bb9186684aa7a9e19
-vsspell_ignored_words_a7973c7026e0422bb9186684aa7a9e19 = File:exclusion.dic
+indent_style = space
+end_of_line = crlf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
 
 [*.cs]
 indent_size = 4
-indent_style = space
-trim_trailing_whitespace = true
-insert_final_newline = true
-charset = utf-8
 
-[*.{json,yml,yaml,xml,csproj,props,targets}]
+csharp_using_directive_placement = outside_namespace:warning
+csharp_prefer_braces = true:error
+csharp_prefer_simple_using_statement = true:warning
+csharp_prefer_simple_default_expression = true:warning
+csharp_style_namespace_declarations = file_scoped:warning
+
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method = false:warning
+dotnet_style_qualification_for_event = false:warning
+dotnet_style_predefined_type_for_locals_parameters_members = true:warning
+dotnet_style_predefined_type_for_member_access = true:warning
+dotnet_style_null_propagation = true:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# Do not warn about lowercase strings or unnecessary using directives
+dotnet_diagnostic.CA1308.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+
+# Naming: private fields use _camelCase
+dotnet_naming_rule.private_fields_should_be_camel_case.severity = warning
+dotnet_naming_rule.private_fields_should_be_camel_case.symbols = private_fields
+dotnet_naming_rule.private_fields_should_be_camel_case.style = camel_case_underscore_prefix
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.camel_case_underscore_prefix.required_prefix = _
+dotnet_naming_style.camel_case_underscore_prefix.capitalization = camel_case
+
+
+[*.{json,xml,yml,yaml,csproj,slnx,props,targets}]
 indent_size = 2
-indent_style = space
-trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.verified.cs]
+end_of_line = lf
 insert_final_newline = true
-charset = utf-8
+
+[*.verified.txt]
+end_of_line = lf
+insert_final_newline = false

@@ -1,0 +1,19 @@
+#type HelloWorld
+#model SlusserLabs.AnglePlates.Samples.HelloWorld.ViewModels.HelloWorldViewModel
+#namespace SlusserLabs.AnglePlates.Samples.HelloWorld.Templates
+#render Utf8, Text
+#access internal
+<!DOCTYPE html>
+<html>
+<head>
+    <title>[[ model.Title ]]</title>
+</head>
+<body>
+    <h1>[[ model.Title ]]</h1>
+    [%- foreach (var p in model.Paragraphs) { %]
+    <p>[[ p ]]</p>
+    [%- } -%]
+</body>
+</html>
+[*- Comment -*]
+#not directive

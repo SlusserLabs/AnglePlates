@@ -10,14 +10,14 @@
 ## Current Repository
 
 - AnglePlates is a compile-time template engine prototype using a Roslyn incremental source generator
-- `SlusserLabs.AnglePlates.sln` contains the `netstandard2.0` generator in `src/SlusserLabs.AnglePlates` and the `net9.0` sample in `sandbox/WebApplication1`
+- `AnglePlates.slnx` contains the `netstandard2.0` generator in `src/AnglePlates`, the .NET 10 console sample in `samples/HelloWorld`, and `tests/AnglePlates.Tests`
 - `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TextTemplateTranspiler.cs` and `Utf8TemplateTranspiler.cs` emit rendering code
 - `TemplateGenerator.cs` coordinates generation; `Boilerplate.cs` supplies generated runtime support types; `buildTransitive` contains template discovery assets
-- Use `sandbox/WebApplication1/Templates/hello-world.html` as the current example; `tmp` contains historical experiments
-- No maintained test suite or CI workflow exists yet; packaging and consumer compatibility remain incomplete
-- Planned paths are `AnglePlates.slnx`, `src/AnglePlates`, `tests/AnglePlates.Tests`, and `tests/AnglePlates.PackageTests`; do not treat them as existing paths
-- Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace during the planned rename
-- Adopt .NET 10 for future test applications and CI; retain the generator's `netstandard2.0` target unless a compatibility change is deliberate and tested
+- Use `samples/HelloWorld/Templates/hello-world.html` as the current example
+- Focused generated-compilation tests exist; the full regression suite, CI workflow, packaging, and consumer compatibility remain incomplete
+- Keep `tests/AnglePlates.PackageTests` outside the solution; it is a package-consumer scaffold until the package contract is implemented
+- Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
+- Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target unless a compatibility change is deliberate and tested
 
 ## General Practices
 
@@ -103,7 +103,7 @@
 - Use braces for generic type parameters and `c` tags for inline code; avoid `CDATA` and `code` tags
 - Use `inheritdoc` as the sole documentation element for inherited members
 
-## Testing Conventions to Adopt
+## Testing Conventions
 
 - Use TUnit with its awaited built-in assertions; do not introduce xUnit, Moq, or additional assertion libraries
 - Use Imposter only when a mock is needed; prefer concrete implementations or small fakes where practical
@@ -121,8 +121,8 @@
 
 ## Validation
 
-- Use the existing solution and sample paths until the planned rename is implemented
+- Use `AnglePlates.slnx` and `samples/HelloWorld` for solution and sample validation
 - For code changes, restore and build the solution, then run the sample when generation or rendering is affected
-- Run focused regression tests once the test projects exist; until then, report the limits of sample or temporary-probe validation
+- Run focused tests and report their scope; do not imply the complete roadmap regression suite exists
 - For documentation-only changes, check links, consistency, whitespace, and line endings; a build is unnecessary
 - Report what changed, what was verified, and any remaining limitations; do not claim release readiness, coverage, or performance without evidence

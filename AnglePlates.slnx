@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitattributes" />
+    <File Path=".gitignore" />
+    <File Path="AGENTS.md" />
+    <File Path="docs/roadmap.md" />
+    <File Path="exclusion.dic" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/AnglePlates/AnglePlates.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/HelloWorld/HelloWorld.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AnglePlates.Tests/AnglePlates.Tests.csproj" />
+  </Folder>
+</Solution>

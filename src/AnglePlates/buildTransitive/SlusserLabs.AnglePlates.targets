@@ -1,0 +1,13 @@
+<Project>
+
+  <ItemGroup>
+    <!-- Include everything in the default folder(s)  -->
+    <AnglePlate Include="$(AnglePlateTemplates)\**\*" Condition="Exists('$(AnglePlateTemplates)')" />
+    <AnglePlate Include="$(AnglePlateViews)\**\*" Condition="Exists('$(AnglePlateViews)')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="@(AnglePlate)" />
+  </ItemGroup>
+
+</Project>

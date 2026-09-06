@@ -1,6 +1,8 @@
 # AnglePlates status and release roadmap
 
-Status reviewed 2026-09-05 against AnglePlates commit `0696d93729b0c93b0dd74055555654864efebb7c`. This document describes implemented behavior, known defects, and the work required for a supported NuGet release. Proposed changes are not implemented unless explicitly identified as verified.
+Status reviewed 2026-09-05 against AnglePlates commit `0696d93729b0c93b0dd74055555654864efebb7c`. This document describes implemented behavior, known defects, and the work required for a supported NuGet release. Section 1 conventions were subsequently completed on 2026-09-05, including diagnostic IDs/categories and release inventories. Historical inspection results below remain tied to that commit; current paths and status are updated separately.
+
+This roadmap provides direction, not a patch specification. Regardless of what it states, explicit user direction, best practices, and common sense always supersede its prescriptions. Verify assumptions against the affected code and build behavior; correct mistaken requirements rather than implementing them literally.
 
 ## Overall assessment
 
@@ -8,13 +10,13 @@ AnglePlates is a working compile-time template engine prototype. Its central arc
 
 The design supports efficient typed rendering without runtime template parsing, reflection-based model lookup, or buffering the whole output inside the renderer. UTF-8 literals are pre-encoded, and generated methods write to a caller-owned byte writer. Rendering still performs allocations and copies, particularly for dynamic values.
 
-This is not yet a release-ready general-purpose library. Reproduced parser and buffer-pool defects, incomplete packaging, fragile generated-code dependencies, limited diagnostics, and the absence of a maintained test suite are more immediate gaps than adding a loader. Nested rendering is possible through C# already; a first-class composition API is absent.
+This is not yet a release-ready general-purpose library. Reproduced parser and buffer-pool defects, incomplete packaging, unqualified consumer compatibility, limited diagnostics, and the absence of a complete regression suite are more immediate gaps than adding a loader. Nested rendering is possible through C# already; a first-class composition API is absent.
 
 ## Release baseline and convention precedence
 
 The release baseline is [SlusserLabs/AssemblyInfo](https://github.com/SlusserLabs/AssemblyInfo), reviewed from its local working tree at HEAD `d9acada25c2ca37dbd54de0d130caf14fe1d3781` (2026-08-22). The solution and license had local modifications when inspected. Findings describe the inspected files; they do not certify the published package, CI history, or remote account settings. AssemblyInfo was read only and its build was not rerun.
 
-AssemblyInfo's conventions take precedence over conflicting AnglePlates conventions. The following sections state the resulting requirements directly so contributors do not need another checkout. Paths in the architecture and findings sections describe the current tree; the release plan specifies the proposed names.
+AssemblyInfo's conventions take precedence over conflicting AnglePlates conventions. The following sections state the resulting requirements directly so contributors do not need another checkout. Paths in the repository map and examples describe the current tree; original inspection commands retain their historical paths.
 
 | Area | AssemblyInfo baseline | Required AnglePlates direction |
 | --- | --- | --- |
@@ -32,37 +34,48 @@ Useful reference files are AssemblyInfo's [project](https://github.com/SlusserLa
 
 There are limits to what this baseline establishes. Its `global.json` selects Microsoft.Testing.Platform but does not pin an SDK; its workflow selects .NET `10.0.x`. Its rules require 100% coverage, but the inspected workflow has no coverage collection or threshold check. Imposter is prescribed by its rules but is not a dependency of its existing unit-test project. These are distinctions between convention, implementation and measured evidence.
 
-## What was verified
+## Original inspection verification
 
 - `dotnet build SlusserLabs.AnglePlates.sln --no-restore` succeeded using installed SDK 10.0.400 and existing restored assets: zero errors, two sample-model analyzer warnings (CA1515 and CA1002). This was not a clean-machine restore test.
-- `dotnet run --project sandbox/WebApplication1 --no-build --no-launch-profile` succeeded and printed the example HTML. The application currently runs a console demonstration despite using the Web SDK.
+- `dotnet run --project sandbox/WebApplication1 --no-build --no-launch-profile` succeeded and printed the example HTML. At inspection the application ran a console demonstration despite using the Web SDK.
 - A temporary inspection harness under ignored `obj/inspection` compiled the current parser, generator and transpilers alongside freshly generated sample classes. It exercised tokenization, directive behavior, generation failures, text/UTF-8 output parity, encoding disabled, large-value pool usage, compilation without global imports, and child-template composition.
 - `dotnet pack ... --no-restore` succeeded. The resulting package was opened and inspected; successful packing does not mean its source-generator installation wiring is correct.
-- No tracked test projects, benchmark projects, or CI workflow were found. These focused inspection probes are not a replacement for a maintained regression suite. No throughput benchmark, AOT publish, clean NuGet consumer installation, or target-framework compatibility matrix was run.
+- At inspection no tracked test projects, benchmark projects, or CI workflow were found. These focused inspection probes are not a replacement for a maintained regression suite. No throughput benchmark, AOT publish, clean NuGet consumer installation, or target-framework compatibility matrix was run.
+
+## Section 1 implementation verification
+
+- `dotnet restore AnglePlates.slnx --source https://api.nuget.org/v3/index.json` succeeded using SDK 10.0.400.
+- `dotnet build AnglePlates.slnx --no-restore` succeeded with zero warnings and errors.
+- All nine focused TUnit cases passed: two C# 11 consumer compilation cases, four required-directive diagnostic cases, and three invalid-template cases verifying that filenames do not exempt inputs from validation. All cases compile generated output.
+- `dotnet run --project samples/HelloWorld --no-build --no-launch-profile` rendered the example and checked exact UTF-8 bytes against the text output.
+- Centralized diagnostics now use `SLAP001`–`SLAP003` and category `SlusserLabs.AnglePlates`; titles, messages, severity and default enablement are preserved. Both release inventories are additional files for the analyzers compiling the generator project; they do not automatically become inputs to the generator in consuming projects. No filename exclusion is needed. See the [diagnostic mapping and maintenance contract](diagnostics.md).
+- Removed the unused `System.Runtime.CompilerServices/IsExternalInit.cs` shim. AnglePlates' sole record, `TemplateFile`, uses an explicit constructor and get-only properties, with no `init` accessors. The local AssemblyInfo reference also targets `netstandard2.0` and uses records with ordinary setters or constructor-assigned get-only properties without a shim. AnglePlates builds successfully without it, preserving record value equality. Introducing `init` accessors (including synthesized ones on positional record classes) would require revisiting this compatibility support.
+- Package-consumer execution remains pending the package-layout work; the separate project is a scaffold, not evidence of package usability. No full regression or coverage claim is made.
 
 ## Current repository map
 
 | Area | Purpose and state |
 | --- | --- |
-| `src/SlusserLabs.AnglePlates/TemplateGenerator.cs` | Actual incremental generator; selects inputs, parses, validates required directives, emits support and template classes. |
+| `src/AnglePlates/TemplateGenerator.cs` | Actual incremental generator; selects inputs, parses, validates required directives, emits support and template classes. |
 | `TemplateParser.cs`, `SpanReader.cs`, `Token.cs`, `TokenType.cs` | Flat tokenizer using spans and source offsets. No C# syntax tree or HTML parser. |
 | `TemplateParserOptions.cs` | Default delimiters and whitespace characters; low-level customization fields. |
 | `TemplateTranspilerOptions.cs` | Converts directive tokens into class/rendering options. |
 | `TextTemplateTranspiler.cs`, `Utf8TemplateTranspiler.cs` | Emit C# source for the two writer types. Substantially duplicated implementations. |
 | `Boilerplate.cs` | Source strings for runtime options and the two generic base classes, injected into consumer compilations. |
 | `buildTransitive/*.props`, `*.targets` | Template discovery and one compiler-visible access setting. |
-| `sandbox/WebApplication1` | .NET 9 sample with a concrete model, one template, and explicit analyzer project reference. |
-| `tmp/template.html`, `tmp/generated.cs` | Tracked historical experiments; not current API examples. |
-| `README.md` | Untouched placeholder. |
+| `samples/HelloWorld` | Named .NET 10 console sample with C# 11, explicit imports, both renderers, and an analyzer project reference. |
+| `tests/AnglePlates.Tests` | Focused generated-compilation, diagnostic-contract and invalid-template tests; full regression suite remains planned. |
+| `tests/AnglePlates.PackageTests` | Separate package-consumer scaffold outside the solution; package wiring remains incomplete. |
+| `README.md` | Repository build/test instructions, sample link and current compatibility limits. |
 | `AGENTS.md` | Repository instructions migrated from the obsolete Copilot instructions on 2026-09-05; distinguishes current structure from planned test and release conventions. |
 
-The generator project targets `netstandard2.0`; the sample targets `net9.0`. There is no `global.json`. Package references float at `4.*` for Roslyn and its analyzers, and `9.*` for .NET analyzers. Existing assets resolved Roslyn 4.14.0. Builds are therefore not pinned to one SDK or one future restore result.
+The generator project targets `netstandard2.0`; the sample and test applications target `net10.0`. `global.json` selects stable .NET 10 SDKs and Microsoft.Testing.Platform. The sample and generated-compilation tests use C# 11 for consumer code; older consumer frameworks remain unqualified. Package references float at `4.*` for Roslyn and its analyzers, and `9.*` for .NET analyzers. Existing assets resolved Roslyn 4.14.0. The SDK policy allows .NET 10 feature-band roll-forward, and generator package versions still float; reproducible dependency pinning remains later roadmap work.
 
 ## End-to-end architecture
 
 1. MSBuild includes all files recursively beneath `Templates` and `Views` through the `AnglePlate` item. Paths can be changed with `AnglePlateTemplates` and `AnglePlateViews`; explicit `AnglePlate` items are also possible.
 2. Those items become Roslyn `AdditionalFiles`. There is no extension filter.
-3. The generator actually inspects every additional text, not just a tagged AnglePlate subset. It accepts nonempty files whose decoded content begins immediately with `#`. Leading whitespace or an initial blank line silently excludes a file. Unrelated additional files beginning with `#` can be mistaken for templates.
+3. The generator inspects every additional text, not just a tagged AnglePlate subset. It accepts nonempty files whose decoded content begins immediately with `#`. Leading whitespace or an initial blank line silently excludes a file. Unrelated additional files beginning with `#` can be mistaken for templates.
 4. The parser consumes consecutive directive lines at the start, then emits literal, variable, code and comment tokens. Tokens store offsets and trim flags rather than copies of their contents.
 5. Directives select the namespace, model, class-name prefix, renderer flags and access modifier. Three required-field diagnostics run.
 6. The generator injects `TemplateOptions`, `TextTemplate<TModel>` and `Utf8Template<TModel>` into the consumer assembly. These support types are emitted even if no template qualifies, and both renderer bases are always emitted.
@@ -75,13 +88,14 @@ Template discovery and configuration use files and directives. Partial classes r
 
 ## Template syntax
 
-The current working example is `sandbox/WebApplication1/Templates/hello-world.html`.
+The current working example is `samples/HelloWorld/Templates/hello-world.html`.
 
 ```text
 #type HelloWorld
-#model WebApplication1.ViewModels.HelloWorldViewModel
-#namespace WebApplication1.Templates
+#model SlusserLabs.AnglePlates.Samples.HelloWorld.ViewModels.HelloWorldViewModel
+#namespace SlusserLabs.AnglePlates.Samples.HelloWorld.Templates
 #render Utf8, Text
+#access internal
 <h1>[[ model.Title ]]</h1>
 [%- foreach (var p in model.Paragraphs) { %]
 <p>[[ p ]]</p>
@@ -104,7 +118,7 @@ Directives are line-based, must be consecutive at the very beginning, and are st
 
 Directive keywords are case-sensitive prefix matches rather than exact words: for example, `#models ...` matches `model` with an unintended leading `s` in the value. Unknown directives are silently removed. Repeated scalar directives use the last value; renderer selections accumulate.
 
-`AnglePlateBaseAccessModifier` is a project setting controlling generated support-type accessibility, default `public`. It is separate from `#access`; incompatible combinations, such as a public template inheriting an internal base, can cause compiler errors. The commented item-level `Visiblity` example in the targets is not implemented metadata.
+`AnglePlateBaseAccessModifier` is a project setting controlling generated support-type accessibility, default `public`. It is separate from `#access`; incompatible combinations, such as a public template inheriting an internal base, can cause compiler errors. Item-level accessibility metadata is not implemented.
 
 ### Expressions, code and comments
 
@@ -135,7 +149,7 @@ Generated classes have a public constructor accepting optional `TemplateOptions`
 - UTF-8: `Render(TModel model, IBufferWriter<byte> writer)`.
 - UTF-8 base convenience method: `RenderAsync(TModel model, PipeWriter writer, CancellationToken cancellationToken = default)`.
 
-To obtain a string, use a `StringWriter` (the sample wraps a `StringBuilder`). There is no convenience method returning a string. To collect bytes, an `ArrayBufferWriter<byte>` works; a response `BodyWriter` can receive bytes directly.
+To obtain a string, use a `StringWriter` (as in the sample). There is no convenience method returning a string. To collect bytes, an `ArrayBufferWriter<byte>` works; a response `BodyWriter` can receive bytes directly.
 
 `RenderAsync` renders everything synchronously first and then flushes once. It does not permit `await` in template blocks, observe cancellation during rendering, or apply asynchronous backpressure between chunks. The synchronous methods do not own or dispose the supplied writer.
 
@@ -193,11 +207,11 @@ Hint names contain only the declared type prefix and renderer suffix. Two templa
 
 Missing required fields report ANGLE001/002/003, then `return` exits the entire source-output callback. A bad template followed by a valid template emitted only the three support files. Continue per template and report independent errors.
 
-### 6. Imports and generated-code self-containment are incomplete — reproduced
+### 6. Directive imports and consumer compatibility remain incomplete
 
-`#using` is never consumed by either transpiler. Generated files also rely on unqualified framework names and extension methods supplied by the consumer's global imports. The probe failed without global imports (`TextWriter`, `Lazy<>`, `ValueTask<>`, `CancellationToken`, span helpers, and more) and compiled with suitable imports.
+`#using` is still not consumed by either transpiler. Section 1 replaces generated framework references with explicit imports and aliases, addressing the original probe failure without consumer global imports. Focused compilation tests cover absent implicit imports and framework-name collisions. Directive import semantics remain separate work.
 
-Both support renderers are emitted unconditionally, bringing `System.IO.Pipelines` references even to text-only consumers. The sample's Web SDK supplies the needed framework environment. `netstandard2.0` describes the generator assembly, not the compatibility of generated runtime code; that code uses newer APIs, and UTF-8 output uses C# 11 literals. Minimum supported consumer framework/language versions need to be established and tested.
+Both support renderers are emitted unconditionally, bringing `System.IO.Pipelines` references even to text-only consumers. The console sample explicitly references `Microsoft.AspNetCore.App` to supply this dependency. `netstandard2.0` describes the generator assembly, not the compatibility of generated runtime code; that code uses newer APIs, and UTF-8 output uses C# 11 literals. C# 11 and .NET 10 consumer compilation are exercised locally. Older consumer frameworks and the minimum compiler/IDE host matrix remain to be qualified.
 
 ### 7. NuGet source-generator distribution is unfinished — package inspected
 
@@ -229,15 +243,15 @@ The correctness findings above remain prerequisites. The release work below is a
 
 ### 1. Establish the repository and API conventions
 
-- [ ] Rename the solution to `AnglePlates.slnx` and the main project to `src/AnglePlates/AnglePlates.csproj`. Update solution entries, imports, analyzer references, launch settings, documentation and workflow paths together. Preserve the explicit main assembly/package/root namespace `SlusserLabs.AnglePlates`.
-- [ ] Add `tests/AnglePlates.Tests/AnglePlates.Tests.csproj` with root namespace `SlusserLabs.AnglePlates.Tests` and `tests/AnglePlates.PackageTests/AnglePlates.PackageTests.csproj` with root namespace `SlusserLabs.AnglePlates.PackageTests`. Follow AssemblyInfo's default short test assembly names; any `InternalsVisibleTo` must use the actual assembly name, such as `AnglePlates.Tests`, rather than its root namespace.
-- [ ] Use .NET 10 for repository test applications and CI, retaining `netstandard2.0` for the generator host assembly unless compatibility testing supports a deliberate change. Define generated-code consumer frameworks and C# versions separately. Moving development to .NET 10 does not by itself require .NET 10 consumers.
-- [ ] Adopt AssemblyInfo's `.editorconfig` and applicable `AGENTS.md` conventions: file-scoped namespaces, one type per file for new files, traditional constructors rather than primary constructors, braces on separate lines, four-space C# indentation, `_camelCase` private fields including constants, and PascalCase public symbols. Use `cancellationToken` rather than `ct`, with the async and naming conventions in the baseline.
-- [ ] Prefer explicit `using` directives outside namespaces over fully qualified names; sort `System` first and remove unused imports. Generated sources must supply their own required imports. Where consumer-name ambiguity requires it, use explicit aliases and cover the collision in a compilation test. Implicit imports in the generator project do not make its generated code self-contained.
-- [ ] Use CRLF and UTF-8 for normal source/configuration files, with AssemblyInfo's explicit LF/UTF-8 normalization for Verify snapshot artifacts in `.gitattributes` and `.editorconfig`. Test template CRLF/LF semantics separately: snapshot normalization must not hide changes to rendered output.
-- [ ] Document public types and members with concise XML summaries; omit documentation boilerplate on internal/private implementation details. Keep generator-only helpers internal and use `Properties/AssemblyInfo.cs` for test visibility where needed. Remove abandoned commented code and stale `tmp` examples; replace the misleading WebApplication1 demo with a named, documented sample.
-- [x] Replace contradictory repository instructions with root `AGENTS.md` and remove `.github/copilot-instructions.md`. Record TUnit and Imposter as selected conventions, with Imposter used only when a test actually needs a mock; explicitly note that the test suite is not yet implemented.
-- [ ] Establish stable diagnostic IDs and category `SlusserLabs.AnglePlates` in `DiagnosticDescriptors.cs`, following AssemblyInfo's product-prefixed scheme. `SLAP001` onward is a proposed AnglePlates prefix, not an existing ID. If replacing `ANGLE001`–`ANGLE003`, do so before the first stable release and document the mapping. Add `AnalyzerReleases.Shipped.md` and `AnalyzerReleases.Unshipped.md` as analyzer additional files; the generator must ignore them as templates.
+- [x] Rename the solution to `AnglePlates.slnx` and the main project to `src/AnglePlates/AnglePlates.csproj`. Update solution entries, imports, analyzer references, launch settings, documentation and workflow paths together. Preserve the explicit main assembly/package/root namespace `SlusserLabs.AnglePlates`.
+- [x] Add `tests/AnglePlates.Tests/AnglePlates.Tests.csproj` with root namespace `SlusserLabs.AnglePlates.Tests` and `tests/AnglePlates.PackageTests/AnglePlates.PackageTests.csproj` with root namespace `SlusserLabs.AnglePlates.PackageTests`. Follow AssemblyInfo's default short test assembly names; any `InternalsVisibleTo` must use the actual assembly name, such as `AnglePlates.Tests`, rather than its root namespace.
+- [x] Use .NET 10 for repository test applications and CI, retaining `netstandard2.0` for the generator host assembly unless compatibility testing supports a deliberate change. Define generated-code consumer frameworks and C# versions separately. Moving development to .NET 10 does not by itself require .NET 10 consumers.
+- [x] Adopt AssemblyInfo's `.editorconfig` and applicable `AGENTS.md` conventions: file-scoped namespaces, one type per file for new files, traditional constructors rather than primary constructors, braces on separate lines, four-space C# indentation, `_camelCase` private fields including constants, and PascalCase public symbols. Use `cancellationToken` rather than `ct`, with the async and naming conventions in the baseline.
+- [x] Prefer explicit `using` directives outside namespaces over fully qualified names; sort `System` first and remove unused imports. Generated sources must supply their own required imports. Where consumer-name ambiguity requires it, use explicit aliases and cover the collision in a compilation test. Implicit imports in the generator project do not make its generated code self-contained.
+- [x] Use CRLF and UTF-8 for normal source/configuration files, with AssemblyInfo's explicit LF/UTF-8 normalization for Verify snapshot artifacts in `.gitattributes` and `.editorconfig`. Test template CRLF/LF semantics separately: snapshot normalization must not hide changes to rendered output.
+- [x] Document public types and members with concise XML summaries; omit documentation boilerplate on internal/private implementation details. Keep generator-only helpers internal and use `Properties/AssemblyInfo.cs` for test visibility where needed. Remove abandoned commented code and stale `tmp` examples; replace the misleading WebApplication1 demo with a named, documented sample.
+- [x] Replace contradictory repository instructions with root `AGENTS.md` and remove `.github/copilot-instructions.md`. Record TUnit and Imposter as selected conventions, with Imposter used only when a test actually needs a mock; explicitly distinguish the focused convention tests from the full planned regression suite.
+- [x] Establish stable diagnostic IDs `SLAP001`–`SLAP003` and category `SlusserLabs.AnglePlates` in `DiagnosticDescriptors.cs`, following AssemblyInfo's product-prefixed scheme. Replace prototype `ANGLE001`–`ANGLE003` before the first stable release and [document the mapping](diagnostics.md). Add `AnalyzerReleases.Shipped.md` and `AnalyzerReleases.Unshipped.md` as analyzer additional files in the generator project. Verify the diagnostic contract with compilation tests. The original requirement to exclude these filenames from template discovery was mistaken: these build inputs do not flow into consuming projects, and explicitly supplied template inputs receive normal validation regardless of filename.
 
 ### 2. Make behavior and generated output regression-tested
 
