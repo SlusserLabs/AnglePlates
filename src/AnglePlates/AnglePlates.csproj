@@ -5,34 +5,51 @@
     <AssemblyName>SlusserLabs.AnglePlates</AssemblyName>
     <PackageId>SlusserLabs.AnglePlates</PackageId>
     <RootNamespace>SlusserLabs.AnglePlates</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <BuildOutputTargetFolder>analyzers/dotnet/cs</BuildOutputTargetFolder>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <Title>AnglePlates</Title>
+    <Description>Compile-time templates with generated text and UTF-8 renderers.</Description>
+    <Authors>Jacob Slusser</Authors>
+    <Copyright>SlusserLabs, Jacob Slusser, and/or affiliate. All rights reserved.</Copyright>
+    <PackageTags>templates;source-generator;roslyn;html;utf8</PackageTags>
+    <PackageProjectUrl>https://github.com/SlusserLabs/AnglePlates</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <LangVersion>latest</LangVersion>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="4.*">
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="4.14.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.*" />
-    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.*">
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>
 
-  <!-- Compile as Roslyn component -->
   <PropertyGroup>
     <IsRoslynComponent>true</IsRoslynComponent>
   </PropertyGroup>
 
-  <!-- Include the build props/targets in the NuGet package -->
   <ItemGroup>
     <Content Include="buildTransitive\SlusserLabs.AnglePlates.props" Pack="true" PackagePath="buildTransitive\" />
     <Content Include="buildTransitive\SlusserLabs.AnglePlates.targets" Pack="true" PackagePath="buildTransitive\" />

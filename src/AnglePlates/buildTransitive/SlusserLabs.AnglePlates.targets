@@ -1,13 +1,16 @@
 <Project>
 
-  <ItemGroup>
-    <!-- Include everything in the default folder(s)  -->
-    <AnglePlate Include="$(AnglePlateTemplates)\**\*" Condition="Exists('$(AnglePlateTemplates)')" />
-    <AnglePlate Include="$(AnglePlateViews)\**\*" Condition="Exists('$(AnglePlateViews)')" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <AdditionalFiles Include="@(AnglePlate)" />
-  </ItemGroup>
+  <Target Name="CollectAnglePlateTemplates" BeforeTargets="GenerateMSBuildEditorConfigFile">
+    <ItemGroup>
+      <AnglePlate Include="$(AnglePlateTemplates)\**\*" Exclude="$(AnglePlateExclude)" Condition="Exists('$(AnglePlateTemplates)')" />
+      <AnglePlate Include="$(AnglePlateViews)\**\*" Exclude="$(AnglePlateExclude)" Condition="Exists('$(AnglePlateViews)')" />
+    </ItemGroup>
+    <RemoveDuplicates Inputs="@(AnglePlate)">
+      <Output TaskParameter="Filtered" ItemName="_DistinctAnglePlate" />
+    </RemoveDuplicates>
+    <ItemGroup>
+      <AdditionalFiles Include="@(_DistinctAnglePlate)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

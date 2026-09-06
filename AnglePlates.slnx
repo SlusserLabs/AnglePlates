@@ -4,10 +4,13 @@
     <File Path=".gitattributes" />
     <File Path=".gitignore" />
     <File Path="AGENTS.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="LICENSE" />
     <File Path="docs/roadmap.md" />
     <File Path="exclusion.dic" />
     <File Path="global.json" />
     <File Path="README.md" />
+    <File Path="icon.png" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AnglePlates/AnglePlates.csproj" />

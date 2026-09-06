@@ -7,6 +7,7 @@
     <!-- Default folder(s) -->
     <AnglePlateTemplates Condition="'$(AnglePlateTemplates)' == ''">$(ProjectDir)Templates</AnglePlateTemplates>
     <AnglePlateViews Condition="'$(AnglePlateViews)' == ''">$(ProjectDir)Views</AnglePlateViews>
+    <AnglePlateExclude Condition="'$(AnglePlateExclude)' == ''"></AnglePlateExclude>
   </PropertyGroup>
 
   <ItemGroup>

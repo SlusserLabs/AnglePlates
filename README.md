@@ -9,9 +9,18 @@ Use a .NET 10 SDK to work on this repository. `global.json` allows installed sta
 - Test: `dotnet test --solution AnglePlates.slnx --no-build`
 - Run the [HelloWorld sample](samples/HelloWorld/README.md): `dotnet run --project samples/HelloWorld --no-build --no-launch-profile`
 
-The generator lives in `src/AnglePlates` and retains the assembly name, package ID and root namespace `SlusserLabs.AnglePlates`. Focused compilation and diagnostic tests live in `tests/AnglePlates.Tests`. The separate `tests/AnglePlates.PackageTests` project is a package-consumer scaffold outside the solution; package distribution is still incomplete.
+The generator lives in `src/AnglePlates` and retains the assembly name, package ID and root namespace `SlusserLabs.AnglePlates`. Focused compilation and diagnostic tests live in `tests/AnglePlates.Tests`. The separate `tests/AnglePlates.PackageTests` project validates a freshly packed analyzer-only package outside the solution.
 
-The generator host targets `netstandard2.0` and currently references Roslyn 4.x. The sample and compilation tests exercise generated code on .NET 10 with C# 11, independently of the host target. Generated UTF-8 literals require C# 11; generated support types require `System.IO.Pipelines` even for text-only templates. The sample supplies that dependency with an explicit `Microsoft.AspNetCore.App` framework reference. Earlier consumer frameworks and compiler hosts have not been qualified; repository use of .NET 10 does not establish a technical requirement for every consumer.
+The generator host targets `netstandard2.0` and references Roslyn 4.14.0. The repository uses stable .NET 10 SDK feature bands selected by `global.json`; it currently resolves to SDK 10.0.400. The sample and compilation tests exercise generated code on .NET 10 with C# 11, independently of the host target. Generated UTF-8 literals require C# 11; generated support types require `System.IO.Pipelines` even for text-only templates. The sample supplies that dependency with an explicit `Microsoft.AspNetCore.App` framework reference. Earlier consumer frameworks and compiler hosts have not been qualified; repository use of .NET 10 does not establish a technical requirement for every consumer.
+
+To validate packaging, pack a unique version and run the isolated consumer:
+
+```powershell
+dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -p:PackageVersion=0.1.0-alpha.local.1
+./eng/validate-package.ps1 -Version 0.1.0-alpha.local.1
+```
+
+The package contains the generator and XML documentation beneath `analyzers/dotnet/cs`, portable symbols in the companion `.snupkg`, and automatically imported `buildTransitive` discovery assets. Generated `TemplateOptions` and renderer base classes remain embedded in each consumer assembly by design; AnglePlates has no runtime DLL or runtime NuGet dependency.
 
 See [testing guidance](docs/testing.md) for generator helpers and snapshot review. Regression infrastructure is prepared; the additional step 2 test cases remain to be written.
 
