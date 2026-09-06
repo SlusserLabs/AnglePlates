@@ -1,0 +1,18 @@
+#type HelloWorld
+#model WebApplication1.ViewModels.HelloWorldViewModel
+#namespace WebApplication1.Templates
+#render Utf8, Text
+<!DOCTYPE html>
+<html>
+<head>
+    <title>[[ model.Title ]]</title>
+</head>
+<body>
+    <h1>[[ model.Title ]]</h1>
+    [%- foreach (var p in model.Paragraphs) { %]
+    <p>[[ p ]]</p>
+    [%- } -%]
+</body>
+</html>
+[*- Comment -*]
+#not directive

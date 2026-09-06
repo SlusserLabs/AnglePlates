@@ -1,0 +1,16 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Access modifier of base classes -->
+    <AnglePlateBaseAccessModifier Condition="'$(AnglePlateBaseAccessModifier)' == ''">public</AnglePlateBaseAccessModifier>
+
+    <!-- Default folder(s) -->
+    <AnglePlateTemplates Condition="'$(AnglePlateTemplates)' == ''">$(ProjectDir)Templates</AnglePlateTemplates>
+    <AnglePlateViews Condition="'$(AnglePlateViews)' == ''">$(ProjectDir)Views</AnglePlateViews>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="AnglePlateBaseAccessModifier" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,20 @@
+root = true
+
+[*]
+spelling_exclusion_path = exclusion.dic
+vsspell_section_id = a7973c7026e0422bb9186684aa7a9e19
+vsspell_ignored_words_a7973c7026e0422bb9186684aa7a9e19 = File:exclusion.dic
+
+[*.cs]
+indent_size = 4
+indent_style = space
+trim_trailing_whitespace = true
+insert_final_newline = true
+charset = utf-8
+
+[*.{json,yml,yaml,xml,csproj,props,targets}]
+indent_size = 2
+indent_style = space
+trim_trailing_whitespace = true
+insert_final_newline = true
+charset = utf-8

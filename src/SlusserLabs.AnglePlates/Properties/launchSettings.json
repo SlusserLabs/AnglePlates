@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "SlusserLabs.AnglePlates": {
+      "commandName": "Project"
+    },
+    "Source Generator": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "..\\..\\sandbox\\WebApplication1\\WebApplication1.csproj"
+    }
+  }
+}
