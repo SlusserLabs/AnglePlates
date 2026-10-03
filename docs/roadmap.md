@@ -1,6 +1,6 @@
 # AnglePlates status and release roadmap
 
-Status reviewed 2026-09-05 against AnglePlates commit `0696d93729b0c93b0dd74055555654864efebb7c`. This document describes implemented behavior, known defects, and the work required for a supported NuGet release. Sections 1 and 3 were subsequently completed on 2026-09-05, including diagnostic compatibility and an analyzer-only package contract with isolated validation. Historical inspection results below remain tied to that commit; current paths and status are updated separately.
+Status reviewed 2026-09-06 against AnglePlates commit `eaf691d0e68180d54e3fe5e269a9be2ff8d42f40`. This document describes implemented behavior, known defects, and the work required for a supported NuGet release. Sections 1 and 3 are complete. Section 2 has its test infrastructure and initial convention/diagnostic cases, while section 4 has a working isolated package-consumer baseline. Historical inspection results are retained where labeled and remain tied to the original inspected commit `0696d93729b0c93b0dd74055555654864efebb7c`.
 
 This roadmap provides direction, not a patch specification. Regardless of what it states, explicit user direction, best practices, and common sense always supersede its prescriptions. Verify assumptions against the affected code and build behavior; correct mistaken requirements rather than implementing them literally.
 
@@ -10,7 +10,7 @@ AnglePlates is a working compile-time template engine prototype. Its central arc
 
 The design supports efficient typed rendering without runtime template parsing, reflection-based model lookup, or buffering the whole output inside the renderer. UTF-8 literals are pre-encoded, and generated methods write to a caller-owned byte writer. Rendering still performs allocations and copies, particularly for dynamic values.
 
-This is not yet a release-ready general-purpose library. Reproduced parser and buffer-pool defects, incomplete packaging, unqualified consumer compatibility, limited diagnostics, and the absence of a complete regression suite are more immediate gaps than adding a loader. Nested rendering is possible through C# already; a first-class composition API is absent.
+This is not yet a release-ready general-purpose library. Reproduced parser and buffer-pool defects, unqualified consumer compatibility, limited diagnostics, and the absence of a complete regression suite are more immediate gaps than adding a loader. The analyzer-only package contract and a .NET 10/C# 11 isolated consumer smoke test are implemented, but the broader package-consumer matrix, CI, publishing infrastructure, and user-facing release documentation remain. Nested rendering is possible through C# already; a first-class composition API is absent.
 
 ## Release baseline and convention precedence
 
@@ -42,7 +42,7 @@ There are limits to what this baseline establishes. Its `global.json` selects Mi
 - `dotnet pack ... --no-restore` succeeded. The resulting package was opened and inspected; successful packing does not mean its source-generator installation wiring is correct.
 - At inspection no tracked test projects, benchmark projects, or CI workflow were found. These focused inspection probes are not a replacement for a maintained regression suite. No throughput benchmark, AOT publish, clean NuGet consumer installation, or target-framework compatibility matrix was run.
 
-## Section 1 implementation verification
+## Completed-work verification
 
 - `dotnet restore AnglePlates.slnx --source https://api.nuget.org/v3/index.json` succeeded using SDK 10.0.400.
 - `dotnet build AnglePlates.slnx --no-restore` succeeded with zero warnings and errors.
@@ -50,7 +50,9 @@ There are limits to what this baseline establishes. Its `global.json` selects Mi
 - `dotnet run --project samples/HelloWorld --no-build --no-launch-profile` rendered the example and checked exact UTF-8 bytes against the text output.
 - Centralized diagnostics now use `SLAP001`–`SLAP003` and category `SlusserLabs.AnglePlates`; titles, messages, severity and default enablement are preserved. Both release inventories are additional files for the analyzers compiling the generator project; they do not automatically become inputs to the generator in consuming projects. No filename exclusion is needed. See the [diagnostic mapping and maintenance contract](diagnostics.md).
 - Removed the unused `System.Runtime.CompilerServices/IsExternalInit.cs` shim. AnglePlates' sole record, `TemplateFile`, uses an explicit constructor and get-only properties, with no `init` accessors. The local AssemblyInfo reference also targets `netstandard2.0` and uses records with ordinary setters or constructor-assigned get-only properties without a shim. AnglePlates builds successfully without it, preserving record value equality. Introducing `init` accessors (including synthesized ones on positional record classes) would require revisiting this compatibility support.
-- At section 1 completion, package-consumer execution remained pending. Section 3 now supplies analyzer-only package layout and isolated consumer validation. No full regression or coverage claim is made.
+- Section 3 established an analyzer-only package with generated consumer-side support types, no runtime assets or dependencies, `buildTransitive` discovery assets, XML documentation in the main package, and portable symbols in the companion `.snupkg`.
+- A unique local `0.1.0-alpha.section3final` package passed automated archive, metadata, Source Link, symbol checksum, default/custom/explicit discovery, exclusion, and exact text/UTF-8 rendering validation in an isolated .NET 10/C# 11 consumer. This is the baseline portion of section 4, not the complete consumer matrix.
+- No full regression, coverage, cross-platform, multi-framework, ASP.NET, transitive-consumption, or multi-assembly compatibility claim is made.
 
 ## Current repository map
 
@@ -205,7 +207,7 @@ Hint names contain only the declared type prefix and renderer suffix. Two templa
 
 ### 5. One invalid template suppresses later valid templates — reproduced
 
-Missing required fields report ANGLE001/002/003, then `return` exits the entire source-output callback. A bad template followed by a valid template emitted only the three support files. Continue per template and report independent errors.
+Missing required fields report `SLAP001`–`SLAP003`, then `return` exits the entire source-output callback. A bad template followed by a valid template emits only the three support files. Continue per template and report independent errors.
 
 ### 6. Directive imports and consumer compatibility remain incomplete
 
@@ -213,11 +215,11 @@ Missing required fields report ANGLE001/002/003, then `return` exits the entire 
 
 Both support renderers are emitted unconditionally, bringing `System.IO.Pipelines` references even to text-only consumers. The console sample explicitly references `Microsoft.AspNetCore.App` to supply this dependency. `netstandard2.0` describes the generator assembly, not the compatibility of generated runtime code; that code uses newer APIs, and UTF-8 output uses C# 11 literals. C# 11 and .NET 10 consumer compilation are exercised locally. Older consumer frameworks and the minimum compiler/IDE host matrix remain to be qualified.
 
-### 7. NuGet source-generator distribution is unfinished — package inspected
+### 7. NuGet source-generator distribution baseline — resolved in sections 3 and 4
 
-The packed archive contains `lib/netstandard2.0/SlusserLabs.AnglePlates.dll`, the two `buildTransitive` files, and metadata. It has no `analyzers/dotnet/cs` entry, and the targets do not explicitly add an analyzer. Therefore the normal package layout does not wire up the generator the way the sample's explicit analyzer project reference does.
+The current package places `SlusserLabs.AnglePlates.dll` and its XML documentation under `analyzers/dotnet/cs/netstandard2.0`, retains the two `buildTransitive` files, declares no consumer dependencies, and ships no `lib`, `ref`, or `runtimes` assets. Package metadata, license, README, icon, repository commit, reproducibility records, Source Link, and companion portable symbols are validated automatically.
 
-The package also exposes a Roslyn CSharp dependency, has default version `1.0.0` and placeholder description, and no repository license file was found. Packaging needs a real consumer smoke test after its layout/dependencies are corrected. The version in the archive is not evidence that a release was published.
+An isolated .NET 10/C# 11 console consumer restores only from the freshly packed local package, imports its build assets automatically, discovers default, custom, and explicit templates, honors exclusion, and verifies exact text and UTF-8 output. The remaining section 4 work broadens that baseline; it does not require redesigning the established analyzer-only contract unless compatibility testing finds a defect. No package has been published, and a successful local package validation is not release evidence.
 
 ### 8. Diagnostics, incremental granularity and validation are limited — source-confirmed
 
@@ -239,7 +241,7 @@ Loading must be defined: resolving a compiled template by name is a comparativel
 
 ## Roadmap
 
-The correctness findings above remain prerequisites. The release work below is additionally required even after those defects are fixed. Unchecked items represent outstanding work; checked items record completed work, not release guarantees.
+The unresolved correctness findings above remain prerequisites. The release work below is additionally required even after those defects are fixed. Unchecked items represent outstanding work; checked items record completed work, not release guarantees. Section 2 is partial, section 3 is complete, and section 4 has a completed baseline with broader compatibility work remaining.
 
 ### 1. Establish the repository and API conventions
 
@@ -253,7 +255,7 @@ The correctness findings above remain prerequisites. The release work below is a
 - [x] Replace contradictory repository instructions with root `AGENTS.md` and remove `.github/copilot-instructions.md`. Record TUnit and Imposter as selected conventions, with Imposter used only when a test actually needs a mock; explicitly distinguish the focused convention tests from the full planned regression suite.
 - [x] Establish stable diagnostic IDs `SLAP001`–`SLAP003` and category `SlusserLabs.AnglePlates` in `DiagnosticDescriptors.cs`, following AssemblyInfo's product-prefixed scheme. Replace prototype `ANGLE001`–`ANGLE003` before the first stable release and [document the mapping](diagnostics.md). Add `AnalyzerReleases.Shipped.md` and `AnalyzerReleases.Unshipped.md` as analyzer additional files in the generator project. Verify the diagnostic contract with compilation tests. The original requirement to exclude these filenames from template discovery was mistaken: these build inputs do not flow into consuming projects, and explicitly supplied template inputs receive normal validation regardless of filename.
 
-### 2. Make behavior and generated output regression-tested
+### 2. Correct and regression-test behavior and generated output
 
 Scaffolding prepared on 2026-09-05: the existing .NET 10 TUnit executable now has pinned Verify dependencies, reusable generator/consumer infrastructure and snapshot initialization. See [testing guidance](testing.md). No additional regression tests or reviewed snapshots were created in this preparation step. Coverage is performed in Visual Studio 2026; repository coverage tooling and CI gates are not requested.
 
@@ -261,6 +263,10 @@ Scaffolding prepared on 2026-09-05: the existing .NET 10 TUnit executable now ha
 - [x] Mirror source folders/namespaces in tests. Name classes `{ClassName}Tests` and methods `{MethodName}_{Scenario}_{Outcome}`; test method names do not need an additional `Async` suffix. Use arrange/act/assert sections, static setup helpers, isolated per-test state and properly disposed resources. Group argument-validation cases per class. Add `Properties/AssemblyInfo.cs` with assembly-level coverage exclusion for test infrastructure, following the baseline.
 - [x] Add a `GeneratorTestHelper` under `Infrastructure` that provides in-memory additional templates, analyzer options and consumer source, runs the real generator, and checks the resulting compilation before snapshot verification. Model/template failures must assert the expected diagnostics and locations rather than broadly accepting compilation errors.
 - [x] Initialize Verify once through `Infrastructure/ModuleInitializer.cs` and store reviewed `*.g.verified.cs` and `*.verified.txt` artifacts in `Snapshots`. Require manual review of changed sources and diagnostics; a text snapshot alone does not prove compilation or correct rendering.
+- [ ] Fix false opening-delimiter candidates, empty blocks, and unclosed blocks without regressing trim behavior. Define whether delimiter text inside C# strings/comments is supported or explicitly rejected, then diagnose malformed templates at useful source locations instead of throwing or emitting misleading C#.
+- [ ] Process and report failures per template so one invalid input does not suppress valid outputs. Make hint names stable and unique across paths/namespaces, diagnose generated type collisions separately, and preserve deterministic output across path separator and case differences.
+- [ ] Balance every buffer-pool rental on success and failure, correct the large-object-heap sizing policy, and make rental-size arithmetic overflow-safe. Preserve exact text/UTF-8 parity and caller-owned writer semantics.
+- [ ] Settle directive contracts before snapshotting them: exact keyword matching, unknown/invalid values, repeated directives, functional `#using`, `#render` selection, and accessibility validation. Decide whether text-only consumers should receive UTF-8/Pipelines support and document the resulting minimum consumer requirements.
 - [ ] Cover parser token boundaries, comments, trim flags, false bracket starts, empty/unclosed blocks, delimiter-containing C# strings, directives, render selection, imports, class accessibility, duplicate names and invalid-file isolation. Snapshot both renderers and generated support types.
 - [ ] Execute generated methods and assert exact text and bytes for literals, expressions, loops, HTML escaping, raw writes, Unicode, null/culture behavior, multiple chunks and shared-writer child rendering. Count pool rents/returns, including exceptions and large values. Test writer ownership, final flush and cancellation according to the documented API contract.
 - [ ] Exercise incremental reruns: no input changes, one template changed, file added/removed, options changed and unrelated files changed. Assert output correctness and tracked-step reuse where caching is intended; AssemblyInfo's value-equatable inputs and stable hashed hint names provide useful implementation patterns.
@@ -282,10 +288,12 @@ Section 3 validation uses `eng/validate-package.ps1` and the separate package co
 
 ### 4. Add clean package-consumer validation
 
-- [ ] Keep `AnglePlates.PackageTests` outside the normal solution test run, as in AssemblyInfo, because it depends on a package that is produced after unit tests. Give it only the relevant package reference with a version override property such as `AnglePlatesPackageVersion`.
-- [ ] Restore from `artifacts/package` with a dedicated test `NuGet.config` and an isolated `NUGET_PACKAGES` directory. Use unique local prerelease versions to avoid stale cache results. If legitimate runtime dependencies require a public feed, map `SlusserLabs.AnglePlates` to the local source and configure only the other necessary sources/dependencies; AssemblyInfo's local-only configuration works because its package has no such dependencies.
-- [ ] Compile and render a real template through the package's automatically imported build assets. Assert actual text and UTF-8 output, encoding options and composition. The package test must fail if the generator did not load or if it needs source-tree project references/imports to work.
-- [ ] Inspect `project.assets.json`, output DLLs, assembly references and `.deps.json` for the expected analyzer/compile/runtime separation. Pass the `.nupkg` and `.snupkg` to a `PackageValidator` that checks the package and portable-PDB metadata, following the baseline.
+- [x] Keep `AnglePlates.PackageTests` outside the normal solution test run because it depends on a package produced after unit tests. It has only the package reference, controlled by `AnglePlatesPackageVersion`, plus the framework reference currently required by generated `System.IO.Pipelines` support.
+- [x] Restore from `artifacts/package` through a generated, local-only `NuGet.config` and an isolated `NUGET_PACKAGES` directory. The validation script copies the consumer to a temporary directory so it cannot rely on source-tree imports or project references. Continue using unique local prerelease versions to avoid stale cache results.
+- [x] Compile and render real templates through automatically imported package assets. The baseline covers default, custom, and explicit discovery, exclusion, and exact default-encoded text and UTF-8 output.
+- [x] Pass the `.nupkg` and `.snupkg` to `PackageValidator` to verify archive contents, NuSpec metadata, the absence of runtime/dependency assets, reproducibility records, Source Link, and portable-PDB identity/checksum.
+- [ ] Extend installed-package rendering coverage to configurable encoding, raw output, null handling, composition, text-only generation, and writer/flush behavior. Keep equivalent behavior assertions in the focused generated-code suite rather than relying only on the package smoke test.
+- [ ] Inspect `project.assets.json`, output DLLs, assembly references and `.deps.json` for the expected analyzer/compile/runtime separation.
 - [ ] Test at least a plain SDK console/class-library consumer and an ASP.NET consumer; implicit imports enabled and disabled; text-only and UTF-8 modes; and every advertised minimum/current framework and compiler combination. Prove that pipeline dependencies are supplied explicitly where needed.
 - [ ] Add Windows and Linux checks for path separators, case sensitivity, relative-path diagnostics and LF/CRLF handling. AssemblyInfo's workflow currently validates on Ubuntu; this extra matrix is needed because AnglePlates consumes filesystem templates and preserves their text. Include two assemblies with generated templates to verify the selected shared-type strategy.
 - [ ] Validate template add/change/remove and renamed/moved files through real MSBuild runs. Test direct and intended transitive package usage, plus projects with unrelated `AdditionalFiles`, so discovery and regeneration match the documented contract.
@@ -321,10 +329,10 @@ These are maintainer setup tasks outside the repository. No current AnglePlates 
 
 ### 7. Document the supported product and release procedure
 
-- [ ] Replace the placeholder README with a concise purpose, maturity/support statement, package installation, required SDK/consumer versions, a minimal template/model and both rendering paths. Explain trusted templates, default expression encoding, raw output, whitespace and known limitations without relying on private project history.
+- [ ] Expand the current repository-focused README into user-facing package documentation with installation, required SDK/consumer versions, a minimal template/model and both rendering paths. Retain its purpose and maturity statement; add trusted-template security, default expression encoding, raw output, whitespace, and known limitations without relying on private project history.
 - [ ] Add `docs/overview.md`, `docs/local-packaging.md` and `docs/release-process.md`, following AssemblyInfo's separation. Include current project structure, commands, snapshot review, unique local versions, isolated package restore, archive inspection and a tested release checklist.
 - [ ] Document version updates, diagnostic shipped/unshipped changes, Release validation, annotated SemVer tags, published GitHub Releases, integration-feed rehearsal, publish gating and post-publish consumer verification. Record breaking changes to template syntax, generated API names, MSBuild properties and diagnostic IDs.
-- [ ] Remove or update the stale `#class`/`#models` templates, generic generated-class examples and commented obsolete server calls. Documentation examples must compile and render in automated checks.
+- [ ] Keep documentation and sample syntax aligned with `#type`, `#model`, and the generated class names. Remove any stale generic examples or obsolete commented calls when found, and make documentation examples compile and render in automated checks.
 - [ ] Define the first release's feature boundary. Direct child rendering can be documented as supported without committing to an include language, runtime loader or layouts. A compiled-template registry, richer composition syntax and runtime recompilation remain separate design work unless explicitly included in the release scope.
 - [ ] Add representative rendering/allocation benchmarks before publishing numerical performance claims. Validate AOT/trimming if advertised; neither claim follows solely from using source generation. Further optimization and advanced loading need not block a correctly scoped first package release.
 

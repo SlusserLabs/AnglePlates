@@ -14,8 +14,9 @@
 - `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TextTemplateTranspiler.cs` and `Utf8TemplateTranspiler.cs` emit rendering code
 - `TemplateGenerator.cs` coordinates generation; `Boilerplate.cs` supplies generated runtime support types; `buildTransitive` contains template discovery assets
 - Use `samples/HelloWorld/Templates/hello-world.html` as the current example
-- Focused generated-compilation tests exist; the full regression suite, CI workflow, packaging, and consumer compatibility remain incomplete
-- Keep `tests/AnglePlates.PackageTests` outside the solution; it is a package-consumer scaffold until the package contract is implemented
+- Focused generated-compilation and diagnostic tests exist; the full parser/rendering/incremental regression suite remains incomplete
+- The analyzer-only package contract is implemented and has an isolated .NET 10/C# 11 consumer smoke test; broader consumer compatibility, CI, and publishing remain incomplete
+- Keep `tests/AnglePlates.PackageTests` outside the solution and run it only against a freshly packed package through `eng/validate-package.ps1`
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
 - Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target unless a compatibility change is deliberate and tested
 
@@ -56,7 +57,7 @@
 - Use braces for conditional statements, loops, and scope statements; place braces on separate lines
 - Keep expressions and declarations on one line when they fit within 160 characters
 - Use UTF-8 and CRLF for normal source and configuration files; do not mix line endings or leave trailing whitespace
-- Preserve intentional template newline fixtures; use the roadmap's LF normalization for Verify snapshots when snapshot configuration is introduced
+- Preserve intentional template newline fixtures; keep Verify snapshots normalized to LF
 - Use PascalCase for public symbols and camelCase for locals and parameters
 - Use `_camelCase` for all private fields, including constants and static or readonly fields
 - Precede `return` with a blank line after more than two distinct statements; treat consecutive assignments as one logical sequence
@@ -92,7 +93,8 @@
 - Balance every pooled-buffer rental with a return, including exceptional paths
 - Preserve caller-owned writer semantics and direct streaming; do not add whole-output buffering without a requirement
 - Do not infer package usability from a successful sample build or pack; verify analyzer loading, build assets, and rendering through a clean package consumer
-- Follow the roadmap's package contract; do not copy AssemblyInfo's attribute assets or prohibit legitimate rendering runtime dependencies
+- Preserve the analyzer-only package contract unless compatibility testing justifies a deliberate change: generated support types, no runtime assets or dependencies, and analyzer/XML assets under `analyzers/dotnet/cs`
+- Keep `buildTransitive` discovery working for default, custom, excluded, and explicit `AnglePlate` items
 
 ## XML Documentation
 
