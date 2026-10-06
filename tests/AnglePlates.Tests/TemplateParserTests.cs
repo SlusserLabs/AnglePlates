@@ -1,0 +1,120 @@
+using System;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
+using SlusserLabs.AnglePlates.Tests.Infrastructure;
+using TUnit.Assertions;
+using TUnit.Assertions.Extensions;
+using TUnit.Core;
+
+namespace SlusserLabs.AnglePlates.Tests;
+
+public sealed class TemplateParserTests
+{
+    [Test]
+    [Arguments("[ordinary] [[ model ]]", "[ordinary] &lt;value&gt;")]
+    [Arguments("prefix [ordinary] [[ model ]]", "prefix [ordinary] &lt;value&gt;")]
+    [Arguments("[[ model ]][ordinary] [[ model ]]", "&lt;value&gt;[ordinary] &lt;value&gt;")]
+    [Arguments("[% var unused = 1; %][ordinary] [[ model ]]", "[ordinary] &lt;value&gt;")]
+    [Arguments("[* comment *][ordinary] [[ model ]]", "[ordinary] &lt;value&gt;")]
+    [Arguments("[a][b][ [[ model ]] [", "[a][b][ &lt;value&gt; [")]
+    [Arguments("[", "[")]
+    [Arguments("plain text", "plain text")]
+    [Arguments("[% // %]tail", "tail")]
+    [Arguments("[* first *]rest *]", "rest *]")]
+    public async Task Parse_OrdinaryBrackets_RendersFollowingExpressions(string body, string expected)
+    {
+        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template(body));
+        var output = RenderingTestHelper.Render(result.Compilation);
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    [Arguments("[[", "]]")]
+    [Arguments("[%", "%]")]
+    [Arguments("[*", "*]")]
+    public async Task Parse_EmptyBlocks_AreNoOpsWithTrimFlags(string open, string close)
+    {
+        foreach (var newline in new[] { "\n", "\r\n" })
+        {
+            foreach (var contents in new[] { string.Empty, " ", "\t" + newline })
+            {
+                foreach (var trimLeft in new[] { false, true })
+                {
+                    foreach (var trimRight in new[] { false, true })
+                    {
+                        // A delimiter-adjacent hyphen belongs to the opener; separate a right-only marker
+                        var blockContents = contents.Length == 0 && trimRight && !trimLeft ? " " : contents;
+                        var body = $"a {newline}{open}{(trimLeft ? "-" : string.Empty)}{blockContents}{(trimRight ? "-" : string.Empty)}{close}{newline} b";
+                        var expected = "a" + (trimLeft ? string.Empty : " " + newline) + (trimRight ? string.Empty : newline + " ") + "b";
+                        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template(body));
+                        var output = RenderingTestHelper.Render(result.Compilation);
+
+                        await Assert.That(output.text).IsEqualTo(expected);
+                        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+                    }
+                }
+            }
+        }
+    }
+
+    [Test]
+    [Arguments("[[", "]]")]
+    [Arguments("[%", "%]")]
+    [Arguments("[*", "*]")]
+    public async Task Parse_UnclosedBlock_ReportsOpeningDelimiterLocation(string open, string close)
+    {
+        foreach (var newline in new[] { "\n", "\r\n" })
+        {
+            foreach (var contents in new[] { string.Empty, "   ", "- model", " model" })
+            {
+                var header = $"#type Example{newline}#model string{newline}#namespace Consumer{newline}";
+                var template = new TemplateAdditionalText(header + "prefix " + open + contents);
+                var result = RenderingTestHelper.Generate(template);
+                var diagnostic = result.RunResult.Diagnostics.Single();
+
+                await Assert.That(diagnostic.Id).IsEqualTo("SLAP004");
+                await Assert.That(diagnostic.GetMessage()).IsEqualTo($"Template block is missing its closing delimiter '{close}'");
+                await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+                await Assert.That(diagnostic.Descriptor.Title.ToString()).IsEqualTo("Unclosed template block");
+                await Assert.That(diagnostic.Descriptor.Category).IsEqualTo("SlusserLabs.AnglePlates");
+                await Assert.That(diagnostic.Descriptor.IsEnabledByDefault).IsTrue();
+                await Assert.That(diagnostic.Location.SourceSpan).IsEqualTo(new TextSpan(header.Length + 7, 2));
+                await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(template.Path,
+                    new LinePosition(3, 7), new LinePosition(3, 9)));
+                await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(3);
+            }
+        }
+    }
+
+    [Test]
+    [Arguments("a[[]][%%][**]b", "ab")]
+    [Arguments("a \n[[-]][%- -%][*- -*]\n b", "ab")]
+    [Arguments("a [[-1]] b", "a1 b")]
+    [Arguments("a [[ -1 ]] b", "a -1 b")]
+    [Arguments("a [[(-1)]] b", "a -1 b")]
+    public async Task Parse_AdjacentBlocks_PreservesTrimAndNegativeExpressionBehavior(string body, string expected)
+    {
+        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template(body));
+        var output = RenderingTestHelper.Render(result.Compilation);
+
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    [Arguments("#")]
+    [Arguments("#   ")]
+    [Arguments("#\r\n#\t\r\n")]
+    public async Task Parse_EmptyDirectives_ReportsRequiredFieldsWithoutThrowing(string template)
+    {
+        var result = RenderingTestHelper.Generate(new TemplateAdditionalText(template));
+
+        await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
+    }
+}

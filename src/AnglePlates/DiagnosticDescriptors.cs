@@ -7,8 +7,17 @@ internal static class DiagnosticDescriptors
     public const string MissingTypeId = "SLAP001";
     public const string MissingNamespaceId = "SLAP002";
     public const string MissingModelTypeId = "SLAP003";
+    public const string UnclosedBlockId = "SLAP004";
 
     private const string _category = "SlusserLabs.AnglePlates";
+
+    public static readonly DiagnosticDescriptor UnclosedBlock = new(
+        UnclosedBlockId,
+        "Unclosed template block",
+        "Template block is missing its closing delimiter '{0}'",
+        _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor MissingType = new(
         MissingTypeId,

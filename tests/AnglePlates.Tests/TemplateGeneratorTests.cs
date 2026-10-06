@@ -11,7 +11,7 @@ using TUnit.Core;
 
 namespace SlusserLabs.AnglePlates.Tests;
 
-public sealed class TemplateGeneratorTests
+public sealed partial class TemplateGeneratorTests
 {
     [Test]
     [Arguments(false)]

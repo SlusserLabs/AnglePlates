@@ -16,10 +16,11 @@ internal class TemplateParser
         _anyBlockStart = new char[] { _options.VariableStart.Span[0], _options.CodeStart.Span[0], _options.CommentStart.Span[0] };
     }
 
-    public List<Token> Parse(ReadOnlySpan<char> text)
+    public TemplateParseResult Parse(ReadOnlySpan<char> text)
     {
         var reader = new SpanReader<char>(text);
-        var tokens = new List<Token>();
+        var result = new TemplateParseResult();
+        var tokens = result.Tokens;
         Token token;
 
         // Directives (must be at the top, line-based)
@@ -30,36 +31,21 @@ internal class TemplateParser
         }
 
         // Find anything that is between blocks or is a block
-        while (TryParseText(ref reader, out token) || TryParseBlock(ref reader, out token))
+        while (TryParseText(ref reader, out token) || TryParseBlock(ref reader, result.Errors, out token))
         {
             DebugToken(text, token);
             tokens.Add(token);
         }
 
-        // Anything remaining is text
-        if (!reader.End)
-        {
-            int start = reader.Position;
-            reader.AdvanceToEnd();
-            token = new Token
-            {
-                Type = TokenType.Literal,
-                Start = start,
-                End = reader.Position
-            };
-
-            DebugToken(text, token);
-            tokens.Add(token);
-        }
-
-        return tokens;
+        return result;
     }
 
-    private bool TryParseBlock(ref SpanReader<char> reader, out Token token)
+    private bool TryParseBlock(ref SpanReader<char> reader, List<TemplateParseError> errors, out Token token)
     {
         token = default;
         ReadOnlySpan<char> blockEnd = ReadOnlySpan<char>.Empty;
         int start = reader.Position;
+        int openingStart = start;
 
         if (reader.IsNext(_options.VariableStart.Span, advancePast: true))
         {
@@ -83,6 +69,7 @@ internal class TemplateParser
         // Find something?
         if (blockEnd.Length > 0)
         {
+            int openingLength = reader.Position - openingStart;
             // Whitespace indicator?
             if (reader.IsNext(_options.WhitespaceControl.Span, advancePast: true))
             {
@@ -106,13 +93,12 @@ internal class TemplateParser
             }
             else
             {
-                // Unclosed block?
+                errors.Add(new TemplateParseError(openingStart, openingLength, blockEnd.ToString()));
                 reader.AdvanceToEnd();
-                end = reader.Position;
+                return false;
             }
 
-            token.Start = reader.Span.TrimStartPosition(start, _options.Whitespace.Span);
-            token.End = reader.Span.TrimEndPosition(end, _options.Whitespace.Span);
+            TrimToken(reader.Span, start, end, ref token);
             return true;
         }
 
@@ -126,7 +112,7 @@ internal class TemplateParser
         while (!reader.End)
         {
             // Fast look for just one char
-            if (reader.TryAdvanceToAny(_anyBlockStart.Span, advancePastDelimiter: false) && start != reader.Position)
+            if (reader.TryAdvanceToAny(_anyBlockStart.Span, advancePastDelimiter: false))
             {
                 // We've matched on one char, but is it actually a block start?
                 if (reader.IsNext(_options.VariableStart.Span) || reader.IsNext(_options.CodeStart.Span) || reader.IsNext(_options.CommentStart.Span))
@@ -139,6 +125,7 @@ internal class TemplateParser
                 continue;
             }
 
+            reader.AdvanceToEnd();
             break;
         }
 
@@ -172,14 +159,29 @@ internal class TemplateParser
             token = new Token
             {
                 Type = TokenType.Directive,
-                Start = reader.Span.TrimStartPosition(start, _options.Whitespace.Span),
-                End = reader.Span.TrimEndPosition(reader.Position, _options.Whitespace.Span)
             };
+            TrimToken(reader.Span, start, reader.Position, ref token);
 
             return true;
         }
 
         return false;
+    }
+
+    private void TrimToken(ReadOnlySpan<char> text, int start, int end, ref Token token)
+    {
+        while (start < end && _options.Whitespace.Span.IndexOf(text[start]) >= 0)
+        {
+            start++;
+        }
+
+        while (end > start && _options.Whitespace.Span.IndexOf(text[end - 1]) >= 0)
+        {
+            end--;
+        }
+
+        token.Start = start;
+        token.End = end;
     }
 
     [Conditional("DEBUG")]

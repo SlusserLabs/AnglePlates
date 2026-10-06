@@ -1,6 +1,6 @@
 # AnglePlates status and release roadmap
 
-Status reviewed 2026-09-06 against AnglePlates commit `eaf691d0e68180d54e3fe5e269a9be2ff8d42f40`. This document describes implemented behavior, known defects, and the work required for a supported NuGet release. Sections 1 and 3 are complete. Section 2 has its test infrastructure and initial convention/diagnostic cases, while section 4 has a working isolated package-consumer baseline. Historical inspection results are retained where labeled and remain tied to the original inspected commit `0696d93729b0c93b0dd74055555654864efebb7c`.
+Status updated 2026-10-03 against the current working tree; the previous review covered commit `eaf691d0e68180d54e3fe5e269a9be2ff8d42f40`. This document describes implemented behavior, known defects, and the work required for a supported NuGet release. Sections 1 and 3 are complete. Section 2 has its test infrastructure and focused parser, generation, and pooling fixes with regressions, while section 4 has a working isolated package-consumer baseline. Historical inspection results are retained where labeled and remain tied to the original inspected commit `0696d93729b0c93b0dd74055555654864efebb7c`.
 
 This roadmap provides direction, not a patch specification. Regardless of what it states, explicit user direction, best practices, and common sense always supersede its prescriptions. Verify assumptions against the affected code and build behavior; correct mistaken requirements rather than implementing them literally.
 
@@ -10,7 +10,7 @@ AnglePlates is a working compile-time template engine prototype. Its central arc
 
 The design supports efficient typed rendering without runtime template parsing, reflection-based model lookup, or buffering the whole output inside the renderer. UTF-8 literals are pre-encoded, and generated methods write to a caller-owned byte writer. Rendering still performs allocations and copies, particularly for dynamic values.
 
-This is not yet a release-ready general-purpose library. Reproduced parser and buffer-pool defects, unqualified consumer compatibility, limited diagnostics, and the absence of a complete regression suite are more immediate gaps than adding a loader. The analyzer-only package contract and a .NET 10/C# 11 isolated consumer smoke test are implemented, but the broader package-consumer matrix, CI, publishing infrastructure, and user-facing release documentation remain. Nested rendering is possible through C# already; a first-class composition API is absent.
+This is not yet a release-ready general-purpose library. Unqualified consumer compatibility, incomplete directive behavior, limited diagnostics, and the absence of a complete regression suite are more immediate gaps than adding a loader. The analyzer-only package contract and a .NET 10/C# 11 isolated consumer smoke test are implemented, but the broader package-consumer matrix, CI, publishing infrastructure, and user-facing release documentation remain. Nested rendering is possible through C# already; a first-class composition API is absent.
 
 ## Release baseline and convention precedence
 
@@ -42,7 +42,7 @@ There are limits to what this baseline establishes. Its `global.json` selects Mi
 - `dotnet pack ... --no-restore` succeeded. The resulting package was opened and inspected; successful packing does not mean its source-generator installation wiring is correct.
 - At inspection no tracked test projects, benchmark projects, or CI workflow were found. These focused inspection probes are not a replacement for a maintained regression suite. No throughput benchmark, AOT publish, clean NuGet consumer installation, or target-framework compatibility matrix was run.
 
-## Completed-work verification
+## Earlier completed-work verification
 
 - `dotnet restore AnglePlates.slnx --source https://api.nuget.org/v3/index.json` succeeded using SDK 10.0.400.
 - `dotnet build AnglePlates.slnx --no-restore` succeeded with zero warnings and errors.
@@ -53,6 +53,14 @@ There are limits to what this baseline establishes. Its `global.json` selects Mi
 - Section 3 established an analyzer-only package with generated consumer-side support types, no runtime assets or dependencies, `buildTransitive` discovery assets, XML documentation in the main package, and portable symbols in the companion `.snupkg`.
 - A unique local `0.1.0-alpha.section3final` package passed automated archive, metadata, Source Link, symbol checksum, default/custom/explicit discovery, exclusion, and exact text/UTF-8 rendering validation in an isolated .NET 10/C# 11 consumer. This is the baseline portion of section 4, not the complete consumer matrix.
 - No full regression, coverage, cross-platform, multi-framework, ASP.NET, transitive-consumption, or multi-assembly compatibility claim is made.
+
+## Correctness-work verification (2026-10-03)
+
+- Restored the solution from nuget.org. Debug and Release solution builds completed with zero warnings and errors; all 69 TUnit cases passed in each configuration, including nested empty-block and unclosed-block variants.
+- Manually reviewed both renderer source snapshots, generated support types, and the `SLAP004` diagnostic snapshot before recording them.
+- The HelloWorld sample rendered successfully and checked exact text/UTF-8 parity.
+- Fresh local package `0.1.0-alpha.correctness.20261003.1` passed isolated archive, metadata, symbols, discovery, and exact encoded text/UTF-8 rendering validation through `eng/validate-package.ps1`.
+- These checks cover the focused correctness work and the existing package baseline. Coverage was not measured; the full regression and consumer-compatibility matrices remain incomplete.
 
 ## Current repository map
 
@@ -128,6 +136,7 @@ Directive keywords are case-sensitive prefix matches rather than exact words: fo
 - `[% statements %]` inserts C# into `Render`. Declare locals, call helpers, use loops, and open or close scopes here. A loop is closed with an ordinary `[% } %]` block; there is no special `end` keyword.
 - `[* comment *]` is discarded. It may contain line breaks.
 - C# extension-method calls can be used in expressions when their namespaces are actually in scope. There is no filter language.
+- Closed empty or whitespace-only expressions, code blocks, and comments are no-ops; their trim flags still apply to adjacent literals. Unclosed blocks report `SLAP004` at the opening delimiter and prevent only that template from generating.
 - Expressions and blocks can span lines, but the scanner stops at the first closing delimiter. It does not understand C# strings, comments, nesting or escaped delimiter sequences. A delimiter inside a C# string therefore terminates the template block.
 - There is no dedicated literal-delimiter escape, raw-expression marker, include, layout, section, inheritance or loader directive.
 
@@ -183,31 +192,25 @@ The caller's writer can allocate and buffer the whole result. `RenderAsync`'s si
 
 ## Findings requiring attention
 
-### 1. Large-value rendering fails to return all rented arrays — reproduced
+### 1. Large-value pooled buffers: resolved
 
-In both encoding loops in `Boilerplate.cs`, `Rent` runs inside the loop and overwrites `encodedChars`; only the final array is returned in `finally`. Earlier rentals become garbage instead of returning to the pool. This is lost pooling and allocation pressure, not permanently unreachable memory that the GC cannot reclaim.
+Both generated encoding loops now rent once per nonempty encoded write, reuse that array across chunks, and return it to the captured pool in `finally`, including encoder and writer failures. Rental sizing widens before multiplication and caps requests at 32,768 characters for both renderers; custom pools may return larger arrays. A zero-consumption, zero-output iteration throws instead of looping indefinitely. Focused tests track array identity, exact rental/return counts, Unicode chunk boundaries, overflow-prone sizing, and failures. The original inspection observed 26 text rentals/2 returns and 14 UTF-8 rentals/2 returns for a large sample value; those counts describe the historical implementation.
 
-With a counting pool and a 100,000-character `<` title rendered twice by the sample template, text rented 26 arrays and returned 2; UTF-8 rented 14 and returned 2. Rent once outside the loop and reuse the buffer, or balance each rental with its return.
+### 2. Ordinary opening brackets: resolved
 
-The UTF-8 buffer limit is 64K **characters**, despite a comment about avoiding the large-object heap; that array is roughly 128 KiB. The text cap is 32K characters. Worst-case rental multiplication is also unchecked before clamping, an additional edge-case risk not exercised here.
+Literal scanning advances over false delimiter candidates even at the start of a segment. `[ordinary] [[ model.Title ]]` now recognizes the expression, including when ordinary brackets follow another block. Regression cases execute both renderers and verify exact output.
 
-### 2. Ordinary opening brackets can swallow subsequent template expressions — reproduced
+### 3. Empty and unclosed blocks: resolved; lexical scanning remains limited
 
-`TemplateParser.TryParseText` stops when a candidate opening character is at the current start position, even when it is not a full delimiter. Neither text nor block parsing then succeeds, and the fallback treats the entire remainder as literal.
+Closed empty or whitespace-only expressions, code blocks, and comments produce no output while retaining trim flags. Token trimming is bounded to the block or directive content. Unclosed blocks report `SLAP004` at the opening delimiter and prevent rendering-source emission only for that template. LF/CRLF, empty contents, adjacent blocks, trim markers, and all three block kinds have focused regressions. Closing-delimiter scanning still stops at the first matching delimiter, including inside C# strings/comments; lexical awareness remains separate work.
 
-`[ordinary] [[ model.Title ]]` becomes one literal; `prefix [ordinary] [[ model.Title ]]` recognizes the variable. The issue can recur at a segment boundary after a block. Fix the scan to advance over false delimiter candidates even at segment start.
+### 4. Generated-source names: resolved
 
-### 3. Empty/malformed blocks lack safe handling — reproduced / source-confirmed
+Hint names use a renderer prefix and SHA-256 identity over length-prefixed project-relative path, namespace, type prefix, and renderer. Paths normalize separators and preserve case. Names remain stable across content changes; repeated identities receive deterministic numeric suffixes after ordinal path/content ordering. Templates declaring the same generated type still emit independently; duplicate declarations and members are the C# compiler's responsibility.
 
-Whitespace-only `[[   ]]` and unclosed whitespace-only `[[   ` produced out-of-range failures in the inspection path: trimming can make the end offset precede the start. The Debug parser slices tokens for logging; Release transpilation also slices expression/code tokens and is exposed to invalid ranges. An unclosed `[[ model.Title` was accepted as a variable through EOF rather than reported as an unterminated block. Closing-delimiter scanning is unaware of C# lexical structure.
+### 5. Invalid-template isolation: resolved
 
-### 4. Generated-source names collide across namespaces — reproduced
-
-Hint names contain only the declared type prefix and renderer suffix. Two templates named `Probe` in different namespaces produced CS8785 with an `ArgumentException`; no generated sources survived that generator run. Use a stable unique identity incorporating namespace/path, and diagnose actual generated type collisions separately.
-
-### 5. One invalid template suppresses later valid templates — reproduced
-
-Missing required fields report `SLAP001`–`SLAP003`, then `return` exits the entire source-output callback. A bad template followed by a valid template emits only the three support files. Continue per template and report independent errors.
+Required-directive and parser failures are reported per template and skip only its renderer output. Valid templates still generate regardless of invalid-input order. Existing `SLAP001` through `SLAP003` contracts are unchanged.
 
 ### 6. Directive imports and consumer compatibility remain incomplete
 
@@ -223,7 +226,7 @@ An isolated .NET 10/C# 11 console consumer restores only from the freshly packed
 
 ### 8. Diagnostics, incremental granularity and validation are limited — source-confirmed
 
-Only missing type, namespace and model are explicitly diagnosed, with `Location.None`. There is no template line mapping (`#line`), malformed-token diagnostic, exact directive validation, unknown-directive warning, identifier validation, or robust generation exception isolation. Compiler errors therefore generally point into generated source.
+Missing type, namespace and model retain `Location.None`; `SLAP004` locates unclosed blocks in template source. There is no generated-code template line mapping (`#line`), exact directive validation, unknown-directive warning, or identifier validation. Expected template validation failures are isolated; unexpected generator exceptions are not swallowed. Compiler errors therefore generally point into generated source.
 
 Although it implements `IIncrementalGenerator`, it calls `Collect()` before one output callback, then reparses/retranspiles every template inside that callback. An individual change can regenerate the entire set and support files. The incremental interface is implemented; per-template generation caching is not.
 
@@ -257,15 +260,15 @@ The unresolved correctness findings above remain prerequisites. The release work
 
 ### 2. Correct and regression-test behavior and generated output
 
-Scaffolding prepared on 2026-09-05: the existing .NET 10 TUnit executable now has pinned Verify dependencies, reusable generator/consumer infrastructure and snapshot initialization. See [testing guidance](testing.md). No additional regression tests or reviewed snapshots were created in this preparation step. Coverage is performed in Visual Studio 2026; repository coverage tooling and CI gates are not requested.
+Scaffolding prepared on 2026-09-05: the existing .NET 10 TUnit executable now has pinned Verify dependencies, reusable generator/consumer infrastructure and snapshot initialization. See [testing guidance](testing.md). That preparation step added no regression cases; the 2026-10-03 correctness work adds focused regressions and manually reviewed snapshots. The complete suite below remains unfinished. Coverage is performed in Visual Studio 2026; repository coverage tooling and CI gates are not requested.
 
 - [x] Configure the TUnit project as a nonpackable .NET 10 executable and select `Microsoft.Testing.Platform` through `global.json`. Use TUnit's awaited built-in assertions and parameterized tests, with Verify for generated-source and diagnostic snapshots. The executable project model and built-in reporting/coverage extensions are documented in [TUnit installation](https://tunit.dev/docs/getting-started/installation/).
 - [x] Mirror source folders/namespaces in tests. Name classes `{ClassName}Tests` and methods `{MethodName}_{Scenario}_{Outcome}`; test method names do not need an additional `Async` suffix. Use arrange/act/assert sections, static setup helpers, isolated per-test state and properly disposed resources. Group argument-validation cases per class. Add `Properties/AssemblyInfo.cs` with assembly-level coverage exclusion for test infrastructure, following the baseline.
 - [x] Add a `GeneratorTestHelper` under `Infrastructure` that provides in-memory additional templates, analyzer options and consumer source, runs the real generator, and checks the resulting compilation before snapshot verification. Model/template failures must assert the expected diagnostics and locations rather than broadly accepting compilation errors.
 - [x] Initialize Verify once through `Infrastructure/ModuleInitializer.cs` and store reviewed `*.g.verified.cs` and `*.verified.txt` artifacts in `Snapshots`. Require manual review of changed sources and diagnostics; a text snapshot alone does not prove compilation or correct rendering.
-- [ ] Fix false opening-delimiter candidates, empty blocks, and unclosed blocks without regressing trim behavior. Define whether delimiter text inside C# strings/comments is supported or explicitly rejected, then diagnose malformed templates at useful source locations instead of throwing or emitting misleading C#.
-- [ ] Process and report failures per template so one invalid input does not suppress valid outputs. Make hint names stable and unique across paths/namespaces, diagnose generated type collisions separately, and preserve deterministic output across path separator and case differences.
-- [ ] Balance every buffer-pool rental on success and failure, correct the large-object-heap sizing policy, and make rental-size arithmetic overflow-safe. Preserve exact text/UTF-8 parity and caller-owned writer semantics.
+- [x] Fix false opening-delimiter candidates and empty/unclosed blocks while preserving trim behavior. Closed empty blocks are no-ops; unclosed blocks report `SLAP004` at the opener. Keep and document first-closing-delimiter scanning, including inside C# strings/comments.
+- [x] Isolate expected template failures and make hint names stable and unique across paths/namespaces, with separator normalization and case preservation. Leave actual generated-type conflicts to the C# compiler; regression-test its errors explicitly.
+- [x] Balance rentals on success and failure, cap both renderer requests at 32,768 characters, and widen rental-size arithmetic before clamping. Verify chunked output, buffer identity, encoder/writer failures, and caller-owned writer semantics.
 - [ ] Settle directive contracts before snapshotting them: exact keyword matching, unknown/invalid values, repeated directives, functional `#using`, `#render` selection, and accessibility validation. Decide whether text-only consumers should receive UTF-8/Pipelines support and document the resulting minimum consumer requirements.
 - [ ] Cover parser token boundaries, comments, trim flags, false bracket starts, empty/unclosed blocks, delimiter-containing C# strings, directives, render selection, imports, class accessibility, duplicate names and invalid-file isolation. Snapshot both renderers and generated support types.
 - [ ] Execute generated methods and assert exact text and bytes for literals, expressions, loops, HTML escaping, raw writes, Unicode, null/culture behavior, multiple chunks and shared-writer child rendering. Count pool rents/returns, including exceptions and large values. Test writer ownership, final flush and cancellation according to the documented API contract.

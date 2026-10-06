@@ -11,7 +11,7 @@ Use a stable .NET 10 SDK. [global.json](global.json) sets a 10.0.100 minimum, al
 - Test: `dotnet test --solution AnglePlates.slnx --no-build`
 - Run the [HelloWorld sample](samples/HelloWorld/README.md): `dotnet run --project samples/HelloWorld --no-build --no-launch-profile`
 
-The solution contains the generator in `src/AnglePlates`, the console sample in `samples/HelloWorld`, and focused compilation and diagnostic tests in `tests/AnglePlates.Tests`. The generator's assembly name, package ID, and root namespace are `SlusserLabs.AnglePlates`. The sample renders [hello-world.html](samples/HelloWorld/Templates/hello-world.html) through both rendering paths, checks exact text/UTF-8 parity, and prints the HTML. It references the generator and discovery assets from source; installed-package validation uses the separate consumer below.
+The solution contains the generator in `src/AnglePlates`, the console sample in `samples/HelloWorld`, and focused compilation, diagnostic, parser, and rendering tests in `tests/AnglePlates.Tests`. The generator's assembly name, package ID, and root namespace are `SlusserLabs.AnglePlates`. The sample renders [hello-world.html](samples/HelloWorld/Templates/hello-world.html) through both rendering paths, checks exact text/UTF-8 parity, and prints the HTML. It references the generator and discovery assets from source; installed-package validation uses the separate consumer below.
 
 ## Compatibility
 
@@ -34,8 +34,8 @@ Choose a new version for each validation run. The script copies the consumer to 
 
 ## Status and limitations
 
-Regression helpers and the initial compilation and diagnostic cases are implemented. Verify is configured, but no reviewed source or diagnostic snapshots are checked in. Parser, rendering, pooling, directive, and incremental regression cases remain incomplete. See [testing guidance](docs/testing.md) for helpers and snapshot review, and [diagnostics](docs/diagnostics.md) for the `SLAP001`–`SLAP003` contract.
+Focused regressions cover ordinary brackets, empty/unclosed blocks, invalid-template isolation, stable source names, and pooled-buffer ownership. Reviewed snapshots cover both renderers, generated support types, and unclosed-block diagnostics. The full parser, rendering, directive, and incremental regression suite remains incomplete. See [testing guidance](docs/testing.md) for helpers and snapshot review, and [diagnostics](docs/diagnostics.md) for the `SLAP001` through `SLAP004` contracts.
 
-Known defects remain in parser handling of ordinary opening brackets and empty or unclosed blocks, pooled-buffer returns for large values, generated-source name collisions, and isolation of invalid templates. `#using` is parsed but not emitted, and the current render selection always includes text output. Template changes are collected into one generation callback; per-template incremental generation remains planned.
+Closed empty blocks are no-ops with their trim flags preserved. Unclosed blocks report `SLAP004` at the opening delimiter and suppress only that template. Duplicate generated types receive C# compiler errors. Closing delimiters inside C# strings/comments still end a block. `#using` is parsed but not emitted, and the current render selection always includes text output. Template changes are collected into one generation callback; per-template incremental generation remains planned.
 
 No CI or publishing workflow is checked in. The broader cross-platform, framework, compiler, ASP.NET, transitive-use, and multi-assembly consumer matrix remains release work. This prototype is not release-ready. The [roadmap](docs/roadmap.md) records historical verification, known defects, and remaining plans.

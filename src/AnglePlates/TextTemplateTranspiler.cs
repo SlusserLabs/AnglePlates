@@ -120,6 +120,10 @@ internal class TextTemplateTranspiler
 
                 case TokenType.Variable:
                     (offset, length) = token.GetOffsetAndLength();
+                    if (length == 0)
+                    {
+                        continue;
+                    }
                     var variable = text.Slice(offset, length).ToString();
                     indentedWriter.InnerWriter.WriteLine();
                     indentedWriter.WriteLine($"value = AnglePlatesSystem.Convert.ToString({variable});");
@@ -128,6 +132,10 @@ internal class TextTemplateTranspiler
 
                 case TokenType.Code:
                     (offset, length) = token.GetOffsetAndLength();
+                    if (length == 0)
+                    {
+                        continue;
+                    }
                     var code = text.Slice(offset, length).ToString();
                     indentedWriter.InnerWriter.WriteLine();
                     if (code.IndexOf('}') >= 0)

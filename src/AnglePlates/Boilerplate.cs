@@ -73,7 +73,7 @@ internal static class Boilerplate
         /// <typeparam name="TModel">The type of model supported by the template.</typeparam>
         {{accessModifier}} abstract class TextTemplate<TModel>
         {
-            // At 2 bytes per char, this will keep us under the LOH threshold
+            // Cap requests at 32K characters; custom pools may return larger arrays
             private const int _maxRental = 32 * 1024;
             private readonly TemplateOptions _options;
 
@@ -113,28 +113,24 @@ internal static class Boilerplate
                     return;
                 }
 
-                if (_options.Encoder is null)
+                var encoder = _options.Encoder;
+                if (encoder is null)
                 {
                     WriteRaw(value, writer);
                     return;
                 }
 
-                // This calculation is based on worst-case-scenario; clamp to keep within max size
-                int rentalSize = _options.Encoder.MaxOutputCharactersPerInputCharacter * value.Length;
-                if (rentalSize > _maxRental)
-                {
-                    rentalSize = _maxRental;
-                }
-
+                // Widen before multiplying so large values cannot overflow before clamping
+                int rentalSize = (int)AnglePlatesSystem.Math.Min((long)encoder.MaxOutputCharactersPerInputCharacter * value.Length, _maxRental);
+                var pool = _options.BufferPool;
                 AnglePlatesSystem.ReadOnlySpan<char> sourceChars = value.AsSpan();
-                char[]? encodedChars = default;
+                var encodedChars = pool.Rent(rentalSize);
 
                 try
                 {
                     do
                     {
-                        encodedChars = _options.BufferPool.Rent(rentalSize);
-                        AnglePlatesBuffers.OperationStatus status = _options.Encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
+                        AnglePlatesBuffers.OperationStatus status = encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
                         switch (status)
                         {
                             case AnglePlatesBuffers.OperationStatus.NeedMoreData:
@@ -142,6 +138,11 @@ internal static class Boilerplate
 
                             case AnglePlatesBuffers.OperationStatus.InvalidData:
                                 throw new AnglePlatesSystem.InvalidOperationException("Invalid data found in string. Does this string contain unpaired surrogates?");
+                        }
+
+                        if (charsConsumed == 0 && charsWritten == 0)
+                        {
+                            throw new AnglePlatesSystem.InvalidOperationException("Encoder made no progress with the temporary buffer.");
                         }
 
                         // Write the encoded characters and advance the source chars
@@ -154,10 +155,7 @@ internal static class Boilerplate
                 }
                 finally
                 {
-                    if (encodedChars is not null)
-                    {
-                        _options.BufferPool.Return(encodedChars);
-                    }
+                    pool.Return(encodedChars);
                 }
             }
 
@@ -199,8 +197,8 @@ internal static class Boilerplate
         /// <typeparam name="TModel">The type of model supported by the template.</typeparam>
         {{accessModifier}} abstract class Utf8Template<TModel>
         {
-            // Limit each temporary encoding buffer to 64K characters
-            private const int _maxRental = 64 * 1024;
+            // Cap requests at 32K characters; custom pools may return larger arrays
+            private const int _maxRental = 32 * 1024;
             private readonly TemplateOptions _options;
 
             /// <summary>
@@ -252,28 +250,24 @@ internal static class Boilerplate
                     return;
                 }
 
-                if (_options.Encoder is null)
+                var encoder = _options.Encoder;
+                if (encoder is null)
                 {
                     WriteRaw(value, writer);
                     return;
                 }
 
-                // This calculation is based on worst-case-scenario; clamp to keep within max size
-                int rentalSize = _options.Encoder.MaxOutputCharactersPerInputCharacter * value.Length;
-                if (rentalSize > _maxRental)
-                {
-                    rentalSize = _maxRental;
-                }
-
+                // Widen before multiplying so large values cannot overflow before clamping
+                int rentalSize = (int)AnglePlatesSystem.Math.Min((long)encoder.MaxOutputCharactersPerInputCharacter * value.Length, _maxRental);
+                var pool = _options.BufferPool;
                 AnglePlatesSystem.ReadOnlySpan<char> sourceChars = value.AsSpan();
-                char[]? encodedChars = default;
+                var encodedChars = pool.Rent(rentalSize);
 
                 try
                 {
                     do
                     {
-                        encodedChars = _options.BufferPool.Rent(rentalSize);
-                        AnglePlatesBuffers.OperationStatus status = _options.Encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
+                        AnglePlatesBuffers.OperationStatus status = encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
                         switch (status)
                         {
                             case AnglePlatesBuffers.OperationStatus.NeedMoreData:
@@ -281,6 +275,11 @@ internal static class Boilerplate
 
                             case AnglePlatesBuffers.OperationStatus.InvalidData:
                                 throw new AnglePlatesSystem.InvalidOperationException("Invalid data found in string. Does this string contain unpaired surrogates?");
+                        }
+
+                        if (charsConsumed == 0 && charsWritten == 0)
+                        {
+                            throw new AnglePlatesSystem.InvalidOperationException("Encoder made no progress with the temporary buffer.");
                         }
 
                         // Write the encoded characters as UTF8 and advance the source chars
@@ -293,10 +292,7 @@ internal static class Boilerplate
                 }
                 finally
                 {
-                    if (encodedChars is not null)
-                    {
-                        _options.BufferPool.Return(encodedChars);
-                    }
+                    pool.Return(encodedChars);
                 }
             }
 
