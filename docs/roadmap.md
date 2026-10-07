@@ -90,7 +90,7 @@ The generator project targets `netstandard2.0`; the sample and test applications
 5. Directives select the namespace, model, class-name prefix, renderer flags and access modifier. Three required-field diagnostics run.
 6. The generator injects `TemplateOptions`, `TextTemplate<TModel>` and `Utf8Template<TModel>` into the consumer assembly. These support types are emitted even if no template qualifies, and both renderer bases are always emitted.
 7. A template produces a concrete partial class named `<Type>TextTemplate` and, when enabled, `<Type>Utf8Template`. Both derive from a generic base closed over the declared model type.
-8. A render method writes literals and executes the embedded C# directly. Variable expressions become `Convert.ToString(expression)` followed by the base-class `Write` method.
+8. A render method writes literals and executes the embedded C# directly. C# variables become `Convert.ToString(value)` followed by the base-class `Write` method.
 
 The runtime types are generated into each consuming assembly, rather than supplied as shared runtime types by an ordinary library reference. That simplifies the sample's runtime references but needs a deliberate cross-assembly story: public support types with identical fully qualified names can conflict when multiple generated-template assemblies are consumed together.
 
@@ -130,27 +130,27 @@ Directive keywords are case-sensitive prefix matches rather than exact words: fo
 
 `AnglePlateBaseAccessModifier` is a project setting controlling generated support-type accessibility, default `public`. It is separate from `#access`; incompatible combinations, such as a public template inheriting an internal base, can cause compiler errors. Item-level accessibility metadata is not implemented.
 
-### Expressions, code and comments
+### C# variables, code and comments
 
-- `[[ expression ]]` evaluates a C# expression, converts it to a string, and applies the configured encoder. Both `model` and the generated alias `Model` refer to the supplied model.
+- `[[ C# variable ]]` evaluates embedded C#, converts its value to a string, and applies the configured encoder. Both `model` and the generated alias `Model` refer to the supplied model.
 - `[% statements %]` inserts C# into `Render`. Declare locals, call helpers, use loops, and open or close scopes here. A loop is closed with an ordinary `[% } %]` block; there is no special `end` keyword.
 - `[* comment *]` is discarded. It may contain line breaks.
-- C# extension-method calls can be used in expressions when their namespaces are actually in scope. There is no filter language.
-- Closed empty or whitespace-only expressions, code blocks, and comments are no-ops; their trim flags still apply to adjacent literals. Unclosed blocks report `SLAP004` at the opening delimiter and prevent only that template from generating.
-- Expressions and blocks can span lines, but the scanner stops at the first closing delimiter. It does not understand C# strings, comments, nesting or escaped delimiter sequences. A delimiter inside a C# string therefore terminates the template block.
-- There is no dedicated literal-delimiter escape, raw-expression marker, include, layout, section, inheritance or loader directive.
+- C# extension-method calls can be used in C# variables when their namespaces are actually in scope. There is no filter language.
+- Closed empty or whitespace-only C# variables, C# blocks, and comments are no-ops; their trim flags still apply to adjacent literals. Unclosed blocks report `SLAP004` at the opening delimiter and prevent only that template from generating.
+- C# variables and C# blocks can span lines, but the scanner stops at the first closing delimiter. It does not understand C# strings, comments, nesting or escaped delimiter sequences. A delimiter inside a C# string therefore terminates the template block.
+- There is no dedicated literal-delimiter escape, raw-value marker, include, layout, section, inheritance or loader directive.
 
 Generated locals include `model`, `Model`, `writer`, `value`, and, for UTF-8, `buffer`. User code can collide with these names. Indentation is a best-effort check for braces in strings, not C# parsing. Invalid embedded code is generally left for the C# compiler to report.
 
 ### Whitespace
 
-A `-` immediately after an opening delimiter trims the trailing whitespace of the immediately preceding literal. A `-` immediately before a closing delimiter trims leading whitespace of the immediately following literal. This applies to expressions, code and comments: `[[ expr -]]`, `[%- code %]`, `[*- comment -*]`.
+A `-` immediately after an opening delimiter trims the trailing whitespace of the immediately preceding literal. A `-` immediately before a closing delimiter trims leading whitespace of the immediately following literal. This applies to C# variables, C# blocks and comments: `[[ value -]]`, `[%- code %]`, `[*- comment -*]`.
 
 Trim characters are exactly CR, LF, tab and space. Trimming can remove all adjacent newlines, not just indentation. It is applied during source generation, not at render time, and does not propagate through intervening nonliteral tokens. Spaces around block contents are also removed by the tokenizer.
 
 The sample's trim flags intentionally produce `</p></body>` and `</html>#not directive` without intervening newlines. This is current behavior, not evidence of a failed render.
 
-A minus directly after an expression opener is interpreted as trim control: use `[[ -1 ]]` or `[[(-1)]]` for a negative value. `[[-1]]` with an ASCII hyphen directly after the opener instead consumes the minus as trim control. More generally, delimiter-adjacent hyphens belong to the template language.
+A minus directly after a C# variable opener is interpreted as trim control: use `[[ -1 ]]` or `[[(-1)]]` for a negative value. `[[-1]]` with an ASCII hyphen directly after the opener instead consumes the minus as trim control. More generally, delimiter-adjacent hyphens belong to the template language.
 
 ## Rendering API and security behavior
 
@@ -172,9 +172,9 @@ To obtain a string, use a `StringWriter` (as in the sample). There is no conveni
 | `BufferPool` | `ArrayPool<char>.Shared`; temporary encoded-character storage. |
 | `NullVariable` | `null`; fallback when `Write` receives null. |
 
-Only expression output passed through `Write` is automatically encoded. Template literals are trusted and written as-is. Code blocks can call protected `WriteRaw(value, writer)` or write to the writer directly, bypassing encoding. There is no first-class safe-HTML wrapper or per-expression raw syntax.
+Only C# variable output passed through `Write` is automatically encoded. Template literals are trusted and written as-is. C# blocks can call protected `WriteRaw(value, writer)` or write to the writer directly, bypassing encoding. There is no first-class safe-HTML wrapper or per-variable raw syntax.
 
-A probe containing `<b>`, ampersand, quotes and Unicode produced equivalent encoded text and UTF-8 output; disabling encoding preserved the raw value. This is an HTML-escaping default, not context-aware HTML/JavaScript/CSS/URL analysis. The engine never examines where an expression appears. It also compiles arbitrary C#, so templates themselves must be trusted code.
+A probe containing `<b>`, ampersand, quotes and Unicode produced equivalent encoded text and UTF-8 output; disabling encoding preserved the raw value. This is an HTML-escaping default, not context-aware HTML/JavaScript/CSS/URL analysis. The engine never examines where a C# variable appears. It also compiles arbitrary C#, so templates themselves must be trusted code.
 
 Conversion happens before the null fallback. `Convert.ToString((string?)null)` preserves null, but `Convert.ToString((object?)null)` returns an empty string; the latter bypasses `NullVariable`. Formatting uses the selected `Convert.ToString` overload and ambient behavior, with no explicit culture provider. Output options expose no culture setting.
 
@@ -186,7 +186,7 @@ Options are stored by reference and exposed through `Options`. Even `Default.Opt
 
 **Literal path:** text writes a static string. UTF-8 emits a C# `u8` literal followed by `.ToArray()` into a static `ReadOnlyMemory<byte>`, creating an array at type initialization. Each render copies literal bytes into the destination span and advances the writer. It avoids per-render UTF-8 transcoding, but has both an initialization copy and an output copy.
 
-**Dynamic-value path:** both renderers first call `Convert.ToString`. Depending on expression type, this can format/allocate or box. With encoding enabled, characters are encoded into a rented `char[]`; the UTF-8 renderer then transcodes these encoded characters to destination bytes. It does not format directly from arbitrary values into UTF-8 and does not call `TextEncoder.EncodeUtf8`. Disabling encoding removes the intermediate encoding buffer but still transcodes dynamic strings for byte output.
+**Dynamic-value path:** both renderers first call `Convert.ToString`. Depending on the C# variable's type, this can format/allocate or box. With encoding enabled, characters are encoded into a rented `char[]`; the UTF-8 renderer then transcodes these encoded characters to destination bytes. It does not format directly from arbitrary values into UTF-8 and does not call `TextEncoder.EncodeUtf8`. Disabling encoding removes the intermediate encoding buffer but still transcodes dynamic strings for byte output.
 
 The caller's writer can allocate and buffer the whole result. `RenderAsync`'s single final flush can also retain a large response before backpressure. No benchmark establishes throughput, allocation counts or an advantage over Razor/other engines.
 
@@ -198,11 +198,11 @@ Both generated encoding loops now rent once per nonempty encoded write, reuse th
 
 ### 2. Ordinary opening brackets: resolved
 
-Literal scanning advances over false delimiter candidates even at the start of a segment. `[ordinary] [[ model.Title ]]` now recognizes the expression, including when ordinary brackets follow another block. Regression cases execute both renderers and verify exact output.
+Literal scanning advances over false delimiter candidates even at the start of a segment. `[ordinary] [[ model.Title ]]` now recognizes the C# variable, including when ordinary brackets follow another block. Regression cases execute both renderers and verify exact output.
 
 ### 3. Empty and unclosed blocks: resolved; lexical scanning remains limited
 
-Closed empty or whitespace-only expressions, code blocks, and comments produce no output while retaining trim flags. Token trimming is bounded to the block or directive content. Unclosed blocks report `SLAP004` at the opening delimiter and prevent rendering-source emission only for that template. LF/CRLF, empty contents, adjacent blocks, trim markers, and all three block kinds have focused regressions. Closing-delimiter scanning still stops at the first matching delimiter, including inside C# strings/comments; lexical awareness remains separate work.
+Closed empty or whitespace-only C# variables, C# blocks, and comments produce no output while retaining trim flags. Token trimming is bounded to the block or directive content. Unclosed blocks report `SLAP004` at the opening delimiter and prevent rendering-source emission only for that template. LF/CRLF, empty contents, adjacent blocks, trim markers, and all three block kinds have focused regressions. Closing-delimiter scanning still stops at the first matching delimiter, including inside C# strings/comments; lexical awareness remains separate work.
 
 ### 4. Generated-source names: resolved
 
@@ -236,7 +236,7 @@ There is no registry, resolver, runtime file loader, dynamic compilation, layout
 
 Direct composition already fits the design: call a child template's `Render` with a child model and the same writer from a code block. Pass `Options` to the child constructor to retain the parent's encoder/pool choices; using the child's `Default` instead selects that singleton's own options.
 
-An inspection probe compiled and ran a parent and child for both renderer types, producing `<i>&lt;b&gt;</i>` in each. The parent used `[% Child(model, writer); %]` and a helper in each generated partial class that called the matching child renderer. This preserved child literal HTML and encoded its expression exactly once, with no intermediate rendered string.
+An inspection probe compiled and ran a parent and child for both renderer types, producing `<i>&lt;b&gt;</i>` in each. The parent used `[% Child(model, writer); %]` and a helper in each generated partial class that called the matching child renderer. This preserved child literal HTML and encoded its C# variable exactly once, with no intermediate rendered string.
 
 The helper matters because identical template C# is emitted for both renderers: directly calling `ChildTextTemplate` with `writer` cannot compile in the UTF-8 variant. Since `#render Utf8` currently also emits text, this limitation is especially visible. A composition feature should resolve the matching backend automatically or offer a shared overload-based helper API. Child allocation and reusable instances also deserve an explicit policy.
 
@@ -271,7 +271,7 @@ Scaffolding prepared on 2026-09-05: the existing .NET 10 TUnit executable now ha
 - [x] Balance rentals on success and failure, cap both renderer requests at 32,768 characters, and widen rental-size arithmetic before clamping. Verify chunked output, buffer identity, encoder/writer failures, and caller-owned writer semantics.
 - [ ] Settle directive contracts before snapshotting them: exact keyword matching, unknown/invalid values, repeated directives, functional `#using`, `#render` selection, and accessibility validation. Decide whether text-only consumers should receive UTF-8/Pipelines support and document the resulting minimum consumer requirements.
 - [ ] Cover parser token boundaries, comments, trim flags, false bracket starts, empty/unclosed blocks, delimiter-containing C# strings, directives, render selection, imports, class accessibility, duplicate names and invalid-file isolation. Snapshot both renderers and generated support types.
-- [ ] Execute generated methods and assert exact text and bytes for literals, expressions, loops, HTML escaping, raw writes, Unicode, null/culture behavior, multiple chunks and shared-writer child rendering. Count pool rents/returns, including exceptions and large values. Test writer ownership, final flush and cancellation according to the documented API contract.
+- [ ] Execute generated methods and assert exact text and bytes for literals, C# variables, loops, HTML escaping, raw writes, Unicode, null/culture behavior, multiple chunks and shared-writer child rendering. Count pool rents/returns, including exceptions and large values. Test writer ownership, final flush and cancellation according to the documented API contract.
 - [ ] Exercise incremental reruns: no input changes, one template changed, file added/removed, options changed and unrelated files changed. Assert output correctness and tracked-step reuse where caching is intended; AssemblyInfo's value-equatable inputs and stable hashed hint names provide useful implementation patterns.
 - [ ] Measure the 100% line/branch coverage target in Visual Studio 2026, including emitted renderer code. Do not add repository coverage tooling or CI gates unless explicitly requested.
 - [x] Pin compatible package versions. At inspection, AssemblyInfo used Roslyn 5.6.0, TUnit 1.65.0, Verify.SourceGenerators 2.5.0 and Verify.TUnit 31.27.0. These are reference versions, not a requirement to choose the newest Roslyn API: select a Roslyn floor supported by the advertised compiler/IDE hosts and prove it in the compatibility tests.
@@ -332,7 +332,7 @@ These are maintainer setup tasks outside the repository. No current AnglePlates 
 
 ### 7. Document the supported product and release procedure
 
-- [ ] Expand the current repository-focused README into user-facing package documentation with installation, required SDK/consumer versions, a minimal template/model and both rendering paths. Retain its purpose and maturity statement; add trusted-template security, default expression encoding, raw output, whitespace, and known limitations without relying on private project history.
+- [ ] Expand the current repository-focused README into user-facing package documentation with installation, required SDK/consumer versions, a minimal template/model and both rendering paths. Retain its purpose and maturity statement; add trusted-template security, default C# variable encoding, raw output, whitespace, and known limitations without relying on private project history.
 - [ ] Add `docs/overview.md`, `docs/local-packaging.md` and `docs/release-process.md`, following AssemblyInfo's separation. Include current project structure, commands, snapshot review, unique local versions, isolated package restore, archive inspection and a tested release checklist.
 - [ ] Document version updates, diagnostic shipped/unshipped changes, Release validation, annotated SemVer tags, published GitHub Releases, integration-feed rehearsal, publish gating and post-publish consumer verification. Record breaking changes to template syntax, generated API names, MSBuild properties and diagnostic IDs.
 - [ ] Keep documentation and sample syntax aligned with `#type`, `#model`, and the generated class names. Remove any stale generic examples or obsolete commented calls when found, and make documentation examples compile and render in automated checks.

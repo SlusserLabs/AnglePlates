@@ -2,7 +2,7 @@
 
 AnglePlates is like T4 templates for modern .NET. It uses a source generator to turn templates into typed C# classes without having to learn a custom syntax like Razor or Liquid.
 
-It's built to render quickly without chewing through memory. AnglePlates writes directly to a `TextWriter` or UTF-8 `IBufferWriter<byte>`. HTML is the main target, so expressions are HTML-encoded by default, but templates can use any text format.
+Templates are compiled into your project instead of shipped as separate files and achieve awesome performance and memory consumption because at the end of the day, they're just C# classes. The generated classes provide methods for writing directly to a `TextWriter` or asynchronously to an UTF-8 `IBufferWriter<byte>`. HTML is the main target, so C# variables are HTML-encoded by default, but templates can use any text format.
 
 ## Installation
 
@@ -19,9 +19,9 @@ AnglePlates has been tested with .NET 10 and C# 11. UTF-8 compiled templates req
 
 ## Anatomy of a template
 
-A template starts with a directive section followed by a body containing literal text, expressions, and C# blocks. For example, `Templates/greeting.html`:
+A template starts with a directive section followed by a body containing literal text, C# variables, and C# blocks. For example, `Templates/greeting.html`:
 
-```html
+```text
 #type Greeting
 #model MyApp.GreetingModel
 #namespace MyApp.Templates
@@ -35,7 +35,7 @@ A template starts with a directive section followed by a body containing literal
 [% } %]
 ```
 
-The generator creates two `public` classes in `MyApp.Templates`: `GreetingTextTemplate` and `GreetingUtf8Template`. A model can be any object you want to render. Here's one example:
+The generator creates two `public` classes in `MyApp.Templates`: `GreetingTextTemplate` and `GreetingUtf8Template`. A model can be any object you want to render, for example:
 
 ```csharp
 namespace MyApp;
@@ -62,21 +62,21 @@ Directives occupy consecutive lines at the very beginning of the file. The first
 
 ### Template syntax
 
-AnglePlates preserves literal text, including line endings. Expressions and C# blocks run inside the generated render method. You can refer to the supplied model as either `model` or `Model`.
+AnglePlates preserves literal text, including line endings. C# variables and C# blocks run inside the generated render method. You can refer to the supplied model as either `model` or `Model`.
 
 | Syntax | Example | Behavior |
 | --- | --- | --- |
 | Literal text | `<h1>Hello</h1>` | Writes text unchanged. |
-| Expression | `[[ model.Title ]]` | Converts the expression to a string and writes it through the configured encoder. |
-| C# block | `[% foreach (var item in model.Items) { %]<p>[[ item ]]</p>[% } %]` | Inserts C# into the render method for loops, conditions, or local variables. |
+| C# variable | `[[ model.Title ]]` | Converts the C# variable to a string and writes it through the configured encoder. |
+| C# block | `[% foreach (var item in model.Items) { %]<p>[[ item ]]</p>[% } %]` | Inserts C# as-is into the render method for loops, conditions, or local variables. |
 | Comment | `[* This is not rendered. *]` | Omits the comment from output. |
 | Raw output in C# | `[% WriteRaw(model.Html, writer); %]` | Writes a string without encoding in either rendering path. |
 
-C# blocks can call `Write(value, writer)` to encode a string or `WriteRaw(value, writer)` to write it without encoding. AnglePlates converts expressions with `Convert.ToString` before encoding them. Empty expressions, C# blocks, and comments produce no output. There isn't an escape syntax for delimiters, so a closing delimiter inside a C# string or comment still ends the block.
+C# blocks can call `Write(value, writer)` to encode a string or `WriteRaw(value, writer)` to write it without encoding. AnglePlates converts C# variables with `Convert.ToString` before encoding them. Empty C# variables, C# blocks, and comments produce no output. There isn't an escape syntax for delimiters, so a closing delimiter inside a C# string or comment still ends the block.
 
 ### Whitespace trimming
 
-Place a `-` immediately after an opening delimiter or before a closing delimiter to trim nearby whitespace from the literal text. Trim markers work with expressions, C# blocks, and comments, including empty blocks. They remove spaces, tabs, and line breaks (`[ \t\r\n]+`), but they do not trim expression values.
+Place a `-` immediately after an opening delimiter or before a closing delimiter to trim nearby whitespace from the literal text. Trim markers work with C# variables, C# blocks, and comments, including empty blocks. They remove spaces, tabs, and line breaks (`[ \t\r\n]+`), but they do not trim C# variable values.
 
 | Trim | Example | Behavior |
 | --- | --- | --- |
@@ -158,7 +158,7 @@ ASP.NET Core owns the response writer's lifetime, so the endpoint does not dispo
 
 ### Encoding and options
 
-AnglePlates writes literal text unchanged and encodes expressions with `HtmlEncoder.Default`. A null expression writes nothing by default. Pass `SlusserLabs.AnglePlates.TemplateOptions` to a compiled template to choose another `Encoder`. Set `Encoder` to `null` to disable expression encoding, or set `NullVariable` to choose what AnglePlates writes for a null expression.
+AnglePlates writes literal text unchanged and encodes C# variables with `HtmlEncoder.Default`. A null C# variable writes nothing by default. Pass `SlusserLabs.AnglePlates.TemplateOptions` to a compiled template to choose another `Encoder`. Set `Encoder` to `null` to disable C# variable encoding, or set `NullVariable` to choose what AnglePlates writes for a null C# variable.
 
 Generated support types are `public` by default. Set the `AnglePlateBaseAccessModifier` project property to `internal` to change their accessibility. When you do, also add `#access internal` to your templates so their generated classes do not expose less accessible base types.
 
@@ -194,7 +194,7 @@ If the same `AnglePlate` item appears more than once, AnglePlates adds it to `Ad
 
 - `#using` is parsed but does not emit imports. Use fully qualified C# type names in templates.
 - `#render Utf8` still generates a compiled template for text rendering.
-- Closing delimiters inside C# strings or comments end the block; avoid embedding `]]` in expressions or `%]` in C# blocks.
+- Closing delimiters inside C# strings or comments end the block; avoid embedding `]]` in C# variables or `%]` in C# blocks.
 - Templates that generate the same class names in the same namespace cause C# compiler errors.
 - Unclosed blocks report `SLAP004` and prevent that template from generating. Missing required directives report `SLAP001` through `SLAP003`. See [diagnostics](docs/diagnostics.md).
 

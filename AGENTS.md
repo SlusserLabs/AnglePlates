@@ -68,7 +68,7 @@ Do not duplicate instructions in `AGENTS.md` that are already defined by a refer
 - Keep emitted sources self-contained, including support types; use explicit aliases when consumer names could collide and cover collisions with compilation tests
 - Edit generator/transpiler sources rather than generated files under `obj`
 - Preserve exact template bytes, including intentional newline fixtures, and both text and UTF-8 rendering contracts; verify exact characters and bytes when changing parsing, trimming, encoding, or output
-- Templates contain trusted C#; preserve default expression encoding and explicit raw-output behavior
+- Templates contain trusted C#; preserve default C# variable encoding and explicit raw-output behavior
 - Preserve direct streaming; do not add whole-output buffering without a requirement
 - Preserve the analyzer-only package contract unless compatibility testing justifies a deliberate change: generated support types, no runtime assets or dependencies, and analyzer/XML assets under `analyzers/dotnet/cs/netstandard2.0`
 - Keep `buildTransitive` discovery working for default, custom, excluded, and explicit `AnglePlate` items

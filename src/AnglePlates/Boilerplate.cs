@@ -43,7 +43,7 @@ internal static class Boilerplate
             /// Gets or sets the <see cref="AnglePlatesEncoders.TextEncoder" /> to use when writing variables.
             /// The default is <see cref="AnglePlatesEncoders.HtmlEncoder.Default" />.
             /// </summary>
-            /// <remarks>Set to <c>null</c> to disable expression encoding.</remarks>
+            /// <remarks>Set to <c>null</c> to disable C# variable encoding.</remarks>
             public AnglePlatesEncoders.TextEncoder? Encoder { get; set; } = AnglePlatesEncoders.HtmlEncoder.Default;
 
             /// <summary>
