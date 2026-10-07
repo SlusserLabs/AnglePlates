@@ -93,25 +93,24 @@ public class TemplateGenerator : IIncrementalGenerator
                 var tokens = parseResult.Tokens;
 
                 var directiveTokens = tokens.Where(t => t.Type == TokenType.Directive);
-                var transpilerOptions = TemplateTranspilerOptions.Create(t.Content.AsSpan(), directiveTokens, parserOptions.Whitespace);
+                var transpilerOptions = TemplateTranspilerOptions.Create(
+                    t.Path, t.Content.AsSpan(), directiveTokens, parseResult.DirectiveSectionEnd, parserOptions.Whitespace);
 
-                // Validate transpiler options
-                var diagnostics = ValidateTranspilerOptions(transpilerOptions, t.Path);
-                if (parseResult.Errors.Count > 0)
+                // Report directive and parse errors, then skip only this template
+                if (transpilerOptions.Errors.Count > 0 || parseResult.Errors.Count > 0)
                 {
                     var sourceText = SourceText.From(t.Content, Encoding.UTF8);
+                    foreach (var error in transpilerOptions.Errors)
+                    {
+                        ctx.ReportDiagnostic(Diagnostic.Create(error.Descriptor,
+                            Location.Create(t.Path, error.Span, sourceText.Lines.GetLinePositionSpan(error.Span)), error.Arguments));
+                    }
+
                     foreach (var error in parseResult.Errors)
                     {
                         var span = new TextSpan(error.Start, error.Length);
-                        diagnostics.Add(Diagnostic.Create(DiagnosticDescriptors.UnclosedBlock,
+                        ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnclosedBlock,
                             Location.Create(t.Path, span, sourceText.Lines.GetLinePositionSpan(span)), error.ClosingDelimiter));
-                    }
-                }
-                if (diagnostics.Count > 0)
-                {
-                    foreach (var diag in diagnostics)
-                    {
-                        ctx.ReportDiagnostic(diag);
                     }
 
                     continue;
@@ -147,7 +146,7 @@ public class TemplateGenerator : IIncrementalGenerator
     {
         // Length prefixes keep paths and declared names from producing ambiguous identities
         var identity = new StringBuilder();
-        foreach (var component in new[] { path, options.Namespace, options.Type, generationTarget.ToString() })
+        foreach (var component in new[] { path, options.Namespace!, options.Type!, generationTarget.ToString() })
         {
             identity.Append(component.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(component);
         }
@@ -166,46 +165,6 @@ public class TemplateGenerator : IIncrementalGenerator
         var suffix = count == 0 ? string.Empty : $".{count.ToString(CultureInfo.InvariantCulture)}";
 
         return $"{prefix}{suffix}.g.cs";
-    }
-
-    private static List<Diagnostic> ValidateTranspilerOptions(TemplateTranspilerOptions options, string filePath)
-    {
-        var diagnostics = new List<Diagnostic>();
-
-        if (string.IsNullOrWhiteSpace(options.Type))
-        {
-            diagnostics.Add(Diagnostic.Create(
-                DiagnosticDescriptors.MissingType,
-                Location.None,
-                filePath));
-        }
-
-        if (string.IsNullOrWhiteSpace(options.Namespace))
-        {
-            diagnostics.Add(Diagnostic.Create(
-                DiagnosticDescriptors.MissingNamespace,
-                Location.None,
-                filePath));
-        }
-
-        if (string.IsNullOrWhiteSpace(options.ModelType))
-        {
-            diagnostics.Add(Diagnostic.Create(
-                DiagnosticDescriptors.MissingModelType,
-                Location.None,
-                filePath));
-        }
-
-        if (options.InvalidGenerationTarget is not null)
-        {
-            diagnostics.Add(Diagnostic.Create(
-                DiagnosticDescriptors.InvalidGenerationTarget,
-                Location.None,
-                filePath,
-                options.InvalidGenerationTarget));
-        }
-
-        return diagnostics;
     }
 
     private record TemplateFile

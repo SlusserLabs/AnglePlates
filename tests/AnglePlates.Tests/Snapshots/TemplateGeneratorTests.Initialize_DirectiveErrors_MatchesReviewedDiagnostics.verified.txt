@@ -1,0 +1,30 @@
+﻿{
+  Diagnostics: [
+    {
+      Location: Templates\example.html: (3,8)-(3,14),
+      Message: Directive '#access' has invalid value 'privat'. Expected 'public' or 'internal'.,
+      Severity: Error,
+      Descriptor: {
+        Id: SLAP007,
+        Title: Invalid directive value,
+        MessageFormat: Directive '#{0}' has invalid value '{1}'. Expected {2}.,
+        Category: SlusserLabs.AnglePlates,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    },
+    {
+      Location: Templates\example.html: (4,0)-(4,11),
+      Message: Directive '#type' appears more than once,
+      Severity: Error,
+      Descriptor: {
+        Id: SLAP006,
+        Title: Duplicate directive,
+        MessageFormat: Directive '{0}' appears more than once,
+        Category: SlusserLabs.AnglePlates,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}

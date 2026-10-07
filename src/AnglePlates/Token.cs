@@ -10,6 +10,11 @@ internal struct Token
     public bool TrimPrevious;
     public bool TrimNext;
 
+    // Directive tokens only; Start and End cover the trimmed value
+    public DirectiveKind Directive;
+    public int NameStart;
+    public int NameEnd;
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public (int offset, int length) GetOffsetAndLength()
     {

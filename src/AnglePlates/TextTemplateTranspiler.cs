@@ -39,6 +39,17 @@ internal class TextTemplateTranspiler
         indentedWriter.WriteLine(Boilerplate.Directives);
         indentedWriter.InnerWriter.WriteLine();
 
+        // Imports from #using apply to template C# and the model type; emitted support code stays global::-qualified
+        if (_options.UsingStatements.Count > 0)
+        {
+            foreach (var usingStatement in _options.UsingStatements)
+            {
+                indentedWriter.WriteLine($"using {usingStatement};");
+            }
+
+            indentedWriter.InnerWriter.WriteLine();
+        }
+
         indentedWriter.WriteLine($"namespace {_options.Namespace};");
         indentedWriter.InnerWriter.WriteLine();
 

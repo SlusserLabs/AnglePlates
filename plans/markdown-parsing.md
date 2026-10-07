@@ -59,13 +59,13 @@ Once only tagged files are considered, a tagged file that doesn't start with `#`
 Recommendation:
 
 - Files found by **folder discovery** (`Templates`, `Views`) that don't start with a directive are skipped silently, as today. A `Views` folder may hold other files.
-- Files added as **explicit `AnglePlate` items** that don't start with a directive report a new error, `SLAP009` "Template has no directive section", because the user asked for them by name.
+- Files added as **explicit `AnglePlate` items** that don't start with a directive report a new error, `SLAP008` "Template has no directive section", because the user asked for them by name.
 
 To tell them apart, set `AnglePlateSource="Discovered"` metadata in the folder `Include`s and `Explicit` for user items (the default when the metadata is empty). Make that metadata compiler-visible as well.
 
 ### 3. Let Markdown bodies start with a heading
 
-Coordinate with [directive-parsing.md](directive-parsing.md): a directive is `#` followed immediately by a letter. `# Heading`, `## Heading`, and `#!` end the directive section and render as literal text, so this works:
+Coordinate with [directive-parsing.md](directive-parsing.md): a directive line must start with one of the known directive names followed by whitespace. `# Heading`, `## Heading`, and `#!` end the directive section and render as literal text, so this works:
 
 ```text
 #type ReleaseNotes
@@ -87,13 +87,13 @@ Markdown templates should usually set `TemplateOptions.Encoder = null` or a Mark
 ## Steps
 
 1. Add the `CompilerVisibleItemMetadata` declarations to the props file. Add the `AnglePlate` and `AnglePlateSource` metadata in the targets file.
-2. Filter in `TemplateGenerator` on the metadata before `GetText`. Thread `AnglePlateSource` through `TemplateFile` so the generator can report `SLAP009` for explicit items.
-3. Add `SLAP009` to `DiagnosticDescriptors.cs`, `AnalyzerReleases.Unshipped.md`, and `docs/diagnostics.md`.
+2. Filter in `TemplateGenerator` on the metadata before `GetText`. Thread `AnglePlateSource` through `TemplateFile` so the generator can report `SLAP008` for explicit items.
+3. Add `SLAP008` to `DiagnosticDescriptors.cs`, `AnalyzerReleases.Unshipped.md`, and `docs/diagnostics.md`.
 4. Make sure `TestAnalyzerConfigOptionsProvider` can return per-file metadata (`docs/testing.md` says it supports per-file options). Add a small helper for tagged templates so existing tests stay short.
 5. Tests:
    - Untagged `#nullable enable`, `# Title`, and `#!/bin/bash` additional files: no diagnostics, no generated templates.
    - Replace `Initialize_InvalidTemplateRegardlessOfFileName_ReportsDiagnostics`. A tagged Markdown file with no valid directives still reports `SLAP001` to `SLAP003`, regardless of file name.
-   - A discovered tagged file without `#`: skipped. An explicit one: `SLAP009`.
+   - A discovered tagged file without `#`: skipped. An explicit one: `SLAP008`.
    - A Markdown template body starting with `# Heading`: exact text and UTF-8 output. This depends on the directive-parsing plan.
    - Incremental: changing an untagged additional file doesn't rerun template generation steps.
 6. Package tests: add `PublicAPI.Shipped.txt` (`#nullable enable`) and a `README.md` (`# Title`) as plain `AdditionalFiles` to the consumer, and assert the build stays clean. This also covers the roadmap's section 4 item about unrelated `AdditionalFiles`.

@@ -9,11 +9,20 @@ internal class TemplateParser
 {
     private readonly TemplateParserOptions _options;
     private readonly ReadOnlyMemory<char> _anyBlockStart;
+    private readonly (DirectiveKind Kind, ReadOnlyMemory<char> Prefix)[] _directivePrefixes;
 
     public TemplateParser(TemplateParserOptions options)
     {
         _options = options;
         _anyBlockStart = new char[] { _options.VariableStart.Span[0], _options.CodeStart.Span[0], _options.CommentStart.Span[0] };
+
+        var directiveStart = _options.DirectiveStart.ToString();
+        _directivePrefixes = new (DirectiveKind, ReadOnlyMemory<char>)[DirectiveKindExtensions.All.Length];
+        for (int i = 0; i < _directivePrefixes.Length; i++)
+        {
+            var kind = DirectiveKindExtensions.All[i];
+            _directivePrefixes[i] = (kind, (directiveStart + kind.GetName()).AsMemory());
+        }
     }
 
     public TemplateParseResult Parse(ReadOnlySpan<char> text)
@@ -29,6 +38,8 @@ internal class TemplateParser
             DebugToken(text, token);
             tokens.Add(token);
         }
+
+        result.DirectiveSectionEnd = reader.Position;
 
         // Find anything that is between blocks or is a block
         while (TryParseText(ref reader, out token) || TryParseBlock(ref reader, result.Errors, out token))
@@ -147,9 +158,24 @@ internal class TemplateParser
     private bool TryParseDirective(ref SpanReader<char> reader, out Token token)
     {
         token = default;
-        if (reader.IsNext(_options.DirectiveStart.Span, advancePast: true))
+        foreach (var (kind, prefix) in _directivePrefixes)
         {
-            var start = reader.Position;
+            if (!reader.IsNext(prefix.Span))
+            {
+                continue;
+            }
+
+            // A known name only counts when whitespace or the end of the text follows it
+            int nameStart = reader.Position;
+            int nameEnd = nameStart + prefix.Length;
+            if (nameEnd < reader.Span.Length && _options.Whitespace.Span.IndexOf(reader.Span[nameEnd]) < 0)
+            {
+                continue;
+            }
+
+            reader.Advance(prefix.Length);
+
+            // Consume the whole line, including its terminator, so the body starts on the next line
             if (!reader.TryReadTo(out _, '\n', advancePastDelimiter: true))
             {
                 // No line break? Can only be EOF
@@ -159,8 +185,18 @@ internal class TemplateParser
             token = new Token
             {
                 Type = TokenType.Directive,
+                Directive = kind,
+                NameStart = nameStart,
+                NameEnd = nameEnd
             };
-            TrimToken(reader.Span, start, reader.Position, ref token);
+            TrimToken(reader.Span, nameEnd, reader.Position, ref token);
+
+            // Trimming a blank value runs past the line break, so keep its empty span right after the name
+            if (token.Start == token.End)
+            {
+                token.Start = nameEnd;
+                token.End = nameEnd;
+            }
 
             return true;
         }

@@ -17,7 +17,7 @@ Use this reference when generating documentation, code comments, diagnostics, is
 | --- | --- | --- |
 | Template | Source generator input | The source file that AnglePlates reads. A template contains a directive section followed by its body. |
 | Compiled template | Caller code | A generated C# class that application code calls to render a template. Use "template" for the source file and "compiled template" for the generated class. |
-| Directive | Template authoring | A configuration line beginning with `#` at the start of a template, such as `#model System.String`. |
+| Directive | Template authoring | A configuration line at the start of a template that begins with a known directive name followed by whitespace or the end of the line, such as `#model System.String`. |
 | Directive section | Template authoring | The consecutive directive lines at the start of a template. AnglePlates uses line-based directives, so do not call this section frontmatter. |
 | Generation target | Template authoring and source generator | The compiled template class kind selected by `#generate`: `Text` or `Utf8`. Omitting the directive generates both kinds. |
 | C# variable | Template body | C# inside `[[ ... ]]`. AnglePlates converts its value to a string and passes it through the configured encoder. The parser represents it as `TokenType.Variable`. |

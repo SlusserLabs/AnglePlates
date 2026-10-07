@@ -9,6 +9,8 @@
 
 #nullable enable
 
+using System;
+
 namespace Consumer;
 
 /// <summary>

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Text;
 using SlusserLabs.AnglePlates.Tests.Infrastructure;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
@@ -104,7 +105,9 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
         await Assert.That(diagnostic.Descriptor.IsEnabledByDefault).IsTrue();
         await Assert.That(diagnostic.GetMessage()).IsEqualTo($"Template file 'Templates/example.html' is missing a {message}.");
-        await Assert.That(diagnostic.Location).IsEqualTo(Location.None);
+        // The directive section ends at the body, so that's where the missing directive is reported
+        await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan("Templates/example.html",
+            new LinePosition(2, 0), new LinePosition(2, 5)));
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
     }
 

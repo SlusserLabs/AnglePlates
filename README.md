@@ -49,16 +49,20 @@ public sealed class GreetingModel
 
 ### Directives
 
-Directives occupy consecutive lines at the very beginning of the file. The first character of a template must be `#`, and each directive starts on its own line. A blank line or any other text ends the directive section; subsequent lines starting with `#` are literal output. Directive names are case-sensitive.
+Directives occupy consecutive lines at the very beginning of the file. The first character of a template must be `#`, and each directive gets its own line with exactly one value. A line counts as a directive only when it starts with one of the names below, spelled exactly (names are case-sensitive), followed by a space, a tab, or the end of the line.
+
+The first line that isn't a directive starts the template body. That includes a blank line, an indented line, `# Heading`, `#!`, a CSS rule like `#header { ... }`, and, yes, a misspelled directive. Directive lines and their line breaks never reach the output, so if your markup starts on the line right after the last directive, the output starts with your markup. Want a leading newline? Add a blank line.
+
+`#type`, `#model`, `#namespace`, `#generate`, and `#access` may each appear once. Repeat `#using` as often as you like, one namespace per line.
 
 | Directive | Required | Purpose and default | Sample value |
 | --- | --- | --- | --- |
-| `#type` | Yes | Generated class name prefix, with `TextTemplate` or `Utf8Template` appended. | `#type Greeting` |
-| `#model` | Yes | Model's C# type; use a fully qualified name. | `#model MyApp.GreetingModel` |
-| `#namespace` | Yes | Namespace for compiled template classes. | `#namespace MyApp.Templates` |
-| `#generate` | No | Omit it to generate both compiled templates. Set it to the single case-insensitive value `Text` or `Utf8` to generate only that template type. | `#generate Utf8` |
+| `#type` | Yes | Generated class name prefix, with `TextTemplate` or `Utf8Template` appended. Must be a C# identifier. | `#type Greeting` |
+| `#model` | Yes | Model's C# type. Use a fully qualified name or add a matching `#using`. | `#model MyApp.GreetingModel` |
+| `#namespace` | Yes | Namespace for compiled template classes, as a dotted name. | `#namespace MyApp.Templates` |
+| `#generate` | No | Omit it to generate both compiled templates. Set it to the case-insensitive value `Text` or `Utf8` to generate only that template type. | `#generate Utf8` |
 | `#access` | No | Compiled template accessibility; defaults to `public`. | `#access public` or `#access internal` |
-| `#using` | No | Accepts comma-separated namespace names, but doesn't emit imports yet. Use fully qualified C# names instead. | `#using System, System.Linq` |
+| `#using` | No | Adds a `using` directive for the template's C# and the `#model` type. Plain namespace names only; no `static`, aliases, or `global::`. | `#using System.Linq` |
 
 ### Template syntax
 
@@ -194,10 +198,10 @@ If the same `AnglePlate` item appears more than once, AnglePlates adds it to `Ad
 
 ## Current limitations
 
-- `#using` is parsed but does not emit imports. Use fully qualified C# type names in templates.
+- A misspelled directive isn't an error; it ends the directive section and shows up in the output, along with any directives after it. If a required directive follows the typo, its missing-directive error (`SLAP001` through `SLAP003`) points at the typo. If no required directive comes after a misspelled one, nothing catches it, so put your required directives last or check your output.
 - Closing delimiters inside C# strings or comments end the block; avoid embedding `]]` in C# variables or `%]` in C# blocks.
 - Templates that generate the same class names in the same namespace cause C# compiler errors.
-- Unclosed blocks report `SLAP004`, and invalid `#generate` values report `SLAP005`. Both prevent that template from generating. Missing required directives report `SLAP001` through `SLAP003`. See [diagnostics](docs/diagnostics.md).
+- Missing required directives report `SLAP001` through `SLAP003`, unclosed blocks report `SLAP004`, invalid `#generate` values report `SLAP005`, repeated directives report `SLAP006`, and other invalid directive values report `SLAP007`. Each one stops that template from generating. See [diagnostics](docs/diagnostics.md).
 
 For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
 
