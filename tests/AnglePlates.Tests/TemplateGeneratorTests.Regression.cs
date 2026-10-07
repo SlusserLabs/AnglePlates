@@ -27,7 +27,7 @@ public sealed partial class TemplateGeneratorTests
             RenderingTestHelper.Template("second [[ model ]]", "Second", path: "Templates/z.html")
         };
         var invalidPath = new[] { "Templates/0.html", "Templates/m.html", "Templates/zz.html" }[invalidPosition];
-        templates.Insert(invalidPosition, new TemplateAdditionalText("#render Text\r\n[[", invalidPath));
+        templates.Insert(invalidPosition, new TemplateAdditionalText("#generate Text\r\n[[", invalidPath));
         templates.Add(RenderingTestHelper.Template("[% unclosed", "Bad", path: "Templates/bad.html"));
         var result = RenderingTestHelper.Generate(templates.ToArray());
         var first = RenderingTestHelper.Render(result.Compilation, type: "Consumer.First");
@@ -116,8 +116,8 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("Templates\\example.html")]
     public async Task Initialize_DuplicateTypes_DefersErrorsToCompiler(string secondPath)
     {
-        var first = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n#render Text\r\n");
-        var second = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n#render Text\r\n", secondPath);
+        var first = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n#generate Text\r\n");
+        var second = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n#generate Text\r\n", secondPath);
         var compilation = GeneratorTestHelper.CreateCompilation();
         var driver = GeneratorTestHelper.CreateDriver([first, second]).RunGenerators(compilation);
         var trees = driver.GetRunResult().GeneratedTrees.Skip(3).ToArray();

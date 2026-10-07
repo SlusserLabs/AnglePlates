@@ -45,7 +45,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_RenderDirectiveOmitted_GeneratesTextAndUtf8Types()
+    public async Task Initialize_GenerateDirectiveOmitted_GeneratesTextAndUtf8Types()
     {
         const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\nHello [[ model ]]";
 
@@ -60,9 +60,9 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     [Arguments("Text", true, false)]
     [Arguments("Utf8", false, true)]
-    public async Task Initialize_RenderDirectiveSpecified_GeneratesSelectedType(string renderer, bool hasTextType, bool hasUtf8Type)
+    public async Task Initialize_GenerateDirectiveSpecified_GeneratesSelectedType(string generationTarget, bool hasTextType, bool hasUtf8Type)
     {
-        var template = $"#type Example\r\n#model string\r\n#namespace Consumer\r\n#render {renderer}\r\nHello [[ model ]]";
+        var template = $"#type Example\r\n#model string\r\n#namespace Consumer\r\n#generate {generationTarget}\r\nHello [[ model ]]";
 
         var result = RunGenerator(new TemplateAdditionalText(template));
         var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
@@ -73,16 +73,16 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_RenderDirectiveWithMultipleValues_ReportsDiagnostic()
+    public async Task Initialize_GenerateDirectiveWithMultipleValues_ReportsDiagnostic()
     {
-        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\n#render Text, Utf8\r\nHello [[ model ]]";
+        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\n#generate Text, Utf8\r\nHello [[ model ]]";
 
         var result = RunGenerator(new TemplateAdditionalText(template));
 
         await Assert.That(result.Diagnostics.Length).IsEqualTo(1);
         await Assert.That(result.Diagnostics[0].Id).IsEqualTo("SLAP005");
         await Assert.That(result.Diagnostics[0].GetMessage()).IsEqualTo(
-            "Template file 'Templates/example.html' has invalid render target 'Text, Utf8'. Expected 'Text' or 'Utf8'.");
+            "Template file 'Templates/example.html' has invalid generation target 'Text, Utf8'. Expected 'Text' or 'Utf8'.");
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
     }
 
@@ -111,7 +111,7 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     public async Task Initialize_AllRequiredDirectivesMissing_ReportsAllDiagnostics()
     {
-        var result = RunGenerator(new TemplateAdditionalText("#render Text\r\nHello"));
+        var result = RunGenerator(new TemplateAdditionalText("#generate Text\r\nHello"));
 
         await Assert.That(string.Join(",", result.Diagnostics.Select(diagnostic => diagnostic.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);

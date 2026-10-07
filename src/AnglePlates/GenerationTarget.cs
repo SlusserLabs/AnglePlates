@@ -3,7 +3,7 @@ using System;
 namespace SlusserLabs.AnglePlates;
 
 [Flags]
-internal enum Renderer
+internal enum GenerationTarget
 {
     None = 0,
     Utf8 = 1 << 0,

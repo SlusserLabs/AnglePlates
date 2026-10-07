@@ -87,7 +87,7 @@ The generator project targets `netstandard2.0`; the sample and test applications
 2. Those items become Roslyn `AdditionalFiles`. There is no extension filter.
 3. The generator inspects every additional text, not just a tagged AnglePlate subset. It accepts nonempty files whose decoded content begins immediately with `#`. Leading whitespace or an initial blank line silently excludes a file. Unrelated additional files beginning with `#` can be mistaken for templates.
 4. The parser consumes consecutive directive lines at the start, then emits literal, variable, code and comment tokens. Tokens store offsets and trim flags rather than copies of their contents.
-5. Directives select the namespace, model, class-name prefix, renderer flags and access modifier. Three required-field diagnostics run.
+5. Directives select the namespace, model, class-name prefix, generation target and access modifier. Three required-field diagnostics run.
 6. The generator injects `TemplateOptions`, `TextTemplate<TModel>` and `Utf8Template<TModel>` into the consumer assembly. These support types are emitted even if no template qualifies, and both renderer bases are always emitted.
 7. By default, a template produces concrete partial classes named `<Type>TextTemplate` and `<Type>Utf8Template`. Both derive from a generic base closed over the declared model type.
 8. A render method writes literals and executes the embedded C# directly. C# variables become `Convert.ToString(value)` followed by the base-class `Write` method.
@@ -121,7 +121,7 @@ Directives are line-based, must be consecutive at the very beginning, and are st
 | `#type HelloWorld` | Required. Class-name prefix; produces `HelloWorldTextTemplate` / `HelloWorldUtf8Template`. |
 | `#model Fully.Qualified.Model` | Required. Inserted as a C# type. A built-in type such as `string` also works. |
 | `#namespace My.Templates` | Required. Inserted as a C# namespace. |
-| `#render Utf8` | Optional. Omitting it generates both renderers. When present, it accepts one case-insensitive value: `Text` or `Utf8`. The template generates only the selected renderer. Other values report `SLAP005`. |
+| `#generate Utf8` | Optional. Omitting it generates both compiled template types. When present, it accepts one case-insensitive generation target: `Text` or `Utf8`. The template generates only the selected class kind. Other values report `SLAP005`. |
 | `#access internal` | Generated template class accessibility; defaults to `public`. Text is inserted without syntax/accessibility validation. |
 | `#using System.Linq, System.Text` | Parsed but never emitted by either transpiler. Repeated directives replace the previous list. Currently ineffective. |
 
@@ -268,8 +268,8 @@ Scaffolding prepared on 2026-09-05: the existing .NET 10 TUnit executable now ha
 - [x] Fix false opening-delimiter candidates and empty/unclosed blocks while preserving trim behavior. Closed empty blocks are no-ops; unclosed blocks report `SLAP004` at the opener. Keep and document first-closing-delimiter scanning, including inside C# strings/comments.
 - [x] Isolate expected template failures and make hint names stable and unique across paths/namespaces, with separator normalization and case preservation. Leave actual generated-type conflicts to the C# compiler; regression-test its errors explicitly.
 - [x] Balance rentals on success and failure, cap both renderer requests at 32,768 characters, and widen rental-size arithmetic before clamping. Verify chunked output, buffer identity, encoder/writer failures, and caller-owned writer semantics.
-- [ ] Settle directive contracts before snapshotting them: exact keyword matching, unknown/invalid values, repeated directives, functional `#using`, `#render` selection, and accessibility validation. Decide whether text-only consumers should receive UTF-8/Pipelines support and document the resulting minimum consumer requirements.
-- [ ] Cover parser token boundaries, comments, trim flags, false bracket starts, empty/unclosed blocks, delimiter-containing C# strings, directives, render selection, imports, class accessibility, duplicate names and invalid-file isolation. Snapshot both renderers and generated support types.
+- [ ] Settle directive contracts before snapshotting them: exact keyword matching, unknown/invalid values, repeated directives, functional `#using`, `#generate` selection, and accessibility validation. Decide whether text-only consumers should receive UTF-8/Pipelines support and document the resulting minimum consumer requirements.
+- [ ] Cover parser token boundaries, comments, trim flags, false bracket starts, empty/unclosed blocks, delimiter-containing C# strings, directives, generation selection, imports, class accessibility, duplicate names and invalid-file isolation. Snapshot both renderers and generated support types.
 - [ ] Execute generated methods and assert exact text and bytes for literals, C# variables, loops, HTML escaping, raw writes, Unicode, null/culture behavior, multiple chunks and shared-writer child rendering. Count pool rents/returns, including exceptions and large values. Test writer ownership, final flush and cancellation according to the documented API contract.
 - [ ] Exercise incremental reruns: no input changes, one template changed, file added/removed, options changed and unrelated files changed. Assert output correctness and tracked-step reuse where caching is intended; AssemblyInfo's value-equatable inputs and stable hashed hint names provide useful implementation patterns.
 - [ ] Measure the 100% line/branch coverage target in Visual Studio 2026, including emitted renderer code. Do not add repository coverage tooling or CI gates unless explicitly requested.

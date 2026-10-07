@@ -118,36 +118,36 @@ public class TemplateGenerator : IIncrementalGenerator
                 }
 
                 // Transpile
-                if (transpilerOptions.Renderer.HasFlag(Renderer.Text))
+                if (transpilerOptions.GenerationTarget.HasFlag(GenerationTarget.Text))
                 {
                     var builder = new StringBuilder(t.Content.Length);
                     using var writer = new StringWriter(builder);
                     var textTranspiler = new TextTemplateTranspiler(t.RelativePath, transpilerOptions);
                     textTranspiler.Transpile(writer, t.Content.AsSpan(), tokens);
 
-                    var hintName = CreateHintName(t.RelativePath, transpilerOptions, Renderer.Text, hintNameCounts);
+                    var hintName = CreateHintName(t.RelativePath, transpilerOptions, GenerationTarget.Text, hintNameCounts);
                     ctx.AddSource(hintName, builder.ToString());
                 }
 
-                if (transpilerOptions.Renderer.HasFlag(Renderer.Utf8))
+                if (transpilerOptions.GenerationTarget.HasFlag(GenerationTarget.Utf8))
                 {
                     var builder = new StringBuilder(t.Content.Length);
                     using var writer = new StringWriter(builder);
                     var utf8Transpiler = new Utf8TemplateTranspiler(t.RelativePath, transpilerOptions);
                     utf8Transpiler.Transpile(writer, t.Content.AsSpan(), tokens);
 
-                    var hintName = CreateHintName(t.RelativePath, transpilerOptions, Renderer.Utf8, hintNameCounts);
+                    var hintName = CreateHintName(t.RelativePath, transpilerOptions, GenerationTarget.Utf8, hintNameCounts);
                     ctx.AddSource(hintName, builder.ToString());
                 }
             }
         });
     }
 
-    private static string CreateHintName(string path, TemplateTranspilerOptions options, Renderer renderer, Dictionary<string, int> counts)
+    private static string CreateHintName(string path, TemplateTranspilerOptions options, GenerationTarget generationTarget, Dictionary<string, int> counts)
     {
         // Length prefixes keep paths and declared names from producing ambiguous identities
         var identity = new StringBuilder();
-        foreach (var component in new[] { path, options.Namespace, options.Type, renderer.ToString() })
+        foreach (var component in new[] { path, options.Namespace, options.Type, generationTarget.ToString() })
         {
             identity.Append(component.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(component);
         }
@@ -160,7 +160,7 @@ public class TemplateGenerator : IIncrementalGenerator
             hex.Append(value.ToString("x2", CultureInfo.InvariantCulture));
         }
 
-        var prefix = $"{renderer}Template.{hex}";
+        var prefix = $"{generationTarget}Template.{hex}";
         counts.TryGetValue(prefix, out int count);
         counts[prefix] = count + 1;
         var suffix = count == 0 ? string.Empty : $".{count.ToString(CultureInfo.InvariantCulture)}";
@@ -196,13 +196,13 @@ public class TemplateGenerator : IIncrementalGenerator
                 filePath));
         }
 
-        if (options.InvalidRenderer is not null)
+        if (options.InvalidGenerationTarget is not null)
         {
             diagnostics.Add(Diagnostic.Create(
-                DiagnosticDescriptors.InvalidRenderer,
+                DiagnosticDescriptors.InvalidGenerationTarget,
                 Location.None,
                 filePath,
-                options.InvalidRenderer));
+                options.InvalidGenerationTarget));
         }
 
         return diagnostics;

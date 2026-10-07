@@ -10,7 +10,7 @@ internal struct TemplateTranspilerOptions
     private static readonly ReadOnlyMemory<char> _typeDirective = "type".ToCharArray();
     private static readonly ReadOnlyMemory<char> _modelTypeDirective = "model".ToCharArray();
     private static readonly ReadOnlyMemory<char> _namespaceDirective = "namespace".ToCharArray();
-    private static readonly ReadOnlyMemory<char> _renderDirective = "render".ToCharArray();
+    private static readonly ReadOnlyMemory<char> _generateDirective = "generate".ToCharArray();
     private static readonly ReadOnlyMemory<char> _usingDirective = "using".ToCharArray();
     private static readonly ReadOnlyMemory<char> _accessModifierDirective = "access".ToCharArray();
 
@@ -19,8 +19,8 @@ internal struct TemplateTranspilerOptions
     public string Namespace;
     public string Type;
     public string ModelType;
-    public Renderer Renderer;
-    public string InvalidRenderer;
+    public GenerationTarget GenerationTarget;
+    public string InvalidGenerationTarget;
     public string AccessModifier;
 
     public static TemplateTranspilerOptions Create(ReadOnlySpan<char> text, IEnumerable<Token> directiveTokens, ReadOnlyMemory<char> whitespace)
@@ -32,7 +32,7 @@ internal struct TemplateTranspilerOptions
         {
             Whitespace = whitespace,
             AccessModifier = "public",
-            Renderer = Renderer.Text | Renderer.Utf8
+            GenerationTarget = GenerationTarget.Text | GenerationTarget.Utf8
         };
         foreach (var token in directiveTokens)
         {
@@ -54,21 +54,21 @@ internal struct TemplateTranspilerOptions
                 directive = directive.Slice(_namespaceDirective.Length);
                 options.Namespace = directive.Trim().ToString();
             }
-            else if (directive.StartsWith(_renderDirective.Span))
+            else if (directive.StartsWith(_generateDirective.Span))
             {
-                directive = directive.Slice(_renderDirective.Length);
-                var renderer = directive.Trim().ToString();
-                if (string.Equals(renderer, nameof(Renderer.Text), StringComparison.OrdinalIgnoreCase))
+                directive = directive.Slice(_generateDirective.Length);
+                var generationTarget = directive.Trim().ToString();
+                if (string.Equals(generationTarget, nameof(GenerationTarget.Text), StringComparison.OrdinalIgnoreCase))
                 {
-                    options.Renderer = Renderer.Text;
+                    options.GenerationTarget = GenerationTarget.Text;
                 }
-                else if (string.Equals(renderer, nameof(Renderer.Utf8), StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(generationTarget, nameof(GenerationTarget.Utf8), StringComparison.OrdinalIgnoreCase))
                 {
-                    options.Renderer = Renderer.Utf8;
+                    options.GenerationTarget = GenerationTarget.Utf8;
                 }
                 else
                 {
-                    options.InvalidRenderer = renderer;
+                    options.InvalidGenerationTarget = generationTarget;
                 }
             }
             else if (directive.StartsWith(_usingDirective.Span))

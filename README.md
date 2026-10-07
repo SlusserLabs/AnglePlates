@@ -56,7 +56,7 @@ Directives occupy consecutive lines at the very beginning of the file. The first
 | `#type` | Yes | Generated class name prefix, with `TextTemplate` or `Utf8Template` appended. | `#type Greeting` |
 | `#model` | Yes | Model's C# type; use a fully qualified name. | `#model MyApp.GreetingModel` |
 | `#namespace` | Yes | Namespace for compiled template classes. | `#namespace MyApp.Templates` |
-| `#render` | No | Omit it to generate both compiled templates. Set it to the single case-insensitive value `Text` or `Utf8` to generate only that template type. | `#render Utf8` |
+| `#generate` | No | Omit it to generate both compiled templates. Set it to the single case-insensitive value `Text` or `Utf8` to generate only that template type. | `#generate Utf8` |
 | `#access` | No | Compiled template accessibility; defaults to `public`. | `#access public` or `#access internal` |
 | `#using` | No | Accepts comma-separated namespace names, but doesn't emit imports yet. Use fully qualified C# names instead. | `#using System, System.Linq` |
 
@@ -90,7 +90,7 @@ Place a `-` immediately after an opening delimiter or before a closing delimiter
 
 ## Using compiled templates
 
-Each compiled template has a `Render` method. Text templates write characters to a `TextWriter`, while UTF-8 templates write bytes to an `IBufferWriter<byte>`. Both template types are generated unless you configure the `#render` directive. UTF-8 templates can also write to a `PipeWriter` with `RenderAsync`.
+Each compiled template has a `Render` method. Text templates write characters to a `TextWriter`, while UTF-8 templates write bytes to an `IBufferWriter<byte>`. Both template types are generated unless you configure the `#generate` directive. UTF-8 templates can also write to a `PipeWriter` with `RenderAsync`.
 
 ```csharp
 namespace MyApp.Templates;
@@ -197,7 +197,7 @@ If the same `AnglePlate` item appears more than once, AnglePlates adds it to `Ad
 - `#using` is parsed but does not emit imports. Use fully qualified C# type names in templates.
 - Closing delimiters inside C# strings or comments end the block; avoid embedding `]]` in C# variables or `%]` in C# blocks.
 - Templates that generate the same class names in the same namespace cause C# compiler errors.
-- Unclosed blocks report `SLAP004`, and invalid `#render` values report `SLAP005`. Both prevent that template from generating. Missing required directives report `SLAP001` through `SLAP003`. See [diagnostics](docs/diagnostics.md).
+- Unclosed blocks report `SLAP004`, and invalid `#generate` values report `SLAP005`. Both prevent that template from generating. Missing required directives report `SLAP001` through `SLAP003`. See [diagnostics](docs/diagnostics.md).
 
 For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
 
