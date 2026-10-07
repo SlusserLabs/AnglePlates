@@ -20,6 +20,7 @@ internal struct TemplateTranspilerOptions
     public string Type;
     public string ModelType;
     public Renderer Renderer;
+    public string InvalidRenderer;
     public string AccessModifier;
 
     public static TemplateTranspilerOptions Create(ReadOnlySpan<char> text, IEnumerable<Token> directiveTokens, ReadOnlyMemory<char> whitespace)
@@ -31,9 +32,8 @@ internal struct TemplateTranspilerOptions
         {
             Whitespace = whitespace,
             AccessModifier = "public",
-            Renderer = Renderer.Text
+            Renderer = Renderer.Text | Renderer.Utf8
         };
-
         foreach (var token in directiveTokens)
         {
             var (offset, length) = token.GetOffsetAndLength();
@@ -57,13 +57,18 @@ internal struct TemplateTranspilerOptions
             else if (directive.StartsWith(_renderDirective.Span))
             {
                 directive = directive.Slice(_renderDirective.Length);
-                var render = directive.ToString().Split(',').Select(d => d.Trim());
-                foreach (var s in render)
+                var renderer = directive.Trim().ToString();
+                if (string.Equals(renderer, nameof(Renderer.Text), StringComparison.OrdinalIgnoreCase))
                 {
-                    if (Enum.TryParse(s, ignoreCase: true, out Renderer renderer))
-                    {
-                        options.Renderer |= renderer;
-                    }
+                    options.Renderer = Renderer.Text;
+                }
+                else if (string.Equals(renderer, nameof(Renderer.Utf8), StringComparison.OrdinalIgnoreCase))
+                {
+                    options.Renderer = Renderer.Utf8;
+                }
+                else
+                {
+                    options.InvalidRenderer = renderer;
                 }
             }
             else if (directive.StartsWith(_usingDirective.Span))

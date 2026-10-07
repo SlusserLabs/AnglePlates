@@ -196,6 +196,15 @@ public class TemplateGenerator : IIncrementalGenerator
                 filePath));
         }
 
+        if (options.InvalidRenderer is not null)
+        {
+            diagnostics.Add(Diagnostic.Create(
+                DiagnosticDescriptors.InvalidRenderer,
+                Location.None,
+                filePath,
+                options.InvalidRenderer));
+        }
+
         return diagnostics;
     }
 

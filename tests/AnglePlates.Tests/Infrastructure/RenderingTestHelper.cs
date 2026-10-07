@@ -9,7 +9,7 @@ internal static class RenderingTestHelper
 {
     public static TemplateAdditionalText Template(string body, string type = "Example", string ns = "Consumer", string path = "Templates/example.html")
     {
-        return new TemplateAdditionalText($"#type {type}\r\n#model string\r\n#namespace {ns}\r\n#render Text, Utf8\r\n{body}", path);
+        return new TemplateAdditionalText($"#type {type}\r\n#model string\r\n#namespace {ns}\r\n#using System\r\n{body}", path);
     }
 
     public static GeneratorTestResult Generate(params AdditionalText[] templates)

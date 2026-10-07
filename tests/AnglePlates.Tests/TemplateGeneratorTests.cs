@@ -18,7 +18,7 @@ public sealed partial class TemplateGeneratorTests
     [Arguments(true)]
     public async Task Initialize_ConsumerWithoutImplicitImports_Compiles(bool conflictingNames)
     {
-        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\n#render Text, Utf8\r\nHello [[ model ]]";
+        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\nHello [[ model ]]";
         var source = conflictingNames ? CreateConflictingTypes() : string.Empty;
         var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp11);
         var referencePaths = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
@@ -42,6 +42,48 @@ public sealed partial class TemplateGeneratorTests
         var errors = result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         await Assert.That(string.Join(Environment.NewLine, errors)).IsEqualTo(string.Empty);
         await Assert.That(result.Success).IsTrue();
+    }
+
+    [Test]
+    public async Task Initialize_RenderDirectiveOmitted_GeneratesTextAndUtf8Types()
+    {
+        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\nHello [[ model ]]";
+
+        var result = RunGenerator(new TemplateAdditionalText(template));
+        var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
+
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(5);
+        await Assert.That(generatedSource).Contains("public partial class ExampleTextTemplate");
+        await Assert.That(generatedSource).Contains("public partial class ExampleUtf8Template");
+    }
+
+    [Test]
+    [Arguments("Text", true, false)]
+    [Arguments("Utf8", false, true)]
+    public async Task Initialize_RenderDirectiveSpecified_GeneratesSelectedType(string renderer, bool hasTextType, bool hasUtf8Type)
+    {
+        var template = $"#type Example\r\n#model string\r\n#namespace Consumer\r\n#render {renderer}\r\nHello [[ model ]]";
+
+        var result = RunGenerator(new TemplateAdditionalText(template));
+        var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
+
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
+        await Assert.That(generatedSource.Contains("public partial class ExampleTextTemplate", StringComparison.Ordinal)).IsEqualTo(hasTextType);
+        await Assert.That(generatedSource.Contains("public partial class ExampleUtf8Template", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
+    }
+
+    [Test]
+    public async Task Initialize_RenderDirectiveWithMultipleValues_ReportsDiagnostic()
+    {
+        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\n#render Text, Utf8\r\nHello [[ model ]]";
+
+        var result = RunGenerator(new TemplateAdditionalText(template));
+
+        await Assert.That(result.Diagnostics.Length).IsEqualTo(1);
+        await Assert.That(result.Diagnostics[0].Id).IsEqualTo("SLAP005");
+        await Assert.That(result.Diagnostics[0].GetMessage()).IsEqualTo(
+            "Template file 'Templates/example.html' has invalid render target 'Text, Utf8'. Expected 'Text' or 'Utf8'.");
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
     }
 
     [Test]

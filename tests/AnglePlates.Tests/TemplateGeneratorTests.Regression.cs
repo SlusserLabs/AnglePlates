@@ -116,8 +116,8 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("Templates\\example.html")]
     public async Task Initialize_DuplicateTypes_DefersErrorsToCompiler(string secondPath)
     {
-        var first = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n");
-        var second = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n", secondPath);
+        var first = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n#render Text\r\n");
+        var second = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n#render Text\r\n", secondPath);
         var compilation = GeneratorTestHelper.CreateCompilation();
         var driver = GeneratorTestHelper.CreateDriver([first, second]).RunGenerators(compilation);
         var trees = driver.GetRunResult().GeneratedTrees.Skip(3).ToArray();

@@ -89,7 +89,7 @@ The generator project targets `netstandard2.0`; the sample and test applications
 4. The parser consumes consecutive directive lines at the start, then emits literal, variable, code and comment tokens. Tokens store offsets and trim flags rather than copies of their contents.
 5. Directives select the namespace, model, class-name prefix, renderer flags and access modifier. Three required-field diagnostics run.
 6. The generator injects `TemplateOptions`, `TextTemplate<TModel>` and `Utf8Template<TModel>` into the consumer assembly. These support types are emitted even if no template qualifies, and both renderer bases are always emitted.
-7. A template produces a concrete partial class named `<Type>TextTemplate` and, when enabled, `<Type>Utf8Template`. Both derive from a generic base closed over the declared model type.
+7. By default, a template produces concrete partial classes named `<Type>TextTemplate` and `<Type>Utf8Template`. Both derive from a generic base closed over the declared model type.
 8. A render method writes literals and executes the embedded C# directly. C# variables become `Convert.ToString(value)` followed by the base-class `Write` method.
 
 The runtime types are generated into each consuming assembly, rather than supplied as shared runtime types by an ordinary library reference. That simplifies the sample's runtime references but needs a deliberate cross-assembly story: public support types with identical fully qualified names can conflict when multiple generated-template assemblies are consumed together.
@@ -104,7 +104,6 @@ The current working example is `samples/HelloWorld/Templates/hello-world.html`.
 #type HelloWorld
 #model SlusserLabs.AnglePlates.Samples.HelloWorld.ViewModels.HelloWorldViewModel
 #namespace SlusserLabs.AnglePlates.Samples.HelloWorld.Templates
-#render Utf8, Text
 #access internal
 <h1>[[ model.Title ]]</h1>
 [%- foreach (var p in model.Paragraphs) { %]
@@ -122,11 +121,11 @@ Directives are line-based, must be consecutive at the very beginning, and are st
 | `#type HelloWorld` | Required. Class-name prefix; produces `HelloWorldTextTemplate` / `HelloWorldUtf8Template`. |
 | `#model Fully.Qualified.Model` | Required. Inserted as a C# type. A built-in type such as `string` also works. |
 | `#namespace My.Templates` | Required. Inserted as a C# namespace. |
-| `#render Text, Utf8` | Comma-separated enum names, case-insensitive values. Text is already enabled and values are OR-ed into it. Consequently `#render Utf8` generates both, and `#render None` still generates text. Invalid names are silently ignored. |
+| `#render Utf8` | Optional. Omitting it generates both renderers. When present, it accepts one case-insensitive value: `Text` or `Utf8`. The template generates only the selected renderer. Other values report `SLAP005`. |
 | `#access internal` | Generated template class accessibility; defaults to `public`. Text is inserted without syntax/accessibility validation. |
 | `#using System.Linq, System.Text` | Parsed but never emitted by either transpiler. Repeated directives replace the previous list. Currently ineffective. |
 
-Directive keywords are case-sensitive prefix matches rather than exact words: for example, `#models ...` matches `model` with an unintended leading `s` in the value. Unknown directives are silently removed. Repeated scalar directives use the last value; renderer selections accumulate.
+Directive keywords are case-sensitive prefix matches rather than exact words: for example, `#models ...` matches `model` with an unintended leading `s` in the value. Unknown directives are silently removed. Repeated scalar directives use the last value.
 
 `AnglePlateBaseAccessModifier` is a project setting controlling generated support-type accessibility, default `public`. It is separate from `#access`; incompatible combinations, such as a public template inheriting an internal base, can cause compiler errors. Item-level accessibility metadata is not implemented.
 
@@ -238,7 +237,7 @@ Direct composition already fits the design: call a child template's `Render` wit
 
 An inspection probe compiled and ran a parent and child for both renderer types, producing `<i>&lt;b&gt;</i>` in each. The parent used `[% Child(model, writer); %]` and a helper in each generated partial class that called the matching child renderer. This preserved child literal HTML and encoded its C# variable exactly once, with no intermediate rendered string.
 
-The helper matters because identical template C# is emitted for both renderers: directly calling `ChildTextTemplate` with `writer` cannot compile in the UTF-8 variant. Since `#render Utf8` currently also emits text, this limitation is especially visible. A composition feature should resolve the matching backend automatically or offer a shared overload-based helper API. Child allocation and reusable instances also deserve an explicit policy.
+The helper matters because identical template C# is emitted for both renderers: directly calling `ChildTextTemplate` with `writer` cannot compile in the UTF-8 variant. A composition feature should resolve the matching backend automatically or offer a shared overload-based helper API. Child allocation and reusable instances also deserve an explicit policy.
 
 Loading must be defined: resolving a compiled template by name is a comparatively small registry feature; interpreting changed files at runtime is a substantially different architecture. Neither is implemented. Shared runtime types across assemblies should be settled before designing a plugin-style compiled-template loader.
 

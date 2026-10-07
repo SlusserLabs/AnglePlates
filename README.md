@@ -56,7 +56,7 @@ Directives occupy consecutive lines at the very beginning of the file. The first
 | `#type` | Yes | Generated class name prefix, with `TextTemplate` or `Utf8Template` appended. | `#type Greeting` |
 | `#model` | Yes | Model's C# type; use a fully qualified name. | `#model MyApp.GreetingModel` |
 | `#namespace` | Yes | Namespace for compiled template classes. | `#namespace MyApp.Templates` |
-| `#render` | No | Defaults to `Text`. Add `Utf8` to generate both compiled templates. Values are comma-separated and case-insensitive; text output remains enabled even with `#render Utf8`. | `#render Text, Utf8` |
+| `#render` | No | Omit it to generate both compiled templates. Set it to the single case-insensitive value `Text` or `Utf8` to generate only that template type. | `#render Utf8` |
 | `#access` | No | Compiled template accessibility; defaults to `public`. | `#access public` or `#access internal` |
 | `#using` | No | Accepts comma-separated namespace names, but doesn't emit imports yet. Use fully qualified C# names instead. | `#using System, System.Linq` |
 
@@ -72,11 +72,15 @@ AnglePlates preserves literal text, including line endings. C# variables and C# 
 | Comment | `[* This is not rendered. *]` | Omits the comment from output. |
 | Raw output in C# | `[% WriteRaw(model.Html, writer); %]` | Writes a string without encoding in either rendering path. |
 
-C# blocks can call `Write(value, writer)` to encode a string or `WriteRaw(value, writer)` to write it without encoding. AnglePlates converts C# variables with `Convert.ToString` before encoding them. Empty C# variables, C# blocks, and comments produce no output. There isn't an escape syntax for delimiters, so a closing delimiter inside a C# string or comment still ends the block.
+AnglePlates converts C# variables with `Convert.ToString` before encoding them. To write output directly, C# blocks can call `Write(value, writer)` to write a string through the configured encoder or `WriteRaw(value, writer)` to bypass encoding.
+
+Empty C# variables, C# blocks, and comments produce no output.
+
+There isn't an escape syntax for delimiters, so a closing delimiter inside a C# string or comment still ends the block.
 
 ### Whitespace trimming
 
-Place a `-` immediately after an opening delimiter or before a closing delimiter to trim nearby whitespace from the literal text. Trim markers work with C# variables, C# blocks, and comments, including empty blocks. They remove spaces, tabs, and line breaks (`[ \t\r\n]+`), but they do not trim C# variable values.
+Place a `-` immediately after an opening delimiter or before a closing delimiter to trim nearby whitespace from the literal text. Trim markers work with C# variables, C# blocks, and comments, including empty blocks. They remove spaces, tabs, and line breaks, i.e.`[ \t\r\n]+`, but they do not trim C# variable values.
 
 | Trim | Example | Behavior |
 | --- | --- | --- |
@@ -86,9 +90,7 @@ Place a `-` immediately after an opening delimiter or before a closing delimiter
 
 ## Using compiled templates
 
-### Render the template
-
-Each compiled template has a `Render` method. Text templates write characters to a `TextWriter`, while UTF-8 templates write bytes to an `IBufferWriter<byte>`. UTF-8 templates can also write to a `PipeWriter` with `RenderAsync`. Add `#render Text, Utf8` to the template to generate both classes.
+Each compiled template has a `Render` method. Text templates write characters to a `TextWriter`, while UTF-8 templates write bytes to an `IBufferWriter<byte>`. Both template types are generated unless you configure the `#render` directive. UTF-8 templates can also write to a `PipeWriter` with `RenderAsync`.
 
 ```csharp
 namespace MyApp.Templates;
@@ -105,7 +107,7 @@ public partial class GreetingUtf8Template
 }
 ```
 
-#### Text rendering
+### Text rendering
 
 Use the text renderer, such as `GreetingTextTemplate`, with a `TextWriter`. This works for console output, files, and APIs that accept strings or characters. The renderer writes directly to the destination, so a console application can pass `Console.Out` without creating an intermediate string.
 
@@ -125,7 +127,7 @@ GreetingTextTemplate.Default.Render(model, Console.Out);
 
 This writes `<h1>Hello, Ada &amp; Grace!</h1>` and the welcome paragraph to standard output. Comments do not appear in the output. The original whitespace and line breaks remain unchanged.
 
-#### UTF-8 streaming
+### UTF-8 streaming
 
 Use the UTF-8 renderer, such as `GreetingUtf8Template`, when the destination expects bytes. An HTTP response is a common example. Passing the response's `PipeWriter` avoids creating and encoding an intermediate string. `RenderAsync` writes to the pipe synchronously, then flushes it asynchronously with the request's cancellation token.
 
@@ -193,10 +195,9 @@ If the same `AnglePlate` item appears more than once, AnglePlates adds it to `Ad
 ## Current limitations
 
 - `#using` is parsed but does not emit imports. Use fully qualified C# type names in templates.
-- `#render Utf8` still generates a compiled template for text rendering.
 - Closing delimiters inside C# strings or comments end the block; avoid embedding `]]` in C# variables or `%]` in C# blocks.
 - Templates that generate the same class names in the same namespace cause C# compiler errors.
-- Unclosed blocks report `SLAP004` and prevent that template from generating. Missing required directives report `SLAP001` through `SLAP003`. See [diagnostics](docs/diagnostics.md).
+- Unclosed blocks report `SLAP004`, and invalid `#render` values report `SLAP005`. Both prevent that template from generating. Missing required directives report `SLAP001` through `SLAP003`. See [diagnostics](docs/diagnostics.md).
 
 For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
 
