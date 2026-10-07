@@ -9,12 +9,6 @@
 
 #nullable enable
 
-using global::System;
-using AnglePlatesSystem = global::System;
-using AnglePlatesBuffers = global::System.Buffers;
-using AnglePlatesIO = global::System.IO;
-using AnglePlatesCompilerServices = global::System.Runtime.CompilerServices;
-
 namespace SlusserLabs.AnglePlates;
 
 /// <summary>
@@ -33,7 +27,7 @@ public abstract class TextTemplate<TModel>
     /// <param name="options">Options for controlling template processing.</param>
     protected TextTemplate(TemplateOptions options)
     {
-        AnglePlatesSystem.ArgumentNullException.ThrowIfNull(options);
+        global::System.ArgumentNullException.ThrowIfNull(options);
         _options = options;
     }
 
@@ -46,15 +40,15 @@ public abstract class TextTemplate<TModel>
     /// Renders the template.
     /// </summary>
     /// <param name="model">The data model to render.</param>
-    /// <param name="writer">The <see cref="AnglePlatesIO.TextWriter" /> to render the template to.</param>
-    public abstract void Render(TModel model, AnglePlatesIO.TextWriter writer);
+    /// <param name="writer">The <see cref="global::System.IO.TextWriter" /> to render the template to.</param>
+    public abstract void Render(TModel model, global::System.IO.TextWriter writer);
 
     /// <summary>
     /// Encodes the specified <paramref name="value" /> and writes it to the output.
     /// </summary>
     /// <param name="value">The string value to write.</param>
     /// <param name="writer">The template writer.</param>
-    protected void Write(string? value, AnglePlatesIO.TextWriter writer)
+    protected void Write(string? value, global::System.IO.TextWriter writer)
     {
         value ??= _options.NullVariable;
 
@@ -71,36 +65,36 @@ public abstract class TextTemplate<TModel>
         }
 
         // Widen before multiplying so large values cannot overflow before clamping
-        int rentalSize = (int)AnglePlatesSystem.Math.Min((long)encoder.MaxOutputCharactersPerInputCharacter * value.Length, _maxRental);
+        int rentalSize = (int)global::System.Math.Min((long)encoder.MaxOutputCharactersPerInputCharacter * value.Length, _maxRental);
         var pool = _options.BufferPool;
-        AnglePlatesSystem.ReadOnlySpan<char> sourceChars = value.AsSpan();
+        global::System.ReadOnlySpan<char> sourceChars = global::System.MemoryExtensions.AsSpan(value);
         var encodedChars = pool.Rent(rentalSize);
 
         try
         {
             do
             {
-                AnglePlatesBuffers.OperationStatus status = encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
+                global::System.Buffers.OperationStatus status = encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
                 switch (status)
                 {
-                    case AnglePlatesBuffers.OperationStatus.NeedMoreData:
-                        throw new AnglePlatesSystem.InvalidOperationException("Encoder needs more data, but all data was provided. Does this string end with an unpaired surrogate?");
+                    case global::System.Buffers.OperationStatus.NeedMoreData:
+                        throw new global::System.InvalidOperationException("Encoder needs more data, but all data was provided. Does this string end with an unpaired surrogate?");
 
-                    case AnglePlatesBuffers.OperationStatus.InvalidData:
-                        throw new AnglePlatesSystem.InvalidOperationException("Invalid data found in string. Does this string contain unpaired surrogates?");
+                    case global::System.Buffers.OperationStatus.InvalidData:
+                        throw new global::System.InvalidOperationException("Invalid data found in string. Does this string contain unpaired surrogates?");
                 }
 
                 if (charsConsumed == 0 && charsWritten == 0)
                 {
-                    throw new AnglePlatesSystem.InvalidOperationException("Encoder made no progress with the temporary buffer.");
+                    throw new global::System.InvalidOperationException("Encoder made no progress with the temporary buffer.");
                 }
 
                 // Write the encoded characters and advance the source chars
-                writer.Write(encodedChars.AsSpan().Slice(0, charsWritten));
+                writer.Write(new global::System.ReadOnlySpan<char>(encodedChars, 0, charsWritten));
                 sourceChars = sourceChars.Slice(charsConsumed);
 
-                // If AnglePlatesBuffers.OperationStatus.Done, the loop will exit because sourceChars.IsEmpty
-                // If AnglePlatesBuffers.OperationStatus.DestinationTooSmall, the loop will go again because !sourceChars.IsEmpty
+                // If OperationStatus.Done, the loop will exit because sourceChars.IsEmpty
+                // If OperationStatus.DestinationTooSmall, the loop will go again because !sourceChars.IsEmpty
             } while (!sourceChars.IsEmpty);
         }
         finally
@@ -114,8 +108,8 @@ public abstract class TextTemplate<TModel>
     /// </summary>
     /// <param name="value">The string value to write.</param>
     /// <param name="writer">The template writer.</param>
-    [AnglePlatesCompilerServices.MethodImpl(AnglePlatesCompilerServices.MethodImplOptions.AggressiveInlining)]
-    protected void WriteRaw(string? value, AnglePlatesIO.TextWriter writer)
+    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    protected void WriteRaw(string? value, global::System.IO.TextWriter writer)
     {
         if (!string.IsNullOrEmpty(value))
         {

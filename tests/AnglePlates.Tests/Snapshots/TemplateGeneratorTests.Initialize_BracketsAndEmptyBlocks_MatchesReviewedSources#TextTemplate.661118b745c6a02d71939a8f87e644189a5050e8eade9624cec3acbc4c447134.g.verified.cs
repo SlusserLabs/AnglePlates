@@ -9,18 +9,14 @@
 
 #nullable enable
 
-using AnglePlatesSystem = global::System;
-using AnglePlatesRuntime = global::SlusserLabs.AnglePlates;
-using AnglePlatesIO = global::System.IO;
-
 namespace Consumer;
 
 /// <summary>
 /// A text template that can render the contents of 'Templates/example.html'.
 /// </summary>
-public partial class ExampleTextTemplate : AnglePlatesRuntime.TextTemplate<string>
+public partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.TextTemplate<string>
 {
-    private static readonly AnglePlatesSystem.Lazy<ExampleTextTemplate> _default = new (() => new ExampleTextTemplate());
+    private static readonly global::System.Lazy<ExampleTextTemplate> _default = new (() => new ExampleTextTemplate());
 
     private static readonly string _literal4 = "[ordinary] ";
     private static readonly string _literal6 = "\r\na";
@@ -30,7 +26,7 @@ public partial class ExampleTextTemplate : AnglePlatesRuntime.TextTemplate<strin
     /// Initializes a new instance of the <see cref="ExampleTextTemplate" /> class.
     /// </summary>
     /// <param name="options">Options for controlling template processing.</param>
-    public ExampleTextTemplate(AnglePlatesRuntime.TemplateOptions? options = default) : base(options ?? new AnglePlatesRuntime.TemplateOptions())
+    public ExampleTextTemplate(global::SlusserLabs.AnglePlates.TemplateOptions? options = default) : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())
     {
     }
 
@@ -40,14 +36,14 @@ public partial class ExampleTextTemplate : AnglePlatesRuntime.TextTemplate<strin
     public static ExampleTextTemplate Default => _default.Value;
 
     /// <inheritdoc />
-    public override void Render(string model, AnglePlatesIO.TextWriter writer)
+    public override void Render(string model, global::System.IO.TextWriter writer)
     {
         string Model = model; // Allows alternate casing
         string? value;
 
         writer.Write(_literal4);
 
-        value = AnglePlatesSystem.Convert.ToString(model);
+        value = global::System.Convert.ToString(model, global::System.Globalization.CultureInfo.InvariantCulture);
         Write(value, writer);
 
         writer.Write(_literal6);

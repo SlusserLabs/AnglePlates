@@ -9,9 +9,6 @@
 
 #nullable enable
 
-using AnglePlatesBuffers = global::System.Buffers;
-using AnglePlatesEncoders = global::System.Text.Encodings.Web;
-
 namespace SlusserLabs.AnglePlates;
 
 /// <summary>
@@ -21,16 +18,16 @@ public class TemplateOptions
 {
     /// <summary>
     /// Gets or sets the buffer pool to use for temporary encoding.
-    /// The default is <see cref="AnglePlatesBuffers.ArrayPool{char}.Shared" />.
+    /// The default is <see cref="global::System.Buffers.ArrayPool{char}.Shared" />.
     /// </summary>
-    public AnglePlatesBuffers.ArrayPool<char> BufferPool { get; set; } = AnglePlatesBuffers.ArrayPool<char>.Shared;
+    public global::System.Buffers.ArrayPool<char> BufferPool { get; set; } = global::System.Buffers.ArrayPool<char>.Shared;
 
     /// <summary>
-    /// Gets or sets the <see cref="AnglePlatesEncoders.TextEncoder" /> to use when writing variables.
-    /// The default is <see cref="AnglePlatesEncoders.HtmlEncoder.Default" />.
+    /// Gets or sets the <see cref="global::System.Text.Encodings.Web.TextEncoder" /> to use when writing variables.
+    /// The default is <see cref="global::System.Text.Encodings.Web.HtmlEncoder.Default" />.
     /// </summary>
     /// <remarks>Set to <c>null</c> to disable C# variable encoding.</remarks>
-    public AnglePlatesEncoders.TextEncoder? Encoder { get; set; } = AnglePlatesEncoders.HtmlEncoder.Default;
+    public global::System.Text.Encodings.Web.TextEncoder? Encoder { get; set; } = global::System.Text.Encodings.Web.HtmlEncoder.Default;
 
     /// <summary>
     /// Gets or sets the substitute value to use when a variable evaluates to <c>null</c>.

@@ -3,12 +3,22 @@
 - Treat requests to update project rules or `AGENTS.md` as requests to update this file
 - Keep agent instructions concise and specific to AnglePlates
 - Write README files and project documentation in plain American English with concrete subjects and ordinary verbs; do not copy the compressed style of internal verification notes into user-facing prose
-- Preserve the author's conversational voice in `README.md`. When using `/humanizer`, treat the Author Voice section below as the user-provided writing sample described by the skill's Voice instructions
+- When using `/humanizer`, treat the Author Voice section below as the user-provided writing sample described by the skill's Voice instructions
 - Explicit user instructions take precedence over skill guidelines
 - If a skill causes a permission request, pause, unfinished work, or departure from user intent, link the exact `SKILL.md`, quote the relevant instruction, and explain its application; distinguish requirements from interpretation
 - Use [README.md](README.md) for package usage, contributor setup, and consumer limitations and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
 - Update affected documentation when behavior or repository structure changes, including README files; keep implemented behavior separate from planned work
-- Use [docs/lexicon.md](docs/lexicon.md) for project terminology
+- Use [docs/lexicon.md](docs/lexicon.md) for project terminology, [docs/testing.md](docs/testing.md) for test helpers, snapshot review, and current regression coverage, and [docs/diagnostics.md](docs/diagnostics.md) for diagnostic IDs and release tracking
+
+## Skill Routing
+
+- `/csharp`: Use for all C# source changes, including consumer code emitted from strings in `Boilerplate.cs` and the transpilers.
+- `/dotnet-tunit`: Use for tests in `tests/AnglePlates.Tests`.
+- `/docs`: Use for project documentation under `docs/`.
+- `/humanizer`: Use for human-facing prose and code comments. Do not apply it to code, plans, chat messages, or agent instructions such as `AGENTS.md`.
+- `/test-delegation`: Use only for one-off, agent-driven test runs the user requests.
+
+Do not duplicate instructions in `AGENTS.md` that are already defined by a referenced skill.
 
 ## Author Voice
 
@@ -22,35 +32,19 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 - AnglePlates is a compile-time template engine prototype using a Roslyn incremental source generator
 - `AnglePlates.slnx` contains the generator in `src/AnglePlates`, the console sample in `samples/HelloWorld`, and `tests/AnglePlates.Tests`
-- `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TextTemplateTranspiler.cs` and `Utf8TemplateTranspiler.cs` emit rendering code
-- `TemplateGenerator.cs` coordinates generation; `Boilerplate.cs` supplies generated runtime support types; `buildTransitive` contains template discovery assets
+- `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TemplateTranspilerOptions.cs` reads directives; `TextTemplateTranspiler.cs` and `Utf8TemplateTranspiler.cs` emit rendering code
+- `TemplateGenerator.cs` coordinates generation and reports diagnostics from `DiagnosticDescriptors.cs`; `Boilerplate.cs` supplies generated runtime support types; `buildTransitive` contains template discovery assets
 - Use `samples/HelloWorld/Templates/hello-world.html` as the current example
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
-- Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target unless a compatibility change is deliberate and tested
+- Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target and Roslyn 4.14.0 unless a host-compatibility change is deliberate and tested
 
 ## Verified behavior and limitations
 
-- The generator targets `netstandard2.0` and uses Roslyn 4.14.0. The sample, generated-compilation tests, and package tests run on .NET 10 with C# 11. Do not claim support for earlier frameworks or compiler hosts without testing them.
+- The sample, generated-compilation tests, and package tests run on .NET 10 with C# 11. Do not claim support for earlier frameworks or compiler hosts without testing them.
 - Both renderer base classes are emitted even for text-only templates, requiring `System.IO.Pipelines` in every consumer; repository applications supply it through `Microsoft.AspNetCore.App`.
-- The sample references the generator and discovery assets from source. Use the package tests, rather than the sample, to verify the installed package.
-- Package validation copies the consumer to a temporary directory and restores from a local feed into an isolated cache. It checks metadata/assets, Source Link commit metadata, reproducibility records, portable-symbol identity/checksum, analyzer loading, default/custom/explicit discovery, duplicates, exclusions, base-class accessibility, and exact encoded text/UTF-8 output. Use a unique version for each run.
-- Focused regressions cover ordinary brackets, empty/unclosed blocks, invalid-template isolation, stable source names, and pooled-buffer ownership. Reviewed snapshots cover both renderers, support types, and unclosed-block diagnostics; the full parser/rendering/directive/incremental suite remains incomplete.
-- Closed empty blocks preserve trim flags. Unclosed blocks report `SLAP004` at the opener and suppress only that template. Duplicate generated types receive compiler errors; delimiters inside C# strings/comments still close blocks. `#using` is not emitted, and generation selection always includes text.
 - Template changes are collected into one generation callback; per-template incremental generation remains planned.
-- The repository has no CI or publishing workflow. Do not claim release readiness until the project has been tested across the platforms, frameworks, compilers, ASP.NET scenarios, transitive references, and multi-assembly scenarios listed in the roadmap.
-- `global.json` selects Microsoft.Testing.Platform for repository tests. The package includes portable symbols in a companion `.snupkg`.
-
-## Skill Routing
-
-- `/csharp`: Use this skill whenever creating or modifying C# source code, including emitted consumer code.
-- `/dotnet-tunit`: Use this skill when working with TUnit tests, assertions, setup, or test syntax.
-- `/dotnet-imposter`: Use this skill when working with Imposter test doubles, setup, argument matching, or verification.
-- `/docs`: Use this skill when creating or editing project documentation. Do not use it for code documentation, code comments, `README.md`, `AGENTS.md`, or other files outside the project's documentation set.
-- `/humanizer`: Use this skill for all human-facing prose and code comments. Do not apply it to code, plans (i.e. `plans/*`), chat messages, or agent instructions (i.e. `AGENTS.md`).
-- `/test-delegation`: Use this skill when the user requests one-off, ad hoc, agent-driven tests. Do not use it when running deterministic unit or integration tests with dedicated test runners.
-- `/context7-mcp`: Use Context7 for library, framework, SDK, API, CLI, and cloud-service documentation, including syntax, setup, configuration, migration, and library-specific debugging. It is unnecessary for ordinary refactoring, scripts from scratch, business-logic debugging, code review, or general programming concepts.
-
-Do not duplicate instructions in `AGENTS.md` that are already defined by a referenced skill.
+- The repository has no CI or publishing workflow. Release readiness requires the platform, framework, compiler, ASP.NET, transitive-reference, and multi-assembly testing listed in the roadmap.
+- `global.json` selects Microsoft.Testing.Platform for repository tests.
 
 ## General Practices
 
@@ -65,9 +59,9 @@ Do not duplicate instructions in `AGENTS.md` that are already defined by a refer
 ## Generated Code and Rendering
 
 - Treat the generator host's framework, compiler API version, and generated consumer framework/language requirements as separate compatibility constraints
-- Keep emitted sources self-contained, including support types; use explicit aliases when consumer names could collide and cover collisions with compilation tests
+- Keep emitted sources self-contained, including support types. Reference every type and static member with a `global::`-qualified name instead of `using` directives or aliases, and call extension methods as static methods; this overrides the `/csharp` import preference for emitted code. Cover consumer-name collisions with compilation tests
 - Edit generator/transpiler sources rather than generated files under `obj`
-- Preserve exact template bytes, including intentional newline fixtures, and both text and UTF-8 rendering contracts; verify exact characters and bytes when changing parsing, trimming, encoding, or output
+- Preserve exact template bytes, including intentional newline fixtures, and both text and UTF-8 rendering contracts; execute generated renderers to verify exact characters and bytes when changing parsing, trimming, encoding, or output
 - Templates contain trusted C#; preserve default C# variable encoding and explicit raw-output behavior
 - Preserve direct streaming; do not add whole-output buffering without a requirement
 - Preserve the analyzer-only package contract unless compatibility testing justifies a deliberate change: generated support types, no runtime assets or dependencies, and analyzer/XML assets under `analyzers/dotnet/cs/netstandard2.0`
@@ -75,22 +69,17 @@ Do not duplicate instructions in `AGENTS.md` that are already defined by a refer
 
 ## Testing Conventions
 
-- Retain Roslyn 4.14.0 until a deliberate host-compatibility change is tested
-- Use `Verify.TUnit` and `Verify.SourceGenerators`; initialize once in `Infrastructure/ModuleInitializer.cs` and keep snapshots under `Snapshots`
-- Exclude snapshot C# from compilation; preserve LF snapshot settings and ignore `*.received.*`
-- Review every changed source and diagnostic snapshot manually; never enable automatic acceptance
-- Use `Infrastructure/GeneratorTestHelper` for consumer compilations, additional templates, analyzer options and tracked generator drivers
-- Compile generated output before snapshot verification; assert expected failure diagnostics and locations explicitly
-- Reuse the returned driver with the original consumer compilation for incremental reruns; never feed generated output back as input
-- Execute generated renderers to verify exact text and bytes
+- Follow [docs/testing.md](docs/testing.md) for `GeneratorTestHelper`, Verify snapshots, expected diagnostics, and incremental reruns
+- Review every changed source and diagnostic snapshot manually; never enable automatic acceptance or feed generated output back as generator input
 - Cover valid inputs, boundaries, malformed templates, failures, diagnostics, and both rendering paths
 - Target 100% line and branch coverage separately for generator sources and emitted runtime code; report measured coverage separately from this target
-- Keep `tests/AnglePlates.PackageTests` outside the solution; run it after freshly packing through `eng/validate-package.ps1`, without source-tree imports or analyzer project references
-- Do not infer package usability from a successful sample build or pack; the isolated package consumer must verify analyzer loading, build assets, and rendering
+- Keep `tests/AnglePlates.PackageTests` outside the solution, without source-tree imports or analyzer project references; run it through `eng/validate-package.ps1` after freshly packing a unique version
+- Treat `artifacts/` as ignored local build output. Pack only to `artifacts/package` using `0.1.0-alpha.local.<yyyyMMdd>.<n>` versions; do not create sibling output directories or task-named versions. Before packing, remove older package pairs so the folder holds only the version under validation
+- The sample uses the generator and discovery assets from source, so a successful sample build or pack does not prove the package works; the isolated package consumer must verify analyzer loading, build assets, and rendering
 
 ## Validation
 
 - For code changes, restore and build `AnglePlates.slnx`, then run `samples/HelloWorld` when generation or rendering is affected; use the commands in README.md
-- Run focused tests and report their scope; do not imply the complete roadmap regression suite exists
+- Run focused tests and report their scope; the full parser, rendering, directive, and incremental suite in the roadmap is incomplete, so do not imply it exists
 - For documentation-only changes, check links, consistency, whitespace, and line endings; a build is unnecessary
 - Report what changed, what was verified, and any remaining limitations; do not claim release readiness, coverage, or performance without evidence

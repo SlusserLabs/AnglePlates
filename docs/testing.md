@@ -2,7 +2,7 @@
 
 ## Project and generator helpers
 
-The nonpackable .NET 10 executable uses TUnit 1.65.0, Roslyn 4.14.0, Verify.TUnit 31.27.0, Verify.SourceGenerators 2.5.0. `global.json` selects Microsoft.Testing.Platform. Run the existing suite with `dotnet test --solution AnglePlates.slnx --no-build --no-restore` after restoring and building. Focused regressions now cover ordinary brackets, empty/unclosed blocks, trim flags, invalid-template isolation, source-name stability, compiler-reported duplicate types, and pooled-buffer ownership on success and failure.
+The nonpackable .NET 10 executable uses TUnit 1.65.0, Roslyn 4.14.0, Verify.TUnit 31.27.0, Verify.SourceGenerators 2.5.0. `global.json` selects Microsoft.Testing.Platform. Run the existing suite with `dotnet test --solution AnglePlates.slnx --no-build --no-restore` after restoring and building. Focused regressions now cover ordinary brackets, empty/unclosed blocks, trim flags, invalid-template isolation, source-name stability, compiler-reported duplicate types, invariant-culture formatting of C# variables, and pooled-buffer ownership on success and failure.
 
 [GeneratorTestHelper](../tests/AnglePlates.Tests/Infrastructure/GeneratorTestHelper.cs) creates C# 11 consumer compilations with explicit imports and .NET 10 host references. Supply different references and language versions for compatibility cases; the default does not qualify older consumer frameworks. Supply in-memory `TemplateAdditionalText` instances and `TestAnalyzerConfigOptionsProvider` for global or per-file options.
 

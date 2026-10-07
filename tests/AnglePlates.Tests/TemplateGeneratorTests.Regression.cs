@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -103,6 +104,29 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
+    [Arguments("1.5", "1.5")]
+    [Arguments("1234.5m", "1234.5")]
+    [Arguments("new System.DateTime(2026, 10, 7, 13, 5, 0)", "10/07/2026 13:05:00")]
+    public async Task Initialize_CSharpVariableUnderNonInvariantCulture_FormatsWithInvariantCulture(string expression, string expected)
+    {
+        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template($"[[ {expression} ]]"));
+        var original = CultureInfo.CurrentCulture;
+        (string text, byte[] bytes) output;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+            output = RenderingTestHelper.Render(result.Compilation);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
     public async Task Initialize_UnclosedBlock_MatchesReviewedDiagnostic()
     {
         var result = RenderingTestHelper.Generate(RenderingTestHelper.Template("prefix [[ model"));
@@ -126,14 +150,14 @@ public sealed partial class TemplateGeneratorTests
         const string ambiguousField = "Ambiguity between 'ExampleTextTemplate._default' and 'ExampleTextTemplate._default'";
         var expected = new[]
         {
-            CompilerError(trees[1], 21, 72, 8, "CS0102", "The type 'ExampleTextTemplate' already contains a definition for '_default'"),
-            CompilerError(trees[1], 28, 11, 19, "CS0111", "Type 'ExampleTextTemplate' already defines a member called 'ExampleTextTemplate' with the same parameter types"),
-            CompilerError(trees[1], 35, 38, 7, "CS0102", "The type 'ExampleTextTemplate' already contains a definition for 'Default'"),
-            CompilerError(trees[1], 38, 25, 6, "CS0111", "Type 'ExampleTextTemplate' already defines a member called 'Render' with the same parameter types"),
-            CompilerError(trees[0], 21, 98, 19, "CS0121", ambiguousConstructor),
-            CompilerError(trees[1], 21, 98, 19, "CS0121", ambiguousConstructor),
-            CompilerError(trees[0], 35, 49, 8, "CS0229", ambiguousField),
-            CompilerError(trees[1], 35, 49, 8, "CS0229", ambiguousField)
+            CompilerError(trees[1], 17, 69, 8, "CS0102", "The type 'ExampleTextTemplate' already contains a definition for '_default'"),
+            CompilerError(trees[1], 24, 11, 19, "CS0111", "Type 'ExampleTextTemplate' already defines a member called 'ExampleTextTemplate' with the same parameter types"),
+            CompilerError(trees[1], 31, 38, 7, "CS0102", "The type 'ExampleTextTemplate' already contains a definition for 'Default'"),
+            CompilerError(trees[1], 34, 25, 6, "CS0111", "Type 'ExampleTextTemplate' already defines a member called 'Render' with the same parameter types"),
+            CompilerError(trees[0], 17, 95, 19, "CS0121", ambiguousConstructor),
+            CompilerError(trees[1], 17, 95, 19, "CS0121", ambiguousConstructor),
+            CompilerError(trees[0], 31, 49, 8, "CS0229", ambiguousField),
+            CompilerError(trees[1], 31, 49, 8, "CS0229", ambiguousField)
         };
         var result = GeneratorTestHelper.Run(compilation, driver, expected);
 

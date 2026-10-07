@@ -2,7 +2,7 @@
 
 AnglePlates is like T4 templates for modern .NET. It uses a source generator to turn templates into typed C# classes without having to learn a custom syntax like Razor or Liquid.
 
-Templates are compiled into your project instead of shipped as separate files and achieve awesome performance and memory consumption because at the end of the day, they're just C# classes. The generated classes provide methods for writing directly to a `TextWriter` or asynchronously to an UTF-8 `IBufferWriter<byte>`. HTML is the main target, so C# variables are HTML-encoded by default, but templates can use any text format.
+Templates are compiled into your project instead of shipped as separate files and achieve awesome performance and memory consumption because at the end of the day, they're just C# classes. The generated classes provide methods for writing directly to a `TextWriter`, writing UTF-8 bytes to an `IBufferWriter<byte>`, or rendering asynchronously to a `PipeWriter`. HTML is the main target, so C# variables are HTML-encoded by default, but templates can use any text format.
 
 ## Installation
 
@@ -72,7 +72,7 @@ AnglePlates preserves literal text, including line endings. C# variables and C# 
 | Comment | `[* This is not rendered. *]` | Omits the comment from output. |
 | Raw output in C# | `[% WriteRaw(model.Html, writer); %]` | Writes a string without encoding in either rendering path. |
 
-AnglePlates converts C# variables with `Convert.ToString` before encoding them. To write output directly, C# blocks can call `Write(value, writer)` to write a string through the configured encoder or `WriteRaw(value, writer)` to bypass encoding.
+AnglePlates converts C# variables with `Convert.ToString` and the invariant culture before encoding them, so numbers and dates render the same on every machine. To write output directly, C# blocks can call `Write(value, writer)` to write a string through the configured encoder or `WriteRaw(value, writer)` to bypass encoding.
 
 Empty C# variables, C# blocks, and comments produce no output.
 
@@ -80,13 +80,13 @@ There isn't an escape syntax for delimiters, so a closing delimiter inside a C# 
 
 ### Whitespace trimming
 
-Place a `-` immediately after an opening delimiter or before a closing delimiter to trim nearby whitespace from the literal text. Trim markers work with C# variables, C# blocks, and comments, including empty blocks. They remove spaces, tabs, and line breaks, i.e.`[ \t\r\n]+`, but they do not trim C# variable values.
+Place a `-` immediately after an opening delimiter or before a closing delimiter to trim nearby whitespace from the literal text. Trim markers work with C# variables, C# blocks, and comments, including empty blocks. They remove spaces, tabs, and line breaks, i.e. `[ \t\r\n]+`, but they do not trim C# variable values.
 
 | Trim | Example | Behavior |
 | --- | --- | --- |
 | Before the block | `[[- model.Title ]]` | Removes preceding literal whitespace. |
 | After the block | `[[ model.Title -]]` | Removes following literal whitespace. |
-| Both sides | `[*- model.Title -*]` | Removes literal whitespace on both sides. |
+| Both sides | `[[- model.Title -]]` | Removes literal whitespace on both sides. |
 
 ## Using compiled templates
 
@@ -214,11 +214,11 @@ dotnet run --project samples/HelloWorld --no-build --no-launch-profile
 
 You'll find the generator, a console sample, and the tests in the solution. See the [project lexicon](docs/lexicon.md) for terms that have a specific meaning in AnglePlates. The [testing guide](docs/testing.md) explains the test helpers and snapshots, and the [roadmap](docs/roadmap.md) lists known defects and planned work.
 
-Build and validate a local package with a fresh version for each run:
+Build and validate a local package with a fresh version for each run. I use `0.1.0-alpha.local.<yyyyMMdd>.<n>`, where `<n>` goes up with each pack that day:
 
 ```powershell
-dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -p:PackageVersion=0.1.0-alpha.local.1
-./eng/validate-package.ps1 -Version 0.1.0-alpha.local.1
+dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -p:PackageVersion=0.1.0-alpha.local.20261007.1
+./eng/validate-package.ps1 -Version 0.1.0-alpha.local.20261007.1
 ```
 
 The [package validation project](tests/AnglePlates.PackageTests/README.md) installs and tests the package without referencing the source project.

@@ -154,6 +154,8 @@ public sealed partial class TemplateGeneratorTests
         const string frameworkNames = """
             public class System { }
             public class Convert { }
+            public class Globalization { }
+            public class CultureInfo { }
             public class Span<T> { }
             public class ReadOnlySpan<T> { }
             public class OperationStatus { }

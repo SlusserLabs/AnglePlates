@@ -39,21 +39,17 @@ internal class TextTemplateTranspiler
         indentedWriter.WriteLine(Boilerplate.Directives);
         indentedWriter.InnerWriter.WriteLine();
 
-        indentedWriter.WriteLine("using AnglePlatesSystem = global::System;");
-        indentedWriter.WriteLine("using AnglePlatesRuntime = global::SlusserLabs.AnglePlates;");
-        indentedWriter.WriteLine("using AnglePlatesIO = global::System.IO;");
-        indentedWriter.InnerWriter.WriteLine();
         indentedWriter.WriteLine($"namespace {_options.Namespace};");
         indentedWriter.InnerWriter.WriteLine();
 
         indentedWriter.WriteLine($"/// <summary>");
         indentedWriter.WriteLine($"/// A text template that can render the contents of '{SecurityElement.Escape(_path)}'.");
         indentedWriter.WriteLine($"/// </summary>");
-        indentedWriter.WriteLine($"{_options.AccessModifier} partial class {typeName} : AnglePlatesRuntime.TextTemplate<{_options.ModelType}>");
+        indentedWriter.WriteLine($"{_options.AccessModifier} partial class {typeName} : global::SlusserLabs.AnglePlates.TextTemplate<{_options.ModelType}>");
         indentedWriter.WriteLine("{");
         indentedWriter.Indent++;
 
-        indentedWriter.WriteLine($"private static readonly AnglePlatesSystem.Lazy<{typeName}> _default = new (() => new {typeName}());");
+        indentedWriter.WriteLine($"private static readonly global::System.Lazy<{typeName}> _default = new (() => new {typeName}());");
 
         // Text literals
         indentedWriter.InnerWriter.WriteLine();
@@ -84,7 +80,7 @@ internal class TextTemplateTranspiler
         indentedWriter.WriteLine($"/// Initializes a new instance of the <see cref=\"{typeName}\" /> class.");
         indentedWriter.WriteLine($"/// </summary>");
         indentedWriter.WriteLine($"/// <param name=\"options\">Options for controlling template processing.</param>");
-        indentedWriter.WriteLine($"public {typeName}(AnglePlatesRuntime.TemplateOptions? options = default) : base(options ?? new AnglePlatesRuntime.TemplateOptions())");
+        indentedWriter.WriteLine($"public {typeName}(global::SlusserLabs.AnglePlates.TemplateOptions? options = default) : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())");
         indentedWriter.WriteLine("{");
         indentedWriter.WriteLine("}");
 
@@ -96,7 +92,7 @@ internal class TextTemplateTranspiler
 
         indentedWriter.InnerWriter.WriteLine();
         indentedWriter.WriteLine($"/// <inheritdoc />");
-        indentedWriter.WriteLine($"public override void Render({_options.ModelType} model, AnglePlatesIO.TextWriter writer)");
+        indentedWriter.WriteLine($"public override void Render({_options.ModelType} model, global::System.IO.TextWriter writer)");
         indentedWriter.WriteLine("{");
         indentedWriter.Indent++;
 
@@ -126,7 +122,7 @@ internal class TextTemplateTranspiler
                     }
                     var variable = text.Slice(offset, length).ToString();
                     indentedWriter.InnerWriter.WriteLine();
-                    indentedWriter.WriteLine($"value = AnglePlatesSystem.Convert.ToString({variable});");
+                    indentedWriter.WriteLine($"value = global::System.Convert.ToString({variable}, global::System.Globalization.CultureInfo.InvariantCulture);");
                     indentedWriter.WriteLine("Write(value, writer);");
                     break;
 

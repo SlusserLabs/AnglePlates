@@ -9,28 +9,24 @@
 
 #nullable enable
 
-using AnglePlatesSystem = global::System;
-using AnglePlatesRuntime = global::SlusserLabs.AnglePlates;
-using AnglePlatesBuffers = global::System.Buffers;
-
 namespace Consumer;
 
 /// <summary>
 /// A UTF-8 template that can render the contents of 'Templates/example.html'.
 /// </summary>
-public partial class ExampleUtf8Template : AnglePlatesRuntime.Utf8Template<string>
+public partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf8Template<string>
 {
-    private static readonly AnglePlatesSystem.Lazy<ExampleUtf8Template> _default = new (() => new ExampleUtf8Template());
+    private static readonly global::System.Lazy<ExampleUtf8Template> _default = new (() => new ExampleUtf8Template());
 
-    private static readonly AnglePlatesSystem.ReadOnlyMemory<byte> _literal4 = "[ordinary] "u8.ToArray();
-    private static readonly AnglePlatesSystem.ReadOnlyMemory<byte> _literal6 = "\r\na"u8.ToArray();
-    private static readonly AnglePlatesSystem.ReadOnlyMemory<byte> _literal10 = "b"u8.ToArray();
+    private static readonly global::System.ReadOnlyMemory<byte> _literal4 = "[ordinary] "u8.ToArray();
+    private static readonly global::System.ReadOnlyMemory<byte> _literal6 = "\r\na"u8.ToArray();
+    private static readonly global::System.ReadOnlyMemory<byte> _literal10 = "b"u8.ToArray();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExampleUtf8Template" /> class.
     /// </summary>
     /// <param name="options">Options for controlling template processing.</param>
-    public ExampleUtf8Template(AnglePlatesRuntime.TemplateOptions? options = default) : base(options ?? new AnglePlatesRuntime.TemplateOptions())
+    public ExampleUtf8Template(global::SlusserLabs.AnglePlates.TemplateOptions? options = default) : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())
     {
     }
 
@@ -40,17 +36,17 @@ public partial class ExampleUtf8Template : AnglePlatesRuntime.Utf8Template<strin
     public static ExampleUtf8Template Default => _default.Value;
 
     /// <inheritdoc />
-    public override void Render(string model, AnglePlatesBuffers.IBufferWriter<byte> writer)
+    public override void Render(string model, global::System.Buffers.IBufferWriter<byte> writer)
     {
         string Model = model; // Allows alternate casing
-        AnglePlatesSystem.Span<byte> buffer;
+        global::System.Span<byte> buffer;
         string? value;
 
         buffer = writer.GetSpan(_literal4.Length);
         _literal4.Span.CopyTo(buffer);
         writer.Advance(_literal4.Length);
 
-        value = AnglePlatesSystem.Convert.ToString(model);
+        value = global::System.Convert.ToString(model, global::System.Globalization.CultureInfo.InvariantCulture);
         Write(value, writer);
 
         buffer = writer.GetSpan(_literal6.Length);

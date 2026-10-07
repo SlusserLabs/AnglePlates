@@ -9,15 +9,6 @@
 
 #nullable enable
 
-using global::System;
-using AnglePlatesSystem = global::System;
-using AnglePlatesBuffers = global::System.Buffers;
-using AnglePlatesCompilerServices = global::System.Runtime.CompilerServices;
-using AnglePlatesText = global::System.Text;
-using AnglePlatesPipelines = global::System.IO.Pipelines;
-using AnglePlatesThreading = global::System.Threading;
-using AnglePlatesTasks = global::System.Threading.Tasks;
-
 namespace SlusserLabs.AnglePlates;
 
 /// <summary>
@@ -36,7 +27,7 @@ public abstract class Utf8Template<TModel>
     /// <param name="options">Options for controlling template processing.</param>
     public Utf8Template(TemplateOptions options)
     {
-        AnglePlatesSystem.ArgumentNullException.ThrowIfNull(options);
+        global::System.ArgumentNullException.ThrowIfNull(options);
         _options = options;
     }
 
@@ -49,17 +40,17 @@ public abstract class Utf8Template<TModel>
     /// Renders the template.
     /// </summary>
     /// <param name="model">The data model to render.</param>
-    /// <param name="writer">The <see cref="AnglePlatesBuffers.IBufferWriter{byte}" /> to render the template to.</param>
-    public abstract void Render(TModel model, AnglePlatesBuffers.IBufferWriter<byte> writer);
+    /// <param name="writer">The <see cref="global::System.Buffers.IBufferWriter{byte}" /> to render the template to.</param>
+    public abstract void Render(TModel model, global::System.Buffers.IBufferWriter<byte> writer);
 
     /// <summary>
-    /// Renders the template to a <see cref="AnglePlatesPipelines.PipeWriter" />.
+    /// Renders the template to a <see cref="global::System.IO.Pipelines.PipeWriter" />.
     /// </summary>
     /// <param name="model">The data model to render.</param>
-    /// <param name="writer">The <see cref="AnglePlatesPipelines.PipeWriter" /> to render the template to.</param>
+    /// <param name="writer">The <see cref="global::System.IO.Pipelines.PipeWriter" /> to render the template to.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The result of flushing the writer.</returns>
-    public AnglePlatesTasks.ValueTask<AnglePlatesPipelines.FlushResult> RenderAsync(TModel model, AnglePlatesPipelines.PipeWriter writer, AnglePlatesThreading.CancellationToken cancellationToken = default)
+    public global::System.Threading.Tasks.ValueTask<global::System.IO.Pipelines.FlushResult> RenderAsync(TModel model, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken = default)
     {
         Render(model, writer);
         return writer.FlushAsync(cancellationToken);
@@ -70,7 +61,7 @@ public abstract class Utf8Template<TModel>
     /// </summary>
     /// <param name="value">The string value to write.</param>
     /// <param name="writer">The template writer.</param>
-    protected void Write(string? value, AnglePlatesBuffers.IBufferWriter<byte> writer)
+    protected void Write(string? value, global::System.Buffers.IBufferWriter<byte> writer)
     {
         value ??= _options.NullVariable;
 
@@ -87,36 +78,36 @@ public abstract class Utf8Template<TModel>
         }
 
         // Widen before multiplying so large values cannot overflow before clamping
-        int rentalSize = (int)AnglePlatesSystem.Math.Min((long)encoder.MaxOutputCharactersPerInputCharacter * value.Length, _maxRental);
+        int rentalSize = (int)global::System.Math.Min((long)encoder.MaxOutputCharactersPerInputCharacter * value.Length, _maxRental);
         var pool = _options.BufferPool;
-        AnglePlatesSystem.ReadOnlySpan<char> sourceChars = value.AsSpan();
+        global::System.ReadOnlySpan<char> sourceChars = global::System.MemoryExtensions.AsSpan(value);
         var encodedChars = pool.Rent(rentalSize);
 
         try
         {
             do
             {
-                AnglePlatesBuffers.OperationStatus status = encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
+                global::System.Buffers.OperationStatus status = encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
                 switch (status)
                 {
-                    case AnglePlatesBuffers.OperationStatus.NeedMoreData:
-                        throw new AnglePlatesSystem.InvalidOperationException("Encoder needs more data, but all data was provided. Does this string end with an unpaired surrogate?");
+                    case global::System.Buffers.OperationStatus.NeedMoreData:
+                        throw new global::System.InvalidOperationException("Encoder needs more data, but all data was provided. Does this string end with an unpaired surrogate?");
 
-                    case AnglePlatesBuffers.OperationStatus.InvalidData:
-                        throw new AnglePlatesSystem.InvalidOperationException("Invalid data found in string. Does this string contain unpaired surrogates?");
+                    case global::System.Buffers.OperationStatus.InvalidData:
+                        throw new global::System.InvalidOperationException("Invalid data found in string. Does this string contain unpaired surrogates?");
                 }
 
                 if (charsConsumed == 0 && charsWritten == 0)
                 {
-                    throw new AnglePlatesSystem.InvalidOperationException("Encoder made no progress with the temporary buffer.");
+                    throw new global::System.InvalidOperationException("Encoder made no progress with the temporary buffer.");
                 }
 
                 // Write the encoded characters as UTF8 and advance the source chars
-                AnglePlatesText.EncodingExtensions.GetBytes(AnglePlatesText.Encoding.UTF8, encodedChars.AsSpan().Slice(0, charsWritten), writer);
+                global::System.Text.EncodingExtensions.GetBytes(global::System.Text.Encoding.UTF8, new global::System.ReadOnlySpan<char>(encodedChars, 0, charsWritten), writer);
                 sourceChars = sourceChars.Slice(charsConsumed);
 
-                // If AnglePlatesBuffers.OperationStatus.Done, the loop will exit because sourceChars.IsEmpty
-                // If AnglePlatesBuffers.OperationStatus.DestinationTooSmall, the loop will go again because !sourceChars.IsEmpty
+                // If OperationStatus.Done, the loop will exit because sourceChars.IsEmpty
+                // If OperationStatus.DestinationTooSmall, the loop will go again because !sourceChars.IsEmpty
             } while (!sourceChars.IsEmpty);
         }
         finally
@@ -130,12 +121,12 @@ public abstract class Utf8Template<TModel>
     /// </summary>
     /// <param name="value">The string value to write.</param>
     /// <param name="writer">The template writer.</param>
-    [AnglePlatesCompilerServices.MethodImpl(AnglePlatesCompilerServices.MethodImplOptions.AggressiveInlining)]
-    protected void WriteRaw(string? value, AnglePlatesBuffers.IBufferWriter<byte> writer)
+    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    protected void WriteRaw(string? value, global::System.Buffers.IBufferWriter<byte> writer)
     {
         if (!string.IsNullOrEmpty(value))
         {
-            AnglePlatesText.EncodingExtensions.GetBytes(AnglePlatesText.Encoding.UTF8, value.AsSpan(), writer);
+            global::System.Text.EncodingExtensions.GetBytes(global::System.Text.Encoding.UTF8, global::System.MemoryExtensions.AsSpan(value), writer);
         }
     }
 }
