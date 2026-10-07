@@ -4,8 +4,9 @@
 - Keep these rules terse, direct, and specific to AnglePlates
 - Explicit user instructions take precedence over skill guidelines
 - If a skill causes a permission request, pause, unfinished work, or departure from user intent, link the exact `SKILL.md`, quote the relevant instruction, and explain its application; distinguish requirements from interpretation
-- Use [README.md](README.md) for repository setup and current limitations and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
+- Use [README.md](README.md) for package usage, contributor setup, and consumer limitations and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
 - Update affected documentation when behavior or repository structure changes, including README files; keep implemented behavior separate from planned work
+- Use [docs/lexicon.md](docs/lexicon.md) for project terminology
 
 ## Current Repository
 
@@ -16,6 +17,18 @@
 - Use `samples/HelloWorld/Templates/hello-world.html` as the current example
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
 - Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target unless a compatibility change is deliberate and tested
+
+## Current Verification Context
+
+- The generator targets `netstandard2.0` with Roslyn 4.14.0; the sample, generated-compilation tests, and package consumer exercise .NET 10 with C# 11. Earlier frameworks and compiler hosts remain unqualified.
+- Both renderer base classes are emitted even for text-only templates, requiring `System.IO.Pipelines` in every consumer; repository applications supply it through `Microsoft.AspNetCore.App`.
+- The sample references the generator and discovery assets from source; it does not establish installed-package usability.
+- Package validation copies the consumer to a temporary directory and restores from a local feed into an isolated cache. It checks metadata/assets, Source Link commit metadata, reproducibility records, portable-symbol identity/checksum, analyzer loading, default/custom/explicit discovery, duplicates, exclusions, base-class accessibility, and exact encoded text/UTF-8 output. Use a unique version for each run.
+- Focused regressions cover ordinary brackets, empty/unclosed blocks, invalid-template isolation, stable source names, and pooled-buffer ownership. Reviewed snapshots cover both renderers, support types, and unclosed-block diagnostics; the full parser/rendering/directive/incremental suite remains incomplete.
+- Closed empty blocks preserve trim flags. Unclosed blocks report `SLAP004` at the opener and suppress only that template. Duplicate generated types receive compiler errors; delimiters inside C# strings/comments still close blocks. `#using` is not emitted, and render selection always includes text.
+- Template changes are collected into one generation callback; per-template incremental generation remains planned.
+- No CI or publishing workflow is checked in. Cross-platform, framework, compiler, ASP.NET, transitive-use, and multi-assembly validation remain release work; do not claim release readiness.
+- `global.json` selects Microsoft.Testing.Platform for repository tests. The package includes portable symbols in a companion `.snupkg`.
 
 ## Skill Routing
 
