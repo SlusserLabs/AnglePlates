@@ -78,7 +78,7 @@ Emit `#line` directives that map generated C# variable and C# block code back to
    - An escape next to trim markers.
    - CRLF and LF.
    - Nested-array JavaScript, Bash `[[ ]]`, and TOML `[[x]]` samples.
-4. Docs: README "Template syntax" table (add an escape row) and "Current limitations"; `docs/roadmap.md` "C# variables, code and comments".
+4. Docs: README "Template syntax" table (add an escape row) and "Good to know"; `docs/roadmap.md` "C# variables, code and comments".
 
 ## Open questions
 

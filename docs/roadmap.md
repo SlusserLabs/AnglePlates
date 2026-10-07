@@ -125,7 +125,7 @@ These are maintainer tasks outside the repository.
 
 ### 5. Document the product and the release process
 
-The README already covers installation, a template and model, both rendering paths, encoding, whitespace trimming, discovery, and current limitations.
+The README already covers installation, a template and model, both rendering paths, encoding, whitespace trimming, discovery, and the "Good to know" caveats.
 
 - [ ] Add a short trusted-template security note to the README.
 - [ ] Add `docs/overview.md`, `docs/local-packaging.md`, and `docs/release-process.md`. Cover the project structure, commands, snapshot review, unique local versions, isolated package restores, archive inspection, and a tested release checklist.

@@ -6,7 +6,7 @@
 - When using `/humanizer`, treat the Author Voice section below as the user-provided writing sample described by the skill's Voice instructions
 - Explicit user instructions take precedence over skill guidelines
 - If a skill causes a permission request, pause, unfinished work, or departure from user intent, link the exact `SKILL.md`, quote the relevant instruction, and explain its application; distinguish requirements from interpretation
-- Use [README.md](README.md) for package usage, contributor setup, and consumer limitations and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
+- Use [README.md](README.md) for package usage, contributor setup, and things consumers should know and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
 - Update affected documentation when behavior or repository structure changes, including README files; keep implemented behavior separate from planned work
 - Use [docs/lexicon.md](docs/lexicon.md) for project terminology, [docs/testing.md](docs/testing.md) for test helpers, snapshot review, and current regression coverage, and [docs/diagnostics.md](docs/diagnostics.md) for diagnostic IDs and release tracking
 
@@ -32,7 +32,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 - AnglePlates is a compile-time template engine prototype using a Roslyn incremental source generator
 - `AnglePlates.slnx` contains the generator in `src/AnglePlates`, the console sample in `samples/HelloWorld`, and `tests/AnglePlates.Tests`
-- `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TemplateTranspilerOptions.cs` reads directives; `TemplateTranspiler.cs` emits the text and UTF-8 rendering classes
+- `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TemplateTranspilerOptions.cs` reads and validates directives; `TemplateTranspiler.cs` emits the text and UTF-8 rendering classes
 - `TemplateGenerator.cs` coordinates generation and reports diagnostics from `DiagnosticDescriptors.cs`; `Boilerplate.cs` supplies generated runtime support types; `buildTransitive` contains template discovery assets
 - Use `samples/HelloWorld/Templates/hello-world.html` as the current example
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths

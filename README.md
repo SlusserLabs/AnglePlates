@@ -196,12 +196,13 @@ You can configure discovery in your project file:
 
 If the same `AnglePlate` item appears more than once, AnglePlates adds it to `AdditionalFiles` only once. `AnglePlateExclude` applies to files found automatically, but it does not exclude items you add explicitly.
 
-## Current limitations
+## Good to know
 
-- A misspelled directive isn't an error; it ends the directive section and shows up in the output, along with any directives after it. If a required directive follows the typo, its missing-directive error (`SLAP001` through `SLAP003`) points at the typo. If no required directive comes after a misspelled one, nothing catches it, so put your required directives last or check your output.
-- Closing delimiters inside C# strings or comments end the block; avoid embedding `]]` in C# variables or `%]` in C# blocks.
-- Templates that generate the same class names in the same namespace cause C# compiler errors.
-- Missing required directives report `SLAP001` through `SLAP003`, unclosed blocks report `SLAP004`, invalid `#generate` values report `SLAP005`, repeated directives report `SLAP006`, and other invalid directive values report `SLAP007`. Each one stops that template from generating. See [diagnostics](docs/diagnostics.md).
+- Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling.
+- Any `AdditionalFiles` input that starts with `#` is a template as far as AnglePlates is concerned. A file like `PublicAPI.Shipped.txt`, which starts with `#nullable enable`, fails the build with `SLAP001` through `SLAP003`.
+- A closing delimiter ends its block even inside a C# string or comment, so keep `]]` out of C# variables and `%]` out of C# blocks.
+- Two templates that generate the same class name in the same namespace cause C# compiler errors, the same as two hand-written classes would.
+- Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, or `#using`. Each error stops that template from generating, but your other templates still generate. See [diagnostics](docs/diagnostics.md).
 
 For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
 
