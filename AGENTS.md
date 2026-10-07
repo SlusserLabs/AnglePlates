@@ -49,6 +49,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 ## General Practices
 
 - Avoid unrelated formatting and changes
+- Use the line endings `.editorconfig` defines for each file you create or edit; if it defines none, match the file's existing line endings
 - Add repository assets and processes only for the user's workflow; never persist agent-only verification helpers, scripts, reports, or tooling
 - The user runs coverage in Visual Studio 2026; do not add coverage scripts, configuration, dedicated packages, or CI gates unless explicitly requested
 - Correct spelling errors without changing meaning

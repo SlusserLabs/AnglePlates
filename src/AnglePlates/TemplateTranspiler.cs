@@ -18,6 +18,10 @@ internal static class TemplateTranspiler
     private const string _variablePrefix = "Write((";
     private const string _plainVariablePrefix = "Write(global::System.Convert.ToString(";
 
+    // Characters that end a line in C# source, including comments and preprocessor directives
+    private static readonly char[] _lineBreaks = ['\r', '\n', '\u0085', '\u2028', '\u2029'];
+    private static readonly char[] _unmappablePathCharacters = ['"', .. _lineBreaks];
+
     public static string Transpile(
         string path, string filePath, TextLineCollection lines, TemplateTranspilerOptions options, GenerationTarget target, ReadOnlySpan<char> text, List<Token> tokens)
     {
@@ -41,7 +45,7 @@ internal static class TemplateTranspiler
         void WriteBlankLine() => source.WriteLine();
 
         // A #line file name has no escape sequences, so a path with a quote or line break can't be mapped
-        bool mapLines = filePath.IndexOfAny(['"', '\r', '\n']) < 0;
+        bool mapLines = filePath.IndexOfAny(_unmappablePathCharacters) < 0;
 
         // Maps the next generated line, from the column after its indentation and prefix, to the token's span in the
         // template so compiler errors in template C# point at the template. The compiler reports a span that starts
@@ -86,7 +90,7 @@ internal static class TemplateTranspiler
 
         // Class declaration, constructor, and the default instance
         writer.WriteLine("/// <summary>");
-        writer.WriteLine($"/// {description} that can render the contents of '{SecurityElement.Escape(path)}'.");
+        writer.WriteLine($"/// {description} that can render the contents of '{EscapeDocumentationText(path)}'.");
         writer.WriteLine("/// </summary>");
         writer.WriteLine($"{options.AccessModifier} partial class {typeName} : global::SlusserLabs.AnglePlates.{target}Template<{options.ModelType}>");
         writer.WriteLine("{");
@@ -224,6 +228,18 @@ internal static class TemplateTranspiler
         writer.WriteLine("}");
 
         return source.ToString();
+    }
+
+    // A line break would end the /// comment, so each one becomes an XML character reference
+    private static string EscapeDocumentationText(string text)
+    {
+        var escaped = new StringBuilder(SecurityElement.Escape(text));
+        foreach (var lineBreak in _lineBreaks)
+        {
+            escaped.Replace(lineBreak.ToString(), $"&#{(int)lineBreak};");
+        }
+
+        return escaped.ToString();
     }
 
     private static string ConcatenateLiterals(ReadOnlySpan<char> text, List<Token> tokens, int start, int end)

@@ -106,12 +106,20 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_PathThatLineDirectivesCannotHold_SkipsLineMapping()
+    [Arguments("Templates/a\"b.html", "Templates/a&quot;b.html")]
+    [Arguments("Templates/a\nb.html", "Templates/a&#10;b.html")]
+    [Arguments("Templates/a\r\nb.html", "Templates/a&#13;&#10;b.html")]
+    [Arguments("Templates/a\u0085b.html", "Templates/a&#133;b.html")]
+    [Arguments("Templates/a\u2028b.html", "Templates/a&#8232;b.html")]
+    [Arguments("Templates/a\u2029b.html", "Templates/a&#8233;b.html")]
+    public async Task Initialize_PathThatLineDirectivesCannotHold_EscapesDocumentationAndSkipsLineMapping(string path, string documentedPath)
     {
-        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("a[% var b = 1; %][[ model ]]", path: "Templates/a\"b.html"));
-        var sources = result.RunResult.Results.Single().GeneratedSources;
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("a[% var b = 1; %][[ model ]]", path: path));
+        var sources = result.RunResult.Results.Single().GeneratedSources.Skip(3).Select(source => source.SourceText.ToString()).ToArray();
 
-        await Assert.That(sources.Any(source => source.SourceText.ToString().Contains("#line", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(sources.Length).IsEqualTo(2);
+        await Assert.That(sources.All(source => source.Contains($"render the contents of '{documentedPath}'.", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(sources.Any(source => source.Contains("#line", StringComparison.Ordinal))).IsFalse();
         await Assert.That(RenderingTestHelper.Render(result.Compilation).text).IsEqualTo("a&lt;value&gt;");
     }
 
