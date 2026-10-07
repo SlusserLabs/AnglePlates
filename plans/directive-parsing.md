@@ -72,7 +72,7 @@ Add these to `DiagnosticDescriptors.cs`, `AnalyzerReleases.Unshipped.md`, and `d
 | ID | Title | Message | Location |
 | --- | --- | --- | --- |
 | `SLAP006` | Duplicate directive | `Directive '{0}' appears more than once` (`{0}` is `#type`, or `#using System.Linq` for a repeated import) | The repeated directive line, trimmed |
-| `SLAP007` | Invalid directive value | `Directive '#{0}' has invalid value '{1}'. Expected {2}.` (`{2}` describes what's expected, such as `'public' or 'internal'`) | The value span, or the directive name when the value is blank |
+| `SLAP007` | Invalid directive value | `Directive '#{0}' has invalid value '{1}'; expected {2}` (`{2}` describes what's expected, such as `'public' or 'internal'`) | The value span, or the directive name when the value is blank |
 
 The message formats follow the release-tracking analyzer's `RS1032` rule: a single sentence has no trailing period, and a multi-sentence message ends with one.
 

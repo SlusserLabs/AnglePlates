@@ -2,12 +2,12 @@
   Diagnostics: [
     {
       Location: Templates\example.html: (3,8)-(3,14),
-      Message: Directive '#access' has invalid value 'privat'. Expected 'public' or 'internal'.,
+      Message: Directive '#access' has invalid value 'privat'; expected 'public' or 'internal',
       Severity: Error,
       Descriptor: {
         Id: SLAP007,
         Title: Invalid directive value,
-        MessageFormat: Directive '#{0}' has invalid value '{1}'. Expected {2}.,
+        MessageFormat: Directive '#{0}' has invalid value '{1}'; expected {2},
         Category: SlusserLabs.AnglePlates,
         DefaultSeverity: Error,
         IsEnabledByDefault: true

@@ -12,11 +12,6 @@ internal static class RenderingTestHelper
         return new TemplateAdditionalText($"#type {type}\r\n#model string\r\n#namespace {ns}\r\n#using System\r\n{body}", path);
     }
 
-    public static GeneratorTestResult Generate(params AdditionalText[] templates)
-    {
-        return GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver(templates));
-    }
-
     public static (string text, byte[] bytes) Render(Compilation compilation, string model = "<value>", string type = "Consumer.Example")
     {
         using var generated = GeneratedAssembly.Load(compilation);

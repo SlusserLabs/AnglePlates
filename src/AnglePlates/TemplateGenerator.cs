@@ -2,12 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 
 namespace SlusserLabs.AnglePlates;
@@ -21,33 +19,25 @@ public class TemplateGenerator : IIncrementalGenerator
     private const string _defaultAccessModifier = "public";
     private const string _projectDirKey = "build_property.ProjectDir";
     private const string _baseAccessModifierKey = "build_property.AnglePlateBaseAccessModifier";
+    private static readonly GenerationTarget[] _generationTargets = [GenerationTarget.Text, GenerationTarget.Utf8];
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var optionsProvider = context.AnalyzerConfigOptionsProvider;
+        // 1. Read MSBuild properties from the global options
+        var baseAccessModifier = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
+            options.GlobalOptions.TryGetValue(_baseAccessModifierKey, out var value) ? value : _defaultAccessModifier);
 
-        // 1. Get global options
-        var baseAccessModifier = optionsProvider
-            .Select(static (options, cancellationToken) => options.GlobalOptions.GetValueOrDefault(_baseAccessModifierKey, _defaultAccessModifier));
+        var projectDir = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
+            options.GlobalOptions.TryGetValue(_projectDirKey, out var value) ? value : string.Empty);
 
-        var projectDir = optionsProvider
-            .Select(static (options, cancellationToken) =>
-            {
-                options.GlobalOptions.TryGetValue(_projectDirKey, out var projectDirValue);
-                return projectDirValue ?? string.Empty;
-            });
-
-
-        // 2. Get templates
+        // 2. Read templates, which are additional files whose text starts with a directive marker.
+        // Paths under the project directory become relative with '/' separators for stable class docs and hint names.
         var templateFiles = context.AdditionalTextsProvider
-            .Combine(optionsProvider)
             .Combine(projectDir)
             .Select(static (tuple, cancellationToken) =>
             {
-                var additionalText = tuple.Left.Left;
-                var projDir = tuple.Right;
-
+                var (additionalText, projDir) = tuple;
                 var relativePath = additionalText.Path.Replace('\\', '/');
                 var normalizedProjectDir = projDir.Replace('\\', '/').TrimEnd('/') + "/";
                 if (!string.IsNullOrEmpty(projDir) && relativePath.StartsWith(normalizedProjectDir, StringComparison.Ordinal))
@@ -55,91 +45,71 @@ public class TemplateGenerator : IIncrementalGenerator
                     relativePath = relativePath.Substring(normalizedProjectDir.Length);
                 }
 
-                return new TemplateFile(
-                    path: additionalText.Path,
-                    relativePath: relativePath,
-                    content: additionalText.GetText(cancellationToken)?.ToString() ?? string.Empty
-                );
+                var content = additionalText.GetText(cancellationToken)?.ToString() ?? string.Empty;
+
+                return new TemplateFile(additionalText.Path, relativePath, content);
             })
-            .Where(tf => tf.Content.Length > 0 && tf.Content.StartsWith("#", StringComparison.Ordinal))
+            .Where(static file => file.Content.StartsWith("#", StringComparison.Ordinal))
             .Collect();
 
-        // 3. Combine into immutable inputs for efficient caching
-        var input = templateFiles.Combine(baseAccessModifier);
-
-        // 4. Generate source
-        context.RegisterSourceOutput(input, static (ctx, data) =>
+        // 3. Generate the support types once, then one class per template and generation target
+        context.RegisterSourceOutput(templateFiles.Combine(baseAccessModifier), static (ctx, data) =>
         {
-            var templates = data.Left;
-            var baseAccessModifier = data.Right;
-            Debug.Assert(!string.IsNullOrEmpty(baseAccessModifier));
+            var (templates, accessModifier) = data;
+            Debug.Assert(!string.IsNullOrEmpty(accessModifier));
 
-            // Inject static assets
-            ctx.AddSource("TemplateOptions.g.cs", Boilerplate.TemplateOptions(baseAccessModifier));
-            ctx.AddSource("TextTemplate.g.cs", Boilerplate.TextTemplate(baseAccessModifier));
-            ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(baseAccessModifier));
+            ctx.AddSource("TemplateOptions.g.cs", Boilerplate.TemplateOptions(accessModifier));
+            ctx.AddSource("TextTemplate.g.cs", Boilerplate.TextTemplate(accessModifier));
+            ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier));
 
+            var parserOptions = TemplateParserOptions.Default;
+            var parser = new TemplateParser(parserOptions);
             var hintNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-            foreach (var t in templates.OrderBy(t => t.Path, StringComparer.Ordinal).ThenBy(t => t.Content, StringComparer.Ordinal))
+
+            // Sort so hint name suffixes don't depend on the order MSBuild lists the files
+            foreach (var template in templates.OrderBy(file => file.Path, StringComparer.Ordinal).ThenBy(file => file.Content, StringComparer.Ordinal))
             {
                 ctx.CancellationToken.ThrowIfCancellationRequested();
-                Debug.Assert(!string.IsNullOrEmpty(t.Path));
-                Debug.Assert(!string.IsNullOrEmpty(t.Content));
 
-                // Parse
-                var parserOptions = TemplateParserOptions.Default;
-                var parser = new TemplateParser(parserOptions);
-                var parseResult = parser.Parse(t.Content.AsSpan());
-                var tokens = parseResult.Tokens;
-
-                var directiveTokens = tokens.Where(t => t.Type == TokenType.Directive);
+                var parseResult = parser.Parse(template.Content.AsSpan());
+                var directiveTokens = parseResult.Tokens.Where(token => token.Type == TokenType.Directive);
                 var transpilerOptions = TemplateTranspilerOptions.Create(
-                    t.Path, t.Content.AsSpan(), directiveTokens, parseResult.DirectiveSectionEnd, parserOptions.Whitespace);
+                    template.Path, template.Content.AsSpan(), directiveTokens, parseResult.DirectiveSectionEnd, parserOptions.Whitespace);
 
-                // Report directive and parse errors, then skip only this template
                 if (transpilerOptions.Errors.Count > 0 || parseResult.Errors.Count > 0)
                 {
-                    var sourceText = SourceText.From(t.Content, Encoding.UTF8);
-                    foreach (var error in transpilerOptions.Errors)
-                    {
-                        ctx.ReportDiagnostic(Diagnostic.Create(error.Descriptor,
-                            Location.Create(t.Path, error.Span, sourceText.Lines.GetLinePositionSpan(error.Span)), error.Arguments));
-                    }
-
-                    foreach (var error in parseResult.Errors)
-                    {
-                        var span = new TextSpan(error.Start, error.Length);
-                        ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnclosedBlock,
-                            Location.Create(t.Path, span, sourceText.Lines.GetLinePositionSpan(span)), error.ClosingDelimiter));
-                    }
-
+                    ReportErrors(ctx, template, transpilerOptions.Errors, parseResult.Errors);
                     continue;
                 }
 
-                // Transpile
-                if (transpilerOptions.GenerationTarget.HasFlag(GenerationTarget.Text))
+                foreach (var target in _generationTargets)
                 {
-                    var builder = new StringBuilder(t.Content.Length);
-                    using var writer = new StringWriter(builder);
-                    var textTranspiler = new TextTemplateTranspiler(t.RelativePath, transpilerOptions);
-                    textTranspiler.Transpile(writer, t.Content.AsSpan(), tokens);
-
-                    var hintName = CreateHintName(t.RelativePath, transpilerOptions, GenerationTarget.Text, hintNameCounts);
-                    ctx.AddSource(hintName, builder.ToString());
-                }
-
-                if (transpilerOptions.GenerationTarget.HasFlag(GenerationTarget.Utf8))
-                {
-                    var builder = new StringBuilder(t.Content.Length);
-                    using var writer = new StringWriter(builder);
-                    var utf8Transpiler = new Utf8TemplateTranspiler(t.RelativePath, transpilerOptions);
-                    utf8Transpiler.Transpile(writer, t.Content.AsSpan(), tokens);
-
-                    var hintName = CreateHintName(t.RelativePath, transpilerOptions, GenerationTarget.Utf8, hintNameCounts);
-                    ctx.AddSource(hintName, builder.ToString());
+                    if ((transpilerOptions.GenerationTarget & target) != 0)
+                    {
+                        var source = TemplateTranspiler.Transpile(template.RelativePath, transpilerOptions, target, template.Content.AsSpan(), parseResult.Tokens);
+                        ctx.AddSource(CreateHintName(template.RelativePath, transpilerOptions, target, hintNameCounts), source);
+                    }
                 }
             }
         });
+    }
+
+    // Reports directive and parse errors; the caller then skips only this template
+    private static void ReportErrors(SourceProductionContext ctx, TemplateFile template, List<DirectiveError> directiveErrors, List<TemplateParseError> parseErrors)
+    {
+        var lines = SourceText.From(template.Content, Encoding.UTF8).Lines;
+        foreach (var error in directiveErrors)
+        {
+            var location = Location.Create(template.Path, error.Span, lines.GetLinePositionSpan(error.Span));
+            ctx.ReportDiagnostic(Diagnostic.Create(error.Descriptor, location, error.Arguments));
+        }
+
+        foreach (var error in parseErrors)
+        {
+            var span = new TextSpan(error.Start, error.Length);
+            var location = Location.Create(template.Path, span, lines.GetLinePositionSpan(span));
+            ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnclosedBlock, location, error.ClosingDelimiter));
+        }
     }
 
     private static string CreateHintName(string path, TemplateTranspilerOptions options, GenerationTarget generationTarget, Dictionary<string, int> counts)
@@ -159,6 +129,7 @@ public class TemplateGenerator : IIncrementalGenerator
             hex.Append(value.ToString("x2", CultureInfo.InvariantCulture));
         }
 
+        // Identical identities, such as duplicate templates, get a numeric suffix so AddSource doesn't throw
         var prefix = $"{generationTarget}Template.{hex}";
         counts.TryGetValue(prefix, out int count);
         counts[prefix] = count + 1;
@@ -167,7 +138,7 @@ public class TemplateGenerator : IIncrementalGenerator
         return $"{prefix}{suffix}.g.cs";
     }
 
-    private record TemplateFile
+    private sealed record TemplateFile
     {
         public TemplateFile(string path, string relativePath, string content)
         {

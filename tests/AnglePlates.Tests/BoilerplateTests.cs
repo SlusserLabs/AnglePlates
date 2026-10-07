@@ -166,7 +166,7 @@ public sealed class BoilerplateTests
 
     private static GeneratedAssembly CreateRenderer()
     {
-        return GeneratedAssembly.Load(RenderingTestHelper.Generate(RenderingTestHelper.Template("[[ model ]]")).Compilation);
+        return GeneratedAssembly.Load(GeneratorTestHelper.Run(RenderingTestHelper.Template("[[ model ]]")).Compilation);
     }
 
     private static object CreateOptions(GeneratedAssembly generated, CountingCharPool pool, TextEncoder? encoder)

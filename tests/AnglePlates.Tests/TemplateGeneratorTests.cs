@@ -1,9 +1,7 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using SlusserLabs.AnglePlates.Tests.Infrastructure;
 using TUnit.Assertions;
@@ -19,38 +17,20 @@ public sealed partial class TemplateGeneratorTests
     [Arguments(true)]
     public async Task Initialize_ConsumerWithoutImplicitImports_Compiles(bool conflictingNames)
     {
-        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\nHello [[ model ]]";
-        var source = conflictingNames ? CreateConflictingTypes() : string.Empty;
-        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp11);
-        var referencePaths = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
-        var references = referencePaths.Select(path => MetadataReference.CreateFromFile(path));
-        var compilation = CSharpCompilation.Create(
-            "Consumer",
-            [CSharpSyntaxTree.ParseText(source, parseOptions)],
-            references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            [new TemplateGenerator().AsSourceGenerator()],
-            [new TemplateAdditionalText(template)],
-            parseOptions);
+        // Run fails the test when the generated consumer has any emit error
+        var compilation = GeneratorTestHelper.CreateCompilation(conflictingNames ? [CreateConflictingTypes()] : []);
+        var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([new TemplateAdditionalText(_requiredDirectives + "Hello [[ model ]]")]));
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
-
-        await Assert.That(string.Join(Environment.NewLine, diagnostics)).IsEqualTo(string.Empty);
-        await Assert.That(driver.GetRunResult().GeneratedTrees.Length).IsEqualTo(5);
-        using var assembly = new MemoryStream();
-        var result = output.Emit(assembly);
-        var errors = result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        await Assert.That(string.Join(Environment.NewLine, errors)).IsEqualTo(string.Empty);
-        await Assert.That(result.Success).IsTrue();
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
     }
 
     [Test]
     public async Task Initialize_GenerateDirectiveOmitted_GeneratesTextAndUtf8Types()
     {
-        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\nHello [[ model ]]";
+        const string template = _requiredDirectives + "Hello [[ model ]]";
 
-        var result = RunGenerator(new TemplateAdditionalText(template));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template)).RunResult;
         var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
 
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(5);
@@ -63,9 +43,9 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("Utf8", false, true)]
     public async Task Initialize_GenerateDirectiveSpecified_GeneratesSelectedType(string generationTarget, bool hasTextType, bool hasUtf8Type)
     {
-        var template = $"#type Example\r\n#model string\r\n#namespace Consumer\r\n#generate {generationTarget}\r\nHello [[ model ]]";
+        var template = _requiredDirectives + $"#generate {generationTarget}\r\nHello [[ model ]]";
 
-        var result = RunGenerator(new TemplateAdditionalText(template));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template)).RunResult;
         var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
 
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
@@ -76,26 +56,26 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     public async Task Initialize_GenerateDirectiveWithMultipleValues_ReportsDiagnostic()
     {
-        const string template = "#type Example\r\n#model string\r\n#namespace Consumer\r\n#generate Text, Utf8\r\nHello [[ model ]]";
+        const string template = _requiredDirectives + "#generate Text, Utf8\r\nHello [[ model ]]";
 
-        var result = RunGenerator(new TemplateAdditionalText(template));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template)).RunResult;
 
         await Assert.That(result.Diagnostics.Length).IsEqualTo(1);
         await Assert.That(result.Diagnostics[0].Id).IsEqualTo("SLAP005");
         await Assert.That(result.Diagnostics[0].GetMessage()).IsEqualTo(
-            "Template file 'Templates/example.html' has invalid generation target 'Text, Utf8'. Expected 'Text' or 'Utf8'.");
+            "Template file 'Templates/example.html' has invalid generation target 'Text, Utf8'; expected 'Text' or 'Utf8'");
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
     }
 
     [Test]
-    [Arguments("type", "SLAP001", "Missing type", "type directive (e.g. '#type MyTemplate')")]
-    [Arguments("namespace", "SLAP002", "Missing namespace", "namespace directive (e.g. '#namespace MyNamespace')")]
-    [Arguments("model", "SLAP003", "Missing model type", "model type directive (e.g. '#model MyModel')")]
+    [Arguments("type", "SLAP001", "Missing type", "type directive such as '#type MyTemplate'")]
+    [Arguments("namespace", "SLAP002", "Missing namespace", "namespace directive such as '#namespace MyNamespace'")]
+    [Arguments("model", "SLAP003", "Missing model type", "model type directive such as '#model MyModel'")]
     public async Task Initialize_MissingRequiredDirective_ReportsStableDiagnostic(string directive, string id, string title, string message)
     {
         var template = string.Join("\r\n", new[] { "#type Example", "#namespace Consumer", "#model string" }
             .Where(line => !line.StartsWith("#" + directive + " ", StringComparison.Ordinal))) + "\r\nHello";
-        var result = RunGenerator(new TemplateAdditionalText(template));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template)).RunResult;
 
         await Assert.That(result.Diagnostics.Length).IsEqualTo(1);
         var diagnostic = result.Diagnostics[0];
@@ -104,7 +84,7 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(diagnostic.Descriptor.Category).IsEqualTo("SlusserLabs.AnglePlates");
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
         await Assert.That(diagnostic.Descriptor.IsEnabledByDefault).IsTrue();
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo($"Template file 'Templates/example.html' is missing a {message}.");
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo($"Template file 'Templates/example.html' is missing a {message}");
         // The directive section ends at the body, so that's where the missing directive is reported
         await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan("Templates/example.html",
             new LinePosition(2, 0), new LinePosition(2, 5)));
@@ -114,7 +94,7 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     public async Task Initialize_AllRequiredDirectivesMissing_ReportsAllDiagnostics()
     {
-        var result = RunGenerator(new TemplateAdditionalText("#generate Text\r\nHello"));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText("#generate Text\r\nHello")).RunResult;
 
         await Assert.That(string.Join(",", result.Diagnostics.Select(diagnostic => diagnostic.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
@@ -126,30 +106,10 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("AnalyzerReleases.Unshipped.md")]
     public async Task Initialize_InvalidTemplateRegardlessOfFileName_ReportsDiagnostics(string path)
     {
-        var result = RunGenerator(new TemplateAdditionalText("## Release 1.0\r\n### New Rules", path));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText("## Release 1.0\r\n### New Rules", path)).RunResult;
 
         await Assert.That(string.Join(",", result.Diagnostics.Select(diagnostic => diagnostic.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
-    }
-
-    private static GeneratorDriverRunResult RunGenerator(params AdditionalText[] additionalTexts)
-    {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp11);
-        var referencePaths = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
-        var compilation = CSharpCompilation.Create(
-            "Consumer",
-            references: referencePaths.Select(path => MetadataReference.CreateFromFile(path)),
-            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new TemplateGenerator().AsSourceGenerator()], additionalTexts, parseOptions);
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
-        using var assembly = new MemoryStream();
-        var result = output.Emit(assembly);
-        if (!result.Success)
-        {
-            throw new InvalidOperationException(string.Join(Environment.NewLine, result.Diagnostics));
-        }
-
-        return driver.GetRunResult();
     }
 
     private static string CreateConflictingTypes()

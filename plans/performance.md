@@ -8,7 +8,7 @@ The design does avoid several costs, which `docs/roadmap.md` ("Performance: impl
 
 - no runtime template parsing
 - no reflection-based model lookup
-- literals stored as static fields, with UTF-8 literals pre-encoded
+- literals written as compiled constants, with UTF-8 literals stored as `u8` bytes in the assembly image
 - output streamed to the caller's writer without buffering the whole page
 
 But no benchmark exists. The roadmap says "No benchmark establishes throughput, allocation counts or an advantage over Razor/other engines," and its section 7 requires benchmarks before publishing performance claims. The code also has known per-value costs:
@@ -18,7 +18,6 @@ But no benchmark exists. The roadmap says "No benchmark establishes throughput, 
 | C# variable conversion | `Convert.ToString(value, InvariantCulture)` | Allocates a string per value; boxes when the `object` overload is chosen |
 | Encoding | Rents a `char[]`, encodes into it, then writes | Rents and copies even when nothing needs encoding, which is the common case |
 | UTF-8 dynamic values | Encodes to chars, then transcodes chars to UTF-8 | Two passes; `TextEncoder.EncodeUtf8` isn't used |
-| UTF-8 literals | `"..."u8.ToArray()` stored in `ReadOnlyMemory<byte>` | Copies every literal into a heap array at type initialization |
 | `RenderAsync` | Synchronous render, then one flush | Large pages sit in the pipe until the end; no backpressure |
 
 ## Suggested fix
@@ -66,8 +65,7 @@ Candidates from reading the code; measure each before and after:
 1. **Skip encoding work when nothing needs encoding.** Check first with the encoder's find-first-character API, then write the original string directly with no rental. Alternatively, for the text renderer, try `TextEncoder.Encode(TextWriter, string)`, which handles this internally.
 2. **Encode straight to UTF-8.** Use `TextEncoder.EncodeUtf8` into `writer.GetSpan()` instead of encoding chars and transcoding.
 3. **Format without a string.** For `ISpanFormattable` and `IUtf8SpanFormattable` values, format into a stack or pooled buffer, or straight into the UTF-8 writer's span, instead of calling `Convert.ToString`. This interacts with [null-variable.md](null-variable.md); do it after that plan lands.
-4. **Literals with no heap copy.** Emit `private static ReadOnlySpan<byte> _literal3 => "..."u8;` instead of `ReadOnlyMemory<byte>` plus `.ToArray()`. The data then stays in the assembly image, with no allocation at type initialization.
-5. **Optional flushing in `RenderAsync`.** This needs an async render path and is a larger API decision; leave it until benchmarks show large-page memory is a problem.
+4. **Optional flushing in `RenderAsync`.** This needs an async render path and is a larger API decision; leave it until benchmarks show large-page memory is a problem.
 
 Keep generated support types compatible with the API floor the project decides to support. Several of these APIs need .NET 6 to 8 or later.
 

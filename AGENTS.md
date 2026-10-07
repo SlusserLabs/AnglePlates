@@ -32,7 +32,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 - AnglePlates is a compile-time template engine prototype using a Roslyn incremental source generator
 - `AnglePlates.slnx` contains the generator in `src/AnglePlates`, the console sample in `samples/HelloWorld`, and `tests/AnglePlates.Tests`
-- `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TemplateTranspilerOptions.cs` reads directives; `TextTemplateTranspiler.cs` and `Utf8TemplateTranspiler.cs` emit rendering code
+- `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TemplateTranspilerOptions.cs` reads directives; `TemplateTranspiler.cs` emits the text and UTF-8 rendering classes
 - `TemplateGenerator.cs` coordinates generation and reports diagnostics from `DiagnosticDescriptors.cs`; `Boilerplate.cs` supplies generated runtime support types; `buildTransitive` contains template discovery assets
 - Use `samples/HelloWorld/Templates/hello-world.html` as the current example
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths

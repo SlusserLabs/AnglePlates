@@ -18,12 +18,6 @@ namespace Consumer;
 /// </summary>
 public partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.TextTemplate<string>
 {
-    private static readonly global::System.Lazy<ExampleTextTemplate> _default = new (() => new ExampleTextTemplate());
-
-    private static readonly string _literal4 = "[ordinary] ";
-    private static readonly string _literal6 = "\r\na";
-    private static readonly string _literal10 = "b";
-
     /// <summary>
     /// Initializes a new instance of the <see cref="ExampleTextTemplate" /> class.
     /// </summary>
@@ -35,21 +29,19 @@ public partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.TextT
     /// <summary>
     /// Gets a singleton instance of the template with default options.
     /// </summary>
-    public static ExampleTextTemplate Default => _default.Value;
+    public static ExampleTextTemplate Default { get; } = new ExampleTextTemplate();
 
     /// <inheritdoc />
     public override void Render(string model, global::System.IO.TextWriter writer)
     {
         string Model = model; // Allows alternate casing
-        string? value;
 
-        writer.Write(_literal4);
+        writer.Write("[ordinary] ");
 
-        value = global::System.Convert.ToString(model, global::System.Globalization.CultureInfo.InvariantCulture);
-        Write(value, writer);
+        Write(global::System.Convert.ToString(model, global::System.Globalization.CultureInfo.InvariantCulture), writer);
 
-        writer.Write(_literal6);
+        writer.Write("\r\na");
 
-        writer.Write(_literal10);
+        writer.Write("b");
     }
 }

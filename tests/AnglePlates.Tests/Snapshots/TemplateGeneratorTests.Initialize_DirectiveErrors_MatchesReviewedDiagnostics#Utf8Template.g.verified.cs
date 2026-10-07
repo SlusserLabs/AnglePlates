@@ -25,7 +25,7 @@ public abstract class Utf8Template<TModel>
     /// Initializes a new instance of the <see cref="Utf8Template{TModel}" /> class.
     /// </summary>
     /// <param name="options">Options for controlling template processing.</param>
-    public Utf8Template(TemplateOptions options)
+    protected Utf8Template(TemplateOptions options)
     {
         global::System.ArgumentNullException.ThrowIfNull(options);
         _options = options;
@@ -83,6 +83,7 @@ public abstract class Utf8Template<TModel>
         global::System.ReadOnlySpan<char> sourceChars = global::System.MemoryExtensions.AsSpan(value);
         var encodedChars = pool.Rent(rentalSize);
 
+        // Encode one buffer-sized chunk at a time; the finally block returns the buffer even if encoding or writing throws
         try
         {
             do
@@ -102,7 +103,7 @@ public abstract class Utf8Template<TModel>
                     throw new global::System.InvalidOperationException("Encoder made no progress with the temporary buffer.");
                 }
 
-                // Write the encoded characters as UTF8 and advance the source chars
+                // Write the encoded characters as UTF-8 and advance the source chars
                 global::System.Text.EncodingExtensions.GetBytes(global::System.Text.Encoding.UTF8, new global::System.ReadOnlySpan<char>(encodedChars, 0, charsWritten), writer);
                 sourceChars = sourceChars.Slice(charsConsumed);
 

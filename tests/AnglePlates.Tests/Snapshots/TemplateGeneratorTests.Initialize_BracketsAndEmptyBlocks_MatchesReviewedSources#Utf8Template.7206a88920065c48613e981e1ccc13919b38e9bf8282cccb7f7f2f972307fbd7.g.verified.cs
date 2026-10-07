@@ -18,12 +18,6 @@ namespace Consumer;
 /// </summary>
 public partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf8Template<string>
 {
-    private static readonly global::System.Lazy<ExampleUtf8Template> _default = new (() => new ExampleUtf8Template());
-
-    private static readonly global::System.ReadOnlyMemory<byte> _literal4 = "[ordinary] "u8.ToArray();
-    private static readonly global::System.ReadOnlyMemory<byte> _literal6 = "\r\na"u8.ToArray();
-    private static readonly global::System.ReadOnlyMemory<byte> _literal10 = "b"u8.ToArray();
-
     /// <summary>
     /// Initializes a new instance of the <see cref="ExampleUtf8Template" /> class.
     /// </summary>
@@ -35,28 +29,19 @@ public partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf8T
     /// <summary>
     /// Gets a singleton instance of the template with default options.
     /// </summary>
-    public static ExampleUtf8Template Default => _default.Value;
+    public static ExampleUtf8Template Default { get; } = new ExampleUtf8Template();
 
     /// <inheritdoc />
     public override void Render(string model, global::System.Buffers.IBufferWriter<byte> writer)
     {
         string Model = model; // Allows alternate casing
-        global::System.Span<byte> buffer;
-        string? value;
 
-        buffer = writer.GetSpan(_literal4.Length);
-        _literal4.Span.CopyTo(buffer);
-        writer.Advance(_literal4.Length);
+        global::System.Buffers.BuffersExtensions.Write(writer, "[ordinary] "u8);
 
-        value = global::System.Convert.ToString(model, global::System.Globalization.CultureInfo.InvariantCulture);
-        Write(value, writer);
+        Write(global::System.Convert.ToString(model, global::System.Globalization.CultureInfo.InvariantCulture), writer);
 
-        buffer = writer.GetSpan(_literal6.Length);
-        _literal6.Span.CopyTo(buffer);
-        writer.Advance(_literal6.Length);
+        global::System.Buffers.BuffersExtensions.Write(writer, "\r\na"u8);
 
-        buffer = writer.GetSpan(_literal10.Length);
-        _literal10.Span.CopyTo(buffer);
-        writer.Advance(_literal10.Length);
+        global::System.Buffers.BuffersExtensions.Write(writer, "b"u8);
     }
 }

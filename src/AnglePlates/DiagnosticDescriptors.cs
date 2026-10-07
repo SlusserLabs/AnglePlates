@@ -25,7 +25,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor MissingType = new(
         MissingTypeId,
         "Missing type",
-        "Template file '{0}' is missing a type directive (e.g. '#type MyTemplate').",
+        "Template file '{0}' is missing a type directive such as '#type MyTemplate'",
         _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -33,7 +33,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor MissingNamespace = new(
         MissingNamespaceId,
         "Missing namespace",
-        "Template file '{0}' is missing a namespace directive (e.g. '#namespace MyNamespace').",
+        "Template file '{0}' is missing a namespace directive such as '#namespace MyNamespace'",
         _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -41,7 +41,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor MissingModelType = new(
         MissingModelTypeId,
         "Missing model type",
-        "Template file '{0}' is missing a model type directive (e.g. '#model MyModel').",
+        "Template file '{0}' is missing a model type directive such as '#model MyModel'",
         _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -49,7 +49,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor InvalidGenerationTarget = new(
         InvalidGenerationTargetId,
         "Invalid generation target",
-        "Template file '{0}' has invalid generation target '{1}'. Expected 'Text' or 'Utf8'.",
+        "Template file '{0}' has invalid generation target '{1}'; expected 'Text' or 'Utf8'",
         _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -65,7 +65,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor InvalidDirectiveValue = new(
         InvalidDirectiveValueId,
         "Invalid directive value",
-        "Directive '#{0}' has invalid value '{1}'. Expected {2}.",
+        "Directive '#{0}' has invalid value '{1}'; expected {2}",
         _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

@@ -45,7 +45,7 @@ Child templates work today: call the child's `Render` from a C# block with the s
 
 ### Performance
 
-The design avoids runtime parsing and reflection, keeps literals in static fields, pre-encodes UTF-8 literals, and streams to the caller's writer. Dynamic values still cost something: each C# variable allocates a string through `Convert.ToString`, encoding goes through a rented `char[]`, and the UTF-8 renderer transcodes those chars instead of calling `TextEncoder.EncodeUtf8`. UTF-8 literals are also copied into heap arrays when the type initializes.
+The design avoids runtime parsing and reflection, writes literals as compiled string constants, stores UTF-8 literals as `u8` bytes in the assembly image, and streams to the caller's writer. Dynamic values still cost something: each C# variable allocates a string through `Convert.ToString`, encoding goes through a rented `char[]`, and the UTF-8 renderer transcodes those chars instead of calling `TextEncoder.EncodeUtf8`.
 
 Nothing has been benchmarked, so there are no numbers to compare against Razor, T4, or anything else. See [plans/performance.md](../plans/performance.md).
 
@@ -61,7 +61,7 @@ Nothing has been benchmarked, so there are no numbers to compare against Razor, 
 | Consumer dependencies | Both renderer base classes are always emitted, so even text-only consumers need `System.IO.Pipelines`. Repository projects get it from `Microsoft.AspNetCore.App`. | Release plan, step 1 |
 | Multiple assemblies | Each assembly gets its own public `SlusserLabs.AnglePlates.TemplateOptions` and base classes. A project that references two assemblies with templates sees two definitions of each support type and gets ambiguity errors. | Release plan, step 2 |
 | Error locations | Compiler errors in template C# point into generated code because there's no `#line` mapping. | [javascript-parsing.md](../plans/javascript-parsing.md) |
-| Generated names | The render method declares `model`, `Model`, `writer`, `value`, and, for UTF-8, `buffer`. Template code can collide with them. A UTF-8 template with no literal text never uses `buffer`, which produces compiler warning `CS0168`. Indentation of C# blocks is a brace-counting guess. | Not planned yet |
+| Generated names | The render method declares `model`, `Model`, and `writer`. Template code can collide with them. Indentation of C# blocks is a brace-counting guess. | Not planned yet |
 | Trim markers | A `-` right after an opener is always a trim marker, so `[[-1]]` writes `1`. Write `[[ -1 ]]` or `[[(-1)]]` for a negative number. | By design; document it in the README |
 | Compatibility | Only .NET 10 consumers with C# 11 have been tested. Generated code uses .NET 6+ APIs such as `ArgumentNullException.ThrowIfNull`, and UTF-8 templates use C# 11 `u8` literals. The generator targets `netstandard2.0` with Roslyn 4.14.0, but older compiler hosts haven't been tested. | Release plan, step 2 |
 

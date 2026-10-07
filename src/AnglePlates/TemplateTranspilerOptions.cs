@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace SlusserLabs.AnglePlates;
 
-internal struct TemplateTranspilerOptions
+internal sealed class TemplateTranspilerOptions
 {
     private const string _expectedIdentifier = "a C# identifier";
     private const string _expectedTypeName = "a C# type name";
@@ -18,14 +18,26 @@ internal struct TemplateTranspilerOptions
     private const string _expectedAccessModifier = "'public' or 'internal'";
     private const string _expectedGenerationTarget = "'Text' or 'Utf8'";
 
-    public ReadOnlyMemory<char> Whitespace;
-    public List<string> UsingStatements;
-    public string? Namespace;
-    public string? Type;
-    public string? ModelType;
-    public GenerationTarget GenerationTarget;
-    public string AccessModifier;
-    public List<DirectiveError> Errors;
+    private TemplateTranspilerOptions(ReadOnlyMemory<char> whitespace)
+    {
+        Whitespace = whitespace;
+    }
+
+    public ReadOnlyMemory<char> Whitespace { get; }
+
+    public List<string> UsingStatements { get; } = new();
+
+    public string? Namespace { get; private set; }
+
+    public string? Type { get; private set; }
+
+    public string? ModelType { get; private set; }
+
+    public GenerationTarget GenerationTarget { get; private set; } = GenerationTarget.Text | GenerationTarget.Utf8;
+
+    public string AccessModifier { get; private set; } = "public";
+
+    public List<DirectiveError> Errors { get; } = new();
 
     public static TemplateTranspilerOptions Create(
         string filePath, ReadOnlySpan<char> text, IEnumerable<Token> directiveTokens, int directiveSectionEnd, ReadOnlyMemory<char> whitespace)
@@ -33,15 +45,9 @@ internal struct TemplateTranspilerOptions
         Debug.Assert(directiveTokens.All(t => t.Type == TokenType.Directive), "Expected only directive tokens.");
         Debug.Assert(whitespace.Length > 0, "Whitespace cannot be empty.");
 
-        var options = new TemplateTranspilerOptions
-        {
-            Whitespace = whitespace,
-            UsingStatements = new List<string>(),
-            AccessModifier = "public",
-            GenerationTarget = GenerationTarget.Text | GenerationTarget.Utf8,
-            Errors = new List<DirectiveError>()
-        };
+        var options = new TemplateTranspilerOptions(whitespace);
 
+        // A blank required directive is reported as missing at its name, so remember where each one was
         var directiveErrors = new List<DirectiveError>();
         var seen = new HashSet<DirectiveKind>();
         var usings = new HashSet<string>(StringComparer.Ordinal);
@@ -68,6 +74,7 @@ internal struct TemplateTranspilerOptions
                 continue;
             }
 
+            // Store each valid value; an invalid value reports SLAP005 or SLAP007 at the value, or at the name when it's blank
             switch (token.Directive)
             {
                 case DirectiveKind.Type:

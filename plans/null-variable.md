@@ -10,8 +10,7 @@
 `[[ expr ]]` emits:
 
 ```csharp
-value = AnglePlatesSystem.Convert.ToString(expr, AnglePlatesSystem.Globalization.CultureInfo.InvariantCulture);
-Write(value, writer);
+Write(global::System.Convert.ToString(expr, global::System.Globalization.CultureInfo.InvariantCulture), writer);
 ```
 
 `Write` substitutes `TemplateOptions.NullVariable` only when it receives `null`. Whether it receives `null` depends on which `Convert.ToString` overload the C# compiler picks for the expression's static type:
@@ -29,10 +28,9 @@ So `NullVariable` works for `[[ model.Name ]]` when `Name` is a `string`, but no
 Check for null in the emitted code before conversion, using a pattern variable so the expression is evaluated once:
 
 ```csharp
-value = (expr) is { } __anglePlatesValue3
-    ? AnglePlatesSystem.Convert.ToString(__anglePlatesValue3, AnglePlatesSystem.Globalization.CultureInfo.InvariantCulture)
-    : null;
-Write(value, writer);
+Write((expr) is { } __anglePlatesValue3
+    ? global::System.Convert.ToString(__anglePlatesValue3, global::System.Globalization.CultureInfo.InvariantCulture)
+    : null, writer);
 ```
 
 Why this shape:
@@ -42,7 +40,7 @@ Why this shape:
 - Non-null values keep the same overload resolution and formatting as today.
 - Wrapping the expression in parentheses keeps operator precedence intact for expressions such as `a ?? b` or `x ? y : z`.
 
-Pattern variables declared in an expression statement are scoped to the enclosing block. Two C# variables in the same block would collide (`CS0128`), so the name needs a per-token suffix. The token index `i` already used for `_literal{i}` fields works.
+Pattern variables declared in an expression statement are scoped to the enclosing block. Two C# variables in the same block would collide (`CS0128`), so the name needs a per-token suffix. The token index `i` in the transpiler's token loop works.
 
 ### Alternatives considered
 
@@ -58,8 +56,8 @@ Pattern variables declared in an expression statement are scoped to the enclosin
 
 ## Steps
 
-1. Update `TextTemplateTranspiler.cs` and `Utf8TemplateTranspiler.cs` to emit the pattern form with a per-token variable name. Keep the two transpilers identical in this section.
-2. Add `Globalization`, `CultureInfo`, and a model property named like the pattern variable to the conflicting-name compilation test if needed. The `AnglePlatesSystem` alias already protects `Convert` and `CultureInfo`.
+1. Update `TemplateTranspiler.cs` to emit the pattern form with a per-token variable name. Both targets share this code.
+2. Add `Globalization`, `CultureInfo`, and a model property named like the pattern variable to the conflicting-name compilation test if needed. `global::` qualification already protects `Convert` and `CultureInfo`.
 3. Add rendering regressions that run both renderers, for:
    - `string`, `object`, class, `int?`, and `dynamic` values that are null, with `NullVariable` unset (expect empty output) and set (expect the substitute).
    - The same types when they're not null (expect unchanged output).

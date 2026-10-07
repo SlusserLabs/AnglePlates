@@ -6,7 +6,7 @@ The nonpackable .NET 10 executable uses TUnit 1.65.0, Roslyn 4.14.0, Verify.TUni
 
 [GeneratorTestHelper](../tests/AnglePlates.Tests/Infrastructure/GeneratorTestHelper.cs) creates C# 11 consumer compilations with explicit imports and .NET 10 host references. Supply different references and language versions for compatibility cases; the default does not qualify older consumer frameworks. Supply in-memory `TemplateAdditionalText` instances and `TestAnalyzerConfigOptionsProvider` for global or per-file options.
 
-`Run` executes the real generator, rejects generator exceptions and emits the resulting compilation before returning its driver, compilation and run result. Successful cases permit no compiler errors. Negative compilation cases must supply exact `ExpectedCompilerDiagnostic` values, including invariant messages and locations; do not derive expected values from the actual diagnostics. Assert generator diagnostics and locations separately from compiler errors. No broad error-acceptance switch is provided.
+`Run` executes the real generator, rejects generator exceptions and emits the resulting compilation before returning its driver, compilation and run result. Pass only templates to use the default compilation and driver, or pass your own when a test needs extra consumer sources, options, or a rerun. Successful cases permit no compiler errors. Negative compilation cases must supply exact `ExpectedCompilerDiagnostic` values, including invariant messages and locations; do not derive expected values from the actual diagnostics. Assert generator diagnostics and locations separately from compiler errors. No broad error-acceptance switch is provided.
 
 Use the returned driver with the original consumer compilation for reruns; update its additional texts or options through Roslyn driver methods. Tracked incremental steps are enabled. Assert both outputs and relevant reuse reasons when adding incremental tests. Do not reuse a compilation containing previously generated trees as the next input.
 
@@ -14,7 +14,7 @@ Use the returned driver with the original consumer compilation for reruns; updat
 
 ## Snapshot review
 
-[ModuleInitializer](../tests/AnglePlates.Tests/Infrastructure/ModuleInitializer.cs) initializes Verify.SourceGenerators once and directs Verify.TUnit artifacts into [Snapshots](../tests/AnglePlates.Tests/Snapshots). `GeneratorTestHelper.VerifyAsync` runs compilation validation before snapshot verification; await the returned operation. For tests needing assertions on the run result, call `Run`, assert diagnostics, and then await `Verifier.Verify(result.RunResult)`.
+[ModuleInitializer](../tests/AnglePlates.Tests/Infrastructure/ModuleInitializer.cs) initializes Verify.SourceGenerators once and directs Verify.TUnit artifacts into [Snapshots](../tests/AnglePlates.Tests/Snapshots). For snapshot tests, call `Run`, which validates the compilation, assert any diagnostics, and then await `Verifier.Verify(result.RunResult)`.
 
 Store reviewed `*.g.verified.cs` and `*.verified.txt` files in `Snapshots`; generated C# snapshots are excluded from compilation. Existing `.gitattributes` and `.editorconfig` settings preserve LF snapshot output while normal source files use CRLF. Unreviewed `*.received.*` output is ignored by Git.
 

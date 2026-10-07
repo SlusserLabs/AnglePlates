@@ -27,84 +27,56 @@ internal ref struct SpanReader<T> where T : unmanaged, IEquatable<T>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsNext(scoped ReadOnlySpan<T> next, bool advancePast = false)
-    {
-        ReadOnlySpan<T> unread = _span.Slice(_position);
-        if (unread.StartsWith(next))
-        {
-            if (advancePast)
-            {
-                Advance(next.Length);
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    // NOTE: We default advancePastDelimiter to false, however, SequenceReader defaults to true
-    public bool TryReadTo(out ReadOnlySpan<T> consumed, T delimiter, bool advancePastDelimiter = false)
-    {
-        ReadOnlySpan<T> unread = _span.Slice(_position);
-        int index = unread.IndexOf(delimiter);
-        if (index != -1)
-        {
-            if (advancePastDelimiter)
-            {
-                index += 1;
-            }
-
-            consumed = unread.Slice(0, index);
-            Advance(index);
-
-            return true;
-        }
-
-        consumed = ReadOnlySpan<T>.Empty;
-        return false;
-    }
-
-    // NOTE: We default advancePastDelimiter to false, however, SequenceReader defaults to true
-    public bool TryAdvanceToAny(scoped ReadOnlySpan<T> delimiters, bool advancePastDelimiter = false)
-    {
-        ReadOnlySpan<T> unread = _span.Slice(_position);
-        int index = unread.IndexOfAny(delimiters);
-        if (index != -1)
-        {
-            if (advancePastDelimiter)
-            {
-                index += 1;
-            }
-
-            Advance(index);
-            return true;
-        }
-
-        return false;
-    }
-
-    public bool TryAdvanceTo(scoped ReadOnlySpan<T> delimiter, bool advancePastDelimiter = false)
-    {
-        ReadOnlySpan<T> unread = _span.Slice(_position);
-        int index = unread.IndexOf(delimiter);
-        if (index != -1)
-        {
-            if (advancePastDelimiter)
-            {
-                index += delimiter.Length;
-            }
-
-            Advance(index);
-            return true;
-        }
-
-        return false;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void AdvanceToEnd()
     {
         _position = _span.Length;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsNext(scoped ReadOnlySpan<T> next, bool advancePast = false)
+    {
+        if (!_span.Slice(_position).StartsWith(next))
+        {
+            return false;
+        }
+
+        if (advancePast)
+        {
+            Advance(next.Length);
+        }
+
+        return true;
+    }
+
+    // Stops at the delimiter; returns false without moving when it isn't found
+    public bool TryAdvanceTo(scoped ReadOnlySpan<T> delimiter)
+    {
+        return TryAdvanceBy(_span.Slice(_position).IndexOf(delimiter));
+    }
+
+    // Stops at the first of any delimiter; returns false without moving when none is found
+    public bool TryAdvanceToAny(scoped ReadOnlySpan<T> delimiters)
+    {
+        return TryAdvanceBy(_span.Slice(_position).IndexOfAny(delimiters));
+    }
+
+    // Moves past the delimiter; returns false without moving when it isn't found
+    public bool TryAdvancePast(T delimiter)
+    {
+        int index = _span.Slice(_position).IndexOf(delimiter);
+
+        return TryAdvanceBy(index < 0 ? index : index + 1);
+    }
+
+    private bool TryAdvanceBy(int index)
+    {
+        if (index < 0)
+        {
+            return false;
+        }
+
+        Advance(index);
+
+        return true;
     }
 }

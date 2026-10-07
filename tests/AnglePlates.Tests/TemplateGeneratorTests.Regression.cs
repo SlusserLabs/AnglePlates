@@ -30,7 +30,7 @@ public sealed partial class TemplateGeneratorTests
         var invalidPath = new[] { "Templates/0.html", "Templates/m.html", "Templates/zz.html" }[invalidPosition];
         templates.Insert(invalidPosition, new TemplateAdditionalText("#generate Text\r\n[[", invalidPath));
         templates.Add(RenderingTestHelper.Template("[% unclosed", "Bad", path: "Templates/bad.html"));
-        var result = RenderingTestHelper.Generate(templates.ToArray());
+        var result = GeneratorTestHelper.Run(templates.ToArray());
         var first = RenderingTestHelper.Render(result.Compilation, type: "Consumer.First");
         var second = RenderingTestHelper.Render(result.Compilation, type: "Consumer.Second");
 
@@ -51,9 +51,9 @@ public sealed partial class TemplateGeneratorTests
             RenderingTestHelper.Template("one", ns: "One", path: "Templates/a.html"),
             RenderingTestHelper.Template("two", ns: "Two", path: "Templates/b.html")
         };
-        var result = RenderingTestHelper.Generate(templates);
-        var reversed = RenderingTestHelper.Generate(templates.Reverse().ToArray());
-        var changed = RenderingTestHelper.Generate(templates[0], RenderingTestHelper.Template("changed", ns: "Two", path: "Templates/b.html"));
+        var result = GeneratorTestHelper.Run(templates);
+        var reversed = GeneratorTestHelper.Run(templates.Reverse().ToArray());
+        var changed = GeneratorTestHelper.Run(templates[0], RenderingTestHelper.Template("changed", ns: "Two", path: "Templates/b.html"));
 
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(7);
         await Assert.That(HintNames(result)).IsEqualTo(HintNames(reversed));
@@ -98,7 +98,7 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     public async Task Initialize_BracketsAndEmptyBlocks_MatchesReviewedSources()
     {
-        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template("[ordinary] [[ model ]]\r\na \r\n[[- -]][%- -%][*- -*]\r\nb"));
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("[ordinary] [[ model ]]\r\na \r\n[[- -]][%- -%][*- -*]\r\nb"));
 
         await Verifier.Verify(result.RunResult);
     }
@@ -109,7 +109,7 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("new System.DateTime(2026, 10, 7, 13, 5, 0)", "10/07/2026 13:05:00")]
     public async Task Initialize_CSharpVariableUnderNonInvariantCulture_FormatsWithInvariantCulture(string expression, string expected)
     {
-        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template($"[[ {expression} ]]"));
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template($"[[ {expression} ]]"));
         var original = CultureInfo.CurrentCulture;
         (string text, byte[] bytes) output;
         try
@@ -129,7 +129,7 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     public async Task Initialize_UnclosedBlock_MatchesReviewedDiagnostic()
     {
-        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template("prefix [[ model"));
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("prefix [[ model"));
 
         await Verifier.Verify(result.RunResult);
     }
@@ -140,24 +140,20 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("Templates\\example.html")]
     public async Task Initialize_DuplicateTypes_DefersErrorsToCompiler(string secondPath)
     {
-        var first = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n#generate Text\r\n");
-        var second = new TemplateAdditionalText("#type Example\r\n#model string\r\n#namespace Consumer\r\n#generate Text\r\n", secondPath);
+        var first = new TemplateAdditionalText(_requiredDirectives + "#generate Text\r\n");
+        var second = new TemplateAdditionalText(_requiredDirectives + "#generate Text\r\n", secondPath);
         var compilation = GeneratorTestHelper.CreateCompilation();
         var driver = GeneratorTestHelper.CreateDriver([first, second]).RunGenerators(compilation);
         var trees = driver.GetRunResult().GeneratedTrees.Skip(3).ToArray();
         const string ambiguousConstructor = "The call is ambiguous between the following methods or properties: " +
             "'ExampleTextTemplate.ExampleTextTemplate(TemplateOptions?)' and 'ExampleTextTemplate.ExampleTextTemplate(TemplateOptions?)'";
-        const string ambiguousField = "Ambiguity between 'ExampleTextTemplate._default' and 'ExampleTextTemplate._default'";
         var expected = new[]
         {
-            CompilerError(trees[1], 17, 69, 8, "CS0102", "The type 'ExampleTextTemplate' already contains a definition for '_default'"),
-            CompilerError(trees[1], 24, 11, 19, "CS0111", "Type 'ExampleTextTemplate' already defines a member called 'ExampleTextTemplate' with the same parameter types"),
-            CompilerError(trees[1], 31, 38, 7, "CS0102", "The type 'ExampleTextTemplate' already contains a definition for 'Default'"),
-            CompilerError(trees[1], 34, 25, 6, "CS0111", "Type 'ExampleTextTemplate' already defines a member called 'Render' with the same parameter types"),
-            CompilerError(trees[0], 17, 95, 19, "CS0121", ambiguousConstructor),
-            CompilerError(trees[1], 17, 95, 19, "CS0121", ambiguousConstructor),
-            CompilerError(trees[0], 31, 49, 8, "CS0229", ambiguousField),
-            CompilerError(trees[1], 31, 49, 8, "CS0229", ambiguousField)
+            CompilerError(trees[1], 21, 11, 19, "CS0111", "Type 'ExampleTextTemplate' already defines a member called 'ExampleTextTemplate' with the same parameter types"),
+            CompilerError(trees[1], 28, 38, 7, "CS0102", "The type 'ExampleTextTemplate' already contains a definition for 'Default'"),
+            CompilerError(trees[1], 31, 25, 6, "CS0111", "Type 'ExampleTextTemplate' already defines a member called 'Render' with the same parameter types"),
+            CompilerError(trees[0], 28, 61, 19, "CS0121", ambiguousConstructor),
+            CompilerError(trees[1], 28, 61, 19, "CS0121", ambiguousConstructor)
         };
         var result = GeneratorTestHelper.Run(compilation, driver, expected);
 

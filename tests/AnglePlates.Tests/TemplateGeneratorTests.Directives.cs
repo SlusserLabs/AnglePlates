@@ -34,7 +34,7 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("</html>\r\n#not directive")]
     public async Task Initialize_NonDirectiveLine_EndsDirectiveSectionAsLiteral(string body)
     {
-        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template(body));
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
         var output = RenderingTestHelper.Render(result.Compilation, model: string.Empty);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
@@ -46,7 +46,7 @@ public sealed partial class TemplateGeneratorTests
     [MethodDataSource(nameof(LineConsumptionCases))]
     public async Task Initialize_DirectiveLines_AreConsumedWithTheirLineBreaks(string template, string expected)
     {
-        var result = RenderingTestHelper.Generate(new TemplateAdditionalText(template));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
         var output = RenderingTestHelper.Render(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
@@ -156,7 +156,7 @@ public sealed partial class TemplateGeneratorTests
 
         await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP005,SLAP006");
         await Assert.That(diagnostics[0].GetMessage()).IsEqualTo(
-            "Template file 'Templates/example.html' has invalid generation target 'Bad'. Expected 'Text' or 'Utf8'.");
+            "Template file 'Templates/example.html' has invalid generation target 'Bad'; expected 'Text' or 'Utf8'");
         await AssertLocation(diagnostics[0], template, 3, 10, 3);
         await AssertLocation(diagnostics[1], template, 4, 0, "#generate Text".Length);
     }
@@ -195,7 +195,7 @@ public sealed partial class TemplateGeneratorTests
         var lineIndex = LineOf(template, line);
 
         await Assert.That(diagnostic.Id).IsEqualTo("SLAP007");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo($"Directive '#{name}' has invalid value '{value}'. Expected {expected}.");
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo($"Directive '#{name}' has invalid value '{value}'; expected {expected}");
         await Assert.That(diagnostic.Descriptor.Title.ToString()).IsEqualTo("Invalid directive value");
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
         if (value.Length == 0)
@@ -220,7 +220,7 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#generate utf8", "Consumer.Example")]
     public async Task Initialize_ValidDirectiveValue_Generates(string line, string type)
     {
-        var result = RenderingTestHelper.Generate(new TemplateAdditionalText(ReplaceDirective(line) + "[[ model ]]"));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(ReplaceDirective(line) + "[[ model ]]"));
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         if (!line.StartsWith("#generate", StringComparison.Ordinal))
@@ -236,7 +236,7 @@ public sealed partial class TemplateGeneratorTests
     {
         var template = "#type Example\r\n#using System.Text\r\n#model IEnumerable<char>\r\n#using System.Collections.Generic\r\n#namespace Consumer\r\n" +
             "[% foreach (var c in model) { %][[ c ]][% } %][[ new StringBuilder(\"!\") ]]";
-        var result = RenderingTestHelper.Generate(new TemplateAdditionalText(template));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
         var output = RenderingTestHelper.Render(result.Compilation);
         var sources = result.RunResult.GeneratedTrees.Skip(3).Select(tree => tree.GetText().ToString()).ToArray();
 
@@ -306,7 +306,7 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     public async Task Initialize_DirectiveErrorTemplate_GeneratesOtherTemplates()
     {
-        var result = RenderingTestHelper.Generate(
+        var result = GeneratorTestHelper.Run(
             new TemplateAdditionalText(_requiredDirectives + "#type Other\r\nbad", "Templates/bad.html"),
             RenderingTestHelper.Template("good [[ model ]]"));
         var output = RenderingTestHelper.Render(result.Compilation);
@@ -319,14 +319,14 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     public async Task Initialize_DirectiveErrors_MatchesReviewedDiagnostics()
     {
-        var result = RenderingTestHelper.Generate(new TemplateAdditionalText(_requiredDirectives + "#access privat\r\n#type Other\r\nbody"));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(_requiredDirectives + "#access privat\r\n#type Other\r\nbody"));
 
         await Verifier.Verify(result.RunResult);
     }
 
     private static Diagnostic[] GenerateDiagnostics(string template)
     {
-        var result = RenderingTestHelper.Generate(new TemplateAdditionalText(template));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
         if (result.RunResult.GeneratedTrees.Length != 3)
         {
             throw new InvalidOperationException("A template with directive errors should not generate.");

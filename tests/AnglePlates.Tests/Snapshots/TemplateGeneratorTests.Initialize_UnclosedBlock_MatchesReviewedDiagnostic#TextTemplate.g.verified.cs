@@ -70,6 +70,7 @@ public abstract class TextTemplate<TModel>
         global::System.ReadOnlySpan<char> sourceChars = global::System.MemoryExtensions.AsSpan(value);
         var encodedChars = pool.Rent(rentalSize);
 
+        // Encode one buffer-sized chunk at a time; the finally block returns the buffer even if encoding or writing throws
         try
         {
             do

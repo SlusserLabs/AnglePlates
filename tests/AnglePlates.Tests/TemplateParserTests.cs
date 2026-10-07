@@ -26,7 +26,7 @@ public sealed class TemplateParserTests
     [Arguments("[* first *]rest *]", "rest *]")]
     public async Task Parse_OrdinaryBrackets_RendersFollowingExpressions(string body, string expected)
     {
-        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template(body));
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
         var output = RenderingTestHelper.Render(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
@@ -52,7 +52,7 @@ public sealed class TemplateParserTests
                         var blockContents = contents.Length == 0 && trimRight && !trimLeft ? " " : contents;
                         var body = $"a {newline}{open}{(trimLeft ? "-" : string.Empty)}{blockContents}{(trimRight ? "-" : string.Empty)}{close}{newline} b";
                         var expected = "a" + (trimLeft ? string.Empty : " " + newline) + (trimRight ? string.Empty : newline + " ") + "b";
-                        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template(body));
+                        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
                         var output = RenderingTestHelper.Render(result.Compilation);
 
                         await Assert.That(output.text).IsEqualTo(expected);
@@ -75,7 +75,7 @@ public sealed class TemplateParserTests
             {
                 var header = $"#type Example{newline}#model string{newline}#namespace Consumer{newline}";
                 var template = new TemplateAdditionalText(header + "prefix " + open + contents);
-                var result = RenderingTestHelper.Generate(template);
+                var result = GeneratorTestHelper.Run(template);
                 var diagnostic = result.RunResult.Diagnostics.Single();
 
                 await Assert.That(diagnostic.Id).IsEqualTo("SLAP004");
@@ -98,9 +98,10 @@ public sealed class TemplateParserTests
     [Arguments("a [[-1]] b", "a1 b")]
     [Arguments("a [[ -1 ]] b", "a -1 b")]
     [Arguments("a [[(-1)]] b", "a -1 b")]
+    [Arguments("a [[- 1 -]] \r\n [[- 2 ]] b", "a12 b")]
     public async Task Parse_AdjacentBlocks_PreservesTrimAndNegativeExpressionBehavior(string body, string expected)
     {
-        var result = RenderingTestHelper.Generate(RenderingTestHelper.Template(body));
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
         var output = RenderingTestHelper.Render(result.Compilation);
 
         await Assert.That(output.text).IsEqualTo(expected);
@@ -113,7 +114,7 @@ public sealed class TemplateParserTests
     [Arguments("#\r\n#\t\r\n")]
     public async Task Parse_EmptyDirectives_ReportsRequiredFieldsWithoutThrowing(string template)
     {
-        var result = RenderingTestHelper.Generate(new TemplateAdditionalText(template));
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
 
         await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
     }

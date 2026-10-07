@@ -3,14 +3,11 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
-using VerifyTests;
-using VerifyTUnit;
 
 namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 
@@ -48,6 +45,11 @@ internal static class GeneratorTestHelper
             new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
     }
 
+    public static GeneratorTestResult Run(params AdditionalText[] templates)
+    {
+        return Run(CreateCompilation(), CreateDriver(templates));
+    }
+
     public static GeneratorTestResult Run(
         Compilation compilation,
         GeneratorDriver driver,
@@ -78,17 +80,6 @@ internal static class GeneratorTestHelper
         }
 
         return new GeneratorTestResult(driver, output, runResult);
-    }
-
-    public static SettingsTask VerifyAsync(
-        Compilation compilation,
-        GeneratorDriver driver,
-        IEnumerable<ExpectedCompilerDiagnostic>? expectedCompilationErrors = null,
-        [CallerFilePath] string sourceFile = "")
-    {
-        var result = Run(compilation, driver, expectedCompilationErrors);
-
-        return Verifier.Verify(result.RunResult, sourceFile: sourceFile);
     }
 
     private static ImmutableArray<MetadataReference> CreateReferences()

@@ -54,66 +54,56 @@ internal class TemplateParser
     private bool TryParseBlock(ref SpanReader<char> reader, List<TemplateParseError> errors, out Token token)
     {
         token = default;
-        ReadOnlySpan<char> blockEnd = ReadOnlySpan<char>.Empty;
-        int start = reader.Position;
-        int openingStart = start;
-
+        int openingStart = reader.Position;
+        ReadOnlySpan<char> blockEnd;
         if (reader.IsNext(_options.VariableStart.Span, advancePast: true))
         {
-            start = reader.Position;
-            token = new Token { Type = TokenType.Variable };
+            token.Type = TokenType.Variable;
             blockEnd = _options.VariableEnd.Span;
         }
         else if (reader.IsNext(_options.CodeStart.Span, advancePast: true))
         {
-            start = reader.Position;
-            token = new Token { Type = TokenType.Code };
+            token.Type = TokenType.Code;
             blockEnd = _options.CodeEnd.Span;
         }
         else if (reader.IsNext(_options.CommentStart.Span, advancePast: true))
         {
-            start = reader.Position;
-            token = new Token { Type = TokenType.Comment };
+            token.Type = TokenType.Comment;
             blockEnd = _options.CommentEnd.Span;
         }
-
-        // Find something?
-        if (blockEnd.Length > 0)
+        else
         {
-            int openingLength = reader.Position - openingStart;
-            // Whitespace indicator?
-            if (reader.IsNext(_options.WhitespaceControl.Span, advancePast: true))
-            {
-                start = reader.Position;
-                token.TrimPrevious = true;
-            }
-
-            int end;
-            if (reader.TryAdvanceTo(blockEnd, advancePastDelimiter: false))
-            {
-                // Whitespace indicator?
-                end = reader.Position;
-                if (reader.Span.Slice(start, reader.Position - start).EndsWith(_options.WhitespaceControl.Span))
-                {
-                    // Exclude the trailing whitespace-control marker
-                    end -= _options.WhitespaceControl.Length;
-                    token.TrimNext = true;
-                }
-
-                reader.Advance(blockEnd.Length); // Now consume end block
-            }
-            else
-            {
-                errors.Add(new TemplateParseError(openingStart, openingLength, blockEnd.ToString()));
-                reader.AdvanceToEnd();
-                return false;
-            }
-
-            TrimToken(reader.Span, start, end, ref token);
-            return true;
+            return false;
         }
 
-        return false;
+        // A marker right after the opener trims whitespace before the block
+        int openingLength = reader.Position - openingStart;
+        if (reader.IsNext(_options.WhitespaceControl.Span, advancePast: true))
+        {
+            token.TrimPrevious = true;
+        }
+
+        // An unclosed block reports the opener and consumes the rest of the text
+        int start = reader.Position;
+        if (!reader.TryAdvanceTo(blockEnd))
+        {
+            errors.Add(new TemplateParseError(openingStart, openingLength, blockEnd.ToString()));
+            reader.AdvanceToEnd();
+            return false;
+        }
+
+        // A marker right before the closer trims whitespace after the block and isn't part of the content
+        int end = reader.Position;
+        if (reader.Span.Slice(start, end - start).EndsWith(_options.WhitespaceControl.Span))
+        {
+            end -= _options.WhitespaceControl.Length;
+            token.TrimNext = true;
+        }
+
+        reader.Advance(blockEnd.Length);
+        TrimToken(reader.Span, start, end, ref token);
+
+        return true;
     }
 
     private bool TryParseText(ref SpanReader<char> reader, out Token token)
@@ -123,7 +113,7 @@ internal class TemplateParser
         while (!reader.End)
         {
             // Fast look for just one char
-            if (reader.TryAdvanceToAny(_anyBlockStart.Span, advancePastDelimiter: false))
+            if (reader.TryAdvanceToAny(_anyBlockStart.Span))
             {
                 // We've matched on one char, but is it actually a block start?
                 if (reader.IsNext(_options.VariableStart.Span) || reader.IsNext(_options.CodeStart.Span) || reader.IsNext(_options.CommentStart.Span))
@@ -175,10 +165,9 @@ internal class TemplateParser
 
             reader.Advance(prefix.Length);
 
-            // Consume the whole line, including its terminator, so the body starts on the next line
-            if (!reader.TryReadTo(out _, '\n', advancePastDelimiter: true))
+            // Consume the whole line, including its terminator, so the body starts on the next line; the last line may have none
+            if (!reader.TryAdvancePast('\n'))
             {
-                // No line break? Can only be EOF
                 reader.AdvanceToEnd();
             }
 
