@@ -106,6 +106,24 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
+    public async Task Initialize_PathThatLineDirectivesCannotHold_SkipsLineMapping()
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("a[% var b = 1; %][[ model ]]", path: "Templates/a\"b.html"));
+        var sources = result.RunResult.Results.Single().GeneratedSources;
+
+        await Assert.That(sources.Any(source => source.SourceText.ToString().Contains("#line", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(RenderingTestHelper.Render(result.Compilation).text).IsEqualTo("a&lt;value&gt;");
+    }
+
+    [Test]
+    public async Task Initialize_EscapedOpeners_MatchesReviewedSources()
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Text\r\nlet a = \\[[1]];\r\n\\\\[% var b = 2; %]\\[*c*]"));
+
+        await Verifier.Verify(result.RunResult);
+    }
+
+    [Test]
     [Arguments("1.5", "1.5")]
     [Arguments("1234.5m", "1234.5")]
     [Arguments("new System.DateTime(2026, 10, 7, 13, 5, 0)", "10/07/2026 13:05:00")]
@@ -186,25 +204,43 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("null", 14, 6, "CS8117", "Invalid operand for pattern match; value required, but found '<null>'.")]
-    [Arguments("default", 15, 7, "CS8716", "There is no target type for the default literal.")]
-    [Arguments("default(System.Span<char>)", 104, 19, "CS1503", "Argument 1: cannot convert from 'System.Span<char>' to 'object?'")]
-    [Arguments("1, 2", 37, 8, "CS1501", "No overload for method 'ToString' takes 3 arguments")]
-    public async Task Initialize_InvalidCSharpVariable_ReportsCompilerError(string expression, int column, int length, string id, string message)
+    [Arguments("null", 38, 14, 6, "CS8117", "Invalid operand for pattern match; value required, but found '<null>'.")]
+    [Arguments("default", 38, 15, 7, "CS8716", "There is no target type for the default literal.")]
+    [Arguments("default(System.Span<char>)", 40, 46, 19, "CS1503", "Argument 1: cannot convert from 'System.Span<char>' to 'object?'")]
+    [Arguments("1, 2", 38, 37, 8, "CS1501", "No overload for method 'ToString' takes 3 arguments")]
+    public async Task Initialize_InvalidCSharpVariable_ReportsCompilerErrorAtTemplate(string expression, int line, int column, int length, string id, string message)
     {
         // Generate one renderer at a time because the compiler doesn't report errors from separate trees in a stable order.
         // Directives are tokens 0 to 4, so the variable is token 5 and the Write call is the first statement after Model.
+        // Every error maps to the whole expression on the template's sixth line, including errors in generated code around it.
         foreach (var target in new[] { "Text", "Utf8" })
         {
             var template = RenderingTestHelper.Template($"#generate {target}\r\n[[ {expression} ]]");
             var compilation = GeneratorTestHelper.CreateCompilation();
             var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
             var tree = driver.GetRunResult().GeneratedTrees.Skip(3).Single();
+            var mapped = new LinePositionSpan(new LinePosition(5, 3), new LinePosition(5, 3 + expression.Length));
 
-            var result = GeneratorTestHelper.Run(compilation, driver, [CompilerError(tree, 37, column, length, id, message)]);
+            var result = GeneratorTestHelper.Run(compilation, driver, [CompilerError(tree, line, column, length, id, message, mapped)]);
 
             await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
         }
+    }
+
+    [Test]
+    public async Task Initialize_InvalidCSharpBlock_ReportsCompilerErrorAtTemplate()
+    {
+        // The block's second line keeps its template columns, so the undefined name maps to the template's seventh line
+        var template = RenderingTestHelper.Template("#generate Text\r\n<p>[% var count = 1;\r\n  count += missing; %]</p>");
+        var compilation = GeneratorTestHelper.CreateCompilation();
+        var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
+        var tree = driver.GetRunResult().GeneratedTrees.Skip(3).Single();
+        var mapped = new LinePositionSpan(new LinePosition(6, 11), new LinePosition(6, 18));
+
+        var result = GeneratorTestHelper.Run(compilation, driver,
+            [CompilerError(tree, 41, 11, 7, "CS0103", "The name 'missing' does not exist in the current context", mapped)]);
+
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
     }
 
     [Test]
@@ -251,12 +287,14 @@ public sealed partial class TemplateGeneratorTests
         return string.Join("\n", result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName).Order(StringComparer.Ordinal));
     }
 
-    private static ExpectedCompilerDiagnostic CompilerError(SyntaxTree tree, int line, int column, int length, string id, string message)
+    private static ExpectedCompilerDiagnostic CompilerError(
+        SyntaxTree tree, int line, int column, int length, string id, string message, LinePositionSpan? templateSpan = null)
     {
         var start = new LinePosition(line, column);
         var end = new LinePosition(line, column + length);
         var span = new TextSpan(tree.GetText().Lines.GetPosition(start), length);
+        var mappedPath = templateSpan is null ? null : "Templates/example.html";
 
-        return new ExpectedCompilerDiagnostic(id, message, new FileLinePositionSpan(tree.FilePath, start, end), span, LocationKind.SourceFile);
+        return new ExpectedCompilerDiagnostic(id, message, new FileLinePositionSpan(tree.FilePath, start, end), span, LocationKind.SourceFile, mappedPath, templateSpan);
     }
 }

@@ -22,6 +22,7 @@ Use this reference when generating documentation, code comments, diagnostics, is
 | Generation target | Template authoring and source generator | The compiled template class kind selected by `#generate`: `Text` or `Utf8`. Omitting the directive generates both kinds. |
 | C# variable | Template body | C# inside `[[ ... ]]`. AnglePlates converts its value to a string and passes it through the configured encoder. The parser represents it as `TokenType.Variable`. |
 | C# block | Template body | C# inside `[% ... %]` that becomes part of the generated render method. This term distinguishes control flow and statements from C# variables. |
+| Escaped opener | Template body | A `[[`, `[%`, or `[*` in literal text preceded by an odd number of backslashes. AnglePlates writes the opener as literal text, along with one backslash for each pair before it. |
 | Encoded output | Template body and rendering | Dynamic text that AnglePlates passes through the configured encoder. C# variables and `Write(value, writer)` produce encoded output. |
 | Raw output | Template body and rendering | Dynamic text written without encoding by `WriteRaw(value, writer)`. Literal template text is also written unchanged. |
 | Template discovery | MSBuild | The build step that finds possible templates and adds them as compiler `AdditionalFiles`. Discovery happens before the generator checks their contents. |

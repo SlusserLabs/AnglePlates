@@ -41,9 +41,25 @@ internal class TemplateParser
 
         result.DirectiveSectionEnd = reader.Position;
 
-        // Find anything that is between blocks or is a block
-        while (TryParseText(ref reader, out token) || TryParseBlock(ref reader, result.Errors, out token))
+        // Find anything that is between blocks or is a block; escapes can split literal text into several tokens
+        while (true)
         {
+            int count = tokens.Count;
+            if (TryParseText(ref reader, tokens))
+            {
+                for (int i = count; i < tokens.Count; i++)
+                {
+                    DebugToken(text, tokens[i]);
+                }
+
+                continue;
+            }
+
+            if (!TryParseBlock(ref reader, result.Errors, out token))
+            {
+                break;
+            }
+
             DebugToken(text, token);
             tokens.Add(token);
         }
@@ -106,43 +122,83 @@ internal class TemplateParser
         return true;
     }
 
-    private bool TryParseText(ref SpanReader<char> reader, out Token token)
+    private bool TryParseText(ref SpanReader<char> reader, List<Token> tokens)
     {
-        token = default;
+        int count = tokens.Count;
         int start = reader.Position;
-        while (!reader.End)
+        while (true)
         {
             // Fast look for just one char
-            if (reader.TryAdvanceToAny(_anyBlockStart.Span))
+            if (!reader.TryAdvanceToAny(_anyBlockStart.Span))
             {
-                // We've matched on one char, but is it actually a block start?
-                if (reader.IsNext(_options.VariableStart.Span) || reader.IsNext(_options.CodeStart.Span) || reader.IsNext(_options.CommentStart.Span))
-                {
-                    break;
-                }
+                reader.AdvanceToEnd();
+                break;
+            }
 
-                // Not actually a token, advance and keep going
+            // We've matched on one char, but is it actually a block start?
+            int openerLength = GetBlockStartLength(ref reader);
+            if (openerLength == 0)
+            {
                 reader.Advance(1);
                 continue;
             }
 
-            reader.AdvanceToEnd();
-            break;
-        }
-
-        if (start != reader.Position)
-        {
-            token = new Token
+            // Backslashes right before an opener escape it in pairs: each pair writes one backslash, and an odd one
+            // left over makes the opener literal. Dropping the first half of the run keeps every token a slice of the text.
+            int opener = reader.Position;
+            int backslashes = CountBackslashes(reader.Span, start, opener);
+            int runStart = opener - backslashes;
+            int kept = backslashes / 2;
+            if (backslashes % 2 == 0)
             {
-                Type = TokenType.Literal,
-                Start = start,
-                End = reader.Position
-            };
+                AddLiteral(tokens, start, runStart + kept);
+                start = opener;
+                break;
+            }
 
-            return true;
+            // The escaped opener starts the next literal after the surviving backslashes, and scanning resumes past it
+            AddLiteral(tokens, start, runStart);
+            start = opener - kept;
+            reader.Advance(openerLength);
         }
 
-        return false;
+        AddLiteral(tokens, start, reader.Position);
+
+        return tokens.Count > count;
+    }
+
+    private int GetBlockStartLength(ref SpanReader<char> reader)
+    {
+        if (reader.IsNext(_options.VariableStart.Span))
+        {
+            return _options.VariableStart.Length;
+        }
+
+        if (reader.IsNext(_options.CodeStart.Span))
+        {
+            return _options.CodeStart.Length;
+        }
+
+        return reader.IsNext(_options.CommentStart.Span) ? _options.CommentStart.Length : 0;
+    }
+
+    private static int CountBackslashes(ReadOnlySpan<char> text, int start, int end)
+    {
+        int index = end;
+        while (index > start && text[index - 1] == '\\')
+        {
+            index--;
+        }
+
+        return end - index;
+    }
+
+    private static void AddLiteral(List<Token> tokens, int start, int end)
+    {
+        if (start < end)
+        {
+            tokens.Add(new Token { Type = TokenType.Literal, Start = start, End = end });
+        }
     }
 
     private bool TryParseDirective(ref SpanReader<char> reader, out Token token)

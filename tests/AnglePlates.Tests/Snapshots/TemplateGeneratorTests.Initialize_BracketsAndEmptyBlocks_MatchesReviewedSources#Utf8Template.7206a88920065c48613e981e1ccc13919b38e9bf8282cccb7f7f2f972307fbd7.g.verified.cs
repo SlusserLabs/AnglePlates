@@ -38,7 +38,11 @@ public partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf8T
 
         global::System.Buffers.BuffersExtensions.Write(writer, "[ordinary] "u8);
 
-        Write((model) is { } __anglePlatesValue5 ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+#line (5, 15) - (5, 19) 16 "Templates/example.html"
+        Write((model) is { } __anglePlatesValue5
+#line (5, 15) - (5, 19) 143 "Templates/example.html"
+            ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+#line default
 
         global::System.Buffers.BuffersExtensions.Write(writer, "\r\na"u8);
 

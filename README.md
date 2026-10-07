@@ -75,12 +75,27 @@ AnglePlates preserves literal text, including line endings. C# variables and C# 
 | C# block | `[% foreach (var item in model.Items) { %]<p>[[ item ]]</p>[% } %]` | Inserts C# as-is into the render method for loops, conditions, or local variables. |
 | Comment | `[* This is not rendered. *]` | Omits the comment from output. |
 | Raw output in C# | `[% WriteRaw(model.Html, writer); %]` | Writes a string without encoding in either rendering path. |
+| Escaped opener | `\[[1, 2]]` | Writes `[[1, 2]]` as literal text. See [Escaping openers](#escaping-openers). |
 
 AnglePlates converts C# variables with `Convert.ToString` and the invariant culture before encoding them, so numbers and dates render the same on every machine. A null C# variable of any type, whether it's a `string`, an `object`, or an `int?`, writes the `NullVariable` option, which is nothing unless you set it (see [Encoding and options](#encoding-and-options)). A bare `[[ null ]]` doesn't compile. If you really want a placeholder that only ever writes `NullVariable`, cast it: `[[ (string?)null ]]`. To write output directly, C# blocks can call `Write(value, writer)` to write a string through the configured encoder or `WriteRaw(value, writer)` to bypass encoding.
 
 Empty C# variables, C# blocks, and comments produce no output.
 
-There isn't an escape syntax for delimiters, so a closing delimiter inside a C# string or comment still ends the block.
+### Escaping openers
+
+Got JavaScript with nested arrays, a Bash `[[ ]]` test, or a TOML `[[table]]`? Put a backslash in front of the opener, and AnglePlates writes it as plain text. `const grid = \[[1, 2], [3, 4]];` writes `const grid = [[1, 2], [3, 4]];`. This works for `[[`, `[%`, and `[*`.
+
+Only the backslashes right in front of an opener count, and they work in pairs, the same way Handlebars treats `\{{`:
+
+| Template | Output |
+| --- | --- |
+| `\[[x]]` | `[[x]]` |
+| `\\[[ model.Name ]]` | A backslash followed by the C# variable |
+| `\\\[[x]]` | `\[[x]]` |
+
+Every other backslash is plain text, so `C:\temp\file` comes out unchanged. Watch for a path that ends right before a C# variable, though: `C:\out\[[ model.Name ]]` writes `C:\out[[ model.Name ]]`. Write `C:\out\\[[ model.Name ]]` instead. AnglePlates doesn't warn about this one, because a TOML table looks just like a C# variable to the parser.
+
+Escapes only apply to literal text. Inside a block, C# has its own escapes, and a closing delimiter inside a C# string or comment still ends the block.
 
 ### Whitespace trimming
 
@@ -201,6 +216,7 @@ If the same `AnglePlate` item appears more than once, AnglePlates adds it to `Ad
 - Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling.
 - Any `AdditionalFiles` input that starts with `#` is a template as far as AnglePlates is concerned. A file like `PublicAPI.Shipped.txt`, which starts with `#nullable enable`, fails the build with `SLAP001` through `SLAP003`.
 - A closing delimiter ends its block even inside a C# string or comment, so keep `]]` out of C# variables and `%]` out of C# blocks.
+- Compiler errors in C# variables and C# blocks point at the template's path, line, and column, because the generated code maps them back with `#line`. An error in the code AnglePlates wraps around a C# variable, such as a `Span<char>` value it can't convert to a string, points at the whole C# variable.
 - The generated render method already declares `model`, `Model`, `writer`, and a `__anglePlatesValue<N>` variable for each C# variable, so don't reuse those names for locals in your C# blocks.
 - Two templates that generate the same class name in the same namespace cause C# compiler errors, the same as two hand-written classes would.
 - Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, or `#using`. Each error stops that template from generating, but your other templates still generate. See [diagnostics](docs/diagnostics.md).

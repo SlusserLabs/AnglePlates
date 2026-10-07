@@ -19,6 +19,8 @@ Recent work fixed the bugs found in the first inspection:
 - C# variables format with the invariant culture.
 - Emitted support code uses `global::`-qualified names, so `#using` imports can't change what it refers to.
 - Directives match exact names, report repeated directives and invalid values, and `#using` emits imports.
+- A backslash before `[[`, `[%`, or `[*` writes the opener as literal text.
+- Compiler errors in C# variables and C# blocks point at the template through `#line` mapping.
 
 It isn't release-ready yet. Consumer compatibility has only been checked on .NET 10 with C# 11, the regression suite is focused rather than complete, and there's no CI or publishing workflow.
 
@@ -26,10 +28,10 @@ It isn't release-ready yet. Consumer compatibility has only been checked on .NET
 
 1. MSBuild discovery collects every file under `Templates` and `Views`, plus any explicit `AnglePlate` items. It removes duplicate item specs and adds the results to the compiler's `AdditionalFiles`.
 2. The generator reads every `AdditionalFiles` input, not only the discovered ones, and keeps nonempty files whose first character is `#`.
-3. The parser reads the directive lines at the top, matching each line against the known `#name` prefixes followed by whitespace. The first line that doesn't match starts the body. It then splits the body into literal text, C# variables, C# blocks, and comments, storing offsets and trim flags instead of copies.
+3. The parser reads the directive lines at the top, matching each line against the known `#name` prefixes followed by whitespace. The first line that doesn't match starts the body. It then splits the body into literal text, C# variables, C# blocks, and comments, storing offsets and trim flags instead of copies. An escaped opener splits the literal text around the backslashes it drops, so every token is still a slice of the template.
 4. `TemplateTranspilerOptions` validates the directives. The generator reports `SLAP001` to `SLAP007` for a template that's missing required directives, has an unclosed block, repeats a directive, or has an invalid directive value, and skips only that template.
 5. The generator always adds `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` to the consumer assembly, even when no template qualifies.
-6. Each template becomes a partial `<Type>TextTemplate` class, a partial `<Type>Utf8Template` class, or both. The `Render` method writes literals, runs C# blocks inline, and writes each C# variable through `Convert.ToString(value, CultureInfo.InvariantCulture)` and the base class's `Write` method. A null check runs first, so a null value of any type reaches `Write` as `null` and gets the `NullVariable` substitute. Text that doesn't parse as one C# expression, such as a stray `[[1, 2]]`, skips the null check and keeps the plain call so it still fails to compile.
+6. Each template becomes a partial `<Type>TextTemplate` class, a partial `<Type>Utf8Template` class, or both. The `Render` method writes literals, runs C# blocks inline, and writes each C# variable through `Convert.ToString(value, CultureInfo.InvariantCulture)` and the base class's `Write` method. A null check runs first, so a null value of any type reaches `Write` as `null` and gets the `NullVariable` substitute. Text that doesn't parse as one C# expression, such as a stray `[[1, 2]]`, skips the null check and keeps the plain call so it still fails to compile. Adjacent literal tokens are written as one literal. A `#line` span directive before each C# variable and C# block maps compiler errors back to the template path, line, and column; errors in the generated code around a C# variable map to the whole C# variable.
 
 All template changes funnel into one generation callback, so editing one template regenerates everything. Per-template incremental caching is still planned.
 
@@ -54,12 +56,11 @@ Nothing has been benchmarked, so there are no numbers to compare against Razor, 
 | Area | Problem | Plan |
 | --- | --- | --- |
 | Directives | A misspelled directive ends the directive section and becomes literal output. Required directives after it report `SLAP001` to `SLAP003` at the typo, but a misspelled optional directive with no required directive after it isn't reported. | By design; the README documents it |
-| Unrelated additional files | Any `AdditionalFiles` input that starts with `#` is treated as a template. `PublicAPI.Shipped.txt` (`#nullable enable`) or a Markdown file would fail the build with `SLAP001` to `SLAP003`. | [markdown-parsing.md](../plans/markdown-parsing.md) |
-| Delimiters | `[[`, `[%`, and `[*` in literal text always open a block, which breaks nested JavaScript arrays, Bash `[[ ]]`, and TOML `[[tables]]`. Inside blocks, a closing delimiter in a C# string or comment ends the block. There's no escape syntax. | [javascript-parsing.md](../plans/javascript-parsing.md) |
+| Unrelated additional files | Any `AdditionalFiles` input that starts with `#` is treated as a template. `PublicAPI.Shipped.txt` (`#nullable enable`) or a Markdown file would fail the build with `SLAP001` to `SLAP003`. | [project-dir.md](../plans/project-dir.md) |
+| Closing delimiters | Inside a block, a closing delimiter in a C# string or comment ends the block, so `[[ "]]" ]]` ends early. | Not planned yet |
 | Discovery defaults | `$(ProjectDir)` is empty when the props file is evaluated, so the defaults are really the relative paths `Templates` and `Views`. Duplicate removal compares item specs, not full paths. | [project-dir.md](../plans/project-dir.md) |
 | Consumer dependencies | Both renderer base classes are always emitted, so even text-only consumers need `System.IO.Pipelines`. Repository projects get it from `Microsoft.AspNetCore.App`. | Release plan, step 1 |
 | Multiple assemblies | Each assembly gets its own public `SlusserLabs.AnglePlates.TemplateOptions` and base classes. A project that references two assemblies with templates sees two definitions of each support type and gets ambiguity errors. | Release plan, step 2 |
-| Error locations | Compiler errors in template C# point into generated code because there's no `#line` mapping. | [javascript-parsing.md](../plans/javascript-parsing.md) |
 | Generated names | The render method declares `model`, `Model`, and `writer`, plus a `__anglePlatesValue<N>` pattern variable for each C# variable. Template code can collide with them. Indentation of C# blocks is a brace-counting guess. | Not planned yet |
 | Trim markers | A `-` right after an opener is always a trim marker, so `[[-1]]` writes `1`. Write `[[ -1 ]]` or `[[(-1)]]` for a negative number. | By design; document it in the README |
 | Compatibility | Only .NET 10 consumers with C# 11 have been tested. Generated code uses .NET 6+ APIs such as `ArgumentNullException.ThrowIfNull`, and UTF-8 templates use C# 11 `u8` literals. The generator targets `netstandard2.0` with Roslyn 4.14.0, but older compiler hosts haven't been tested. | Release plan, step 2 |
@@ -74,7 +75,8 @@ Each step builds on the one before it. Unchecked items are open work; checked it
 - [x] C# variables format with the invariant culture.
 - [x] Settle the directive contract: exact names, unknown and repeated directives, value validation, `#using`, and `#access` checks.
 - [ ] Stop treating unrelated `AdditionalFiles` as templates.
-- [ ] Choose a delimiter escape and make closing-delimiter scanning C#-aware.
+- [x] Add a delimiter escape for openers in literal text.
+- [x] Map compiler errors in template C# back to the template with `#line`.
 - [x] Make `NullVariable` apply to every null C# variable.
 - [ ] Decide whether text-only consumers should still get the UTF-8 base class and its `System.IO.Pipelines` dependency, and document the minimum consumer requirements.
 - [ ] Cover parser token boundaries, comments, trim flags, directives, generation selection, imports, class accessibility, duplicate names, and invalid-file isolation. Snapshot both renderers and the support types.
@@ -150,7 +152,7 @@ Production must publish the same validated artifact from the intended tag. After
 
 - Repository layout and conventions: `AnglePlates.slnx`, `src/AnglePlates`, `tests/AnglePlates.Tests`, and `tests/AnglePlates.PackageTests`, with `SlusserLabs.AnglePlates` kept as the assembly name, package ID, and root namespace. The conventions came from SlusserLabs/AssemblyInfo, and the agent instructions are in `AGENTS.md`.
 - Test infrastructure: a .NET 10 TUnit executable on Microsoft.Testing.Platform, with Verify snapshots, `GeneratorTestHelper`, and in-memory generated-assembly loading.
-- Correctness fixes with focused regressions: false bracket starts, empty and unclosed blocks, invalid-template isolation, stable hint names, pooled-buffer ownership, `#generate` selection, invariant-culture formatting, and `NullVariable` for null C# variables of every type.
+- Correctness fixes with focused regressions: false bracket starts, empty and unclosed blocks, invalid-template isolation, stable hint names, pooled-buffer ownership, `#generate` selection, invariant-culture formatting, `NullVariable` for null C# variables of every type, escaped openers, and `#line` mapping for C# variables and C# blocks.
 - Stable diagnostics `SLAP001` to `SLAP007` in `DiagnosticDescriptors.cs`, tracked in the analyzer release files.
 - Package contract: an analyzer-only package with generated support types, no runtime assets or dependencies, `buildTransitive` discovery, XML documentation, and portable symbols in a `.snupkg`.
 - Isolated package-consumer validation through `eng/validate-package.ps1`.

@@ -35,6 +35,52 @@ public sealed class TemplateParserTests
     }
 
     [Test]
+    [Arguments(@"\[[1, 2]]", "[[1, 2]]")]
+    [Arguments(@"\[% x %]", "[% x %]")]
+    [Arguments(@"\[* x *]", "[* x *]")]
+    [Arguments(@"\\[[ model ]]", @"\&lt;value&gt;")]
+    [Arguments(@"\\\[[ model ]]", @"\[[ model ]]")]
+    [Arguments(@"\\\\[[ model ]]", @"\\&lt;value&gt;")]
+    [Arguments(@"end \[[", "end [[")]
+    [Arguments(@"[[ model ]]\[[x]]", "&lt;value&gt;[[x]]")]
+    [Arguments(@"\[[[[ model ]]", "[[&lt;value&gt;")]
+    [Arguments(@"\[[\[%\[*", "[[[%[*")]
+    [Arguments(@"\[[- x -]]", "[[- x -]]")]
+    [Arguments(@"C:\temp\file \\", @"C:\temp\file \\")]
+    [Arguments(@"C:\out\\[[ model ]]", @"C:\out\&lt;value&gt;")]
+    [Arguments("a\r\n\\[[x]]\r\nb", "a\r\n[[x]]\r\nb")]
+    [Arguments("a\n\\[[x]]\nb", "a\n[[x]]\nb")]
+    [Arguments(@"const grid = \[[1, 2], [3, 4]];", "const grid = [[1, 2], [3, 4]];")]
+    [Arguments(@"if \[[ -f ""$file"" ]]; then", @"if [[ -f ""$file"" ]]; then")]
+    [Arguments(@"\[[servers]]", "[[servers]]")]
+    [Arguments(@"/\[*+?]/", "/[*+?]/")]
+    [Arguments(@"See \[[Home]].", "See [[Home]].")]
+    public async Task Parse_EscapedOpener_WritesOpenerLiterally(string body, string expected)
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+        var output = RenderingTestHelper.Render(result.Compilation);
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    [Arguments("[[ model -]] \r\n \\[[x]] \r\n [[- model ]]", "&lt;value&gt;[[x]]&lt;value&gt;")]
+    [Arguments("[[ model -]] \n \\\\[[- model ]]", @"&lt;value&gt;\&lt;value&gt;")]
+    [Arguments("[[ model -]]\\[[x]]", "&lt;value&gt;[[x]]")]
+    [Arguments("\\[[x]] \n [[- model ]]", "[[x]]&lt;value&gt;")]
+    [Arguments(" \\[[x]] [*- *]", " [[x]]")]
+    public async Task Parse_EscapedOpenerNextToTrimMarkers_TrimsOnlyWhitespace(string body, string expected)
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+        var output = RenderingTestHelper.Render(result.Compilation);
+
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
     [Arguments("[[", "]]")]
     [Arguments("[%", "%]")]
     [Arguments("[*", "*]")]

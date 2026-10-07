@@ -76,9 +76,10 @@ public class TemplateGenerator : IIncrementalGenerator
                 var transpilerOptions = TemplateTranspilerOptions.Create(
                     template.Path, template.Content.AsSpan(), directiveTokens, parseResult.DirectiveSectionEnd, parserOptions.Whitespace);
 
+                var lines = SourceText.From(template.Content, Encoding.UTF8).Lines;
                 if (transpilerOptions.Errors.Count > 0 || parseResult.Errors.Count > 0)
                 {
-                    ReportErrors(ctx, template, transpilerOptions.Errors, parseResult.Errors);
+                    ReportErrors(ctx, template, lines, transpilerOptions.Errors, parseResult.Errors);
                     continue;
                 }
 
@@ -86,7 +87,8 @@ public class TemplateGenerator : IIncrementalGenerator
                 {
                     if ((transpilerOptions.GenerationTarget & target) != 0)
                     {
-                        var source = TemplateTranspiler.Transpile(template.RelativePath, transpilerOptions, target, template.Content.AsSpan(), parseResult.Tokens);
+                        var source = TemplateTranspiler.Transpile(
+                            template.RelativePath, template.Path, lines, transpilerOptions, target, template.Content.AsSpan(), parseResult.Tokens);
                         ctx.AddSource(CreateHintName(template.RelativePath, transpilerOptions, target, hintNameCounts), source);
                     }
                 }
@@ -95,9 +97,9 @@ public class TemplateGenerator : IIncrementalGenerator
     }
 
     // Reports directive and parse errors; the caller then skips only this template
-    private static void ReportErrors(SourceProductionContext ctx, TemplateFile template, List<DirectiveError> directiveErrors, List<TemplateParseError> parseErrors)
+    private static void ReportErrors(
+        SourceProductionContext ctx, TemplateFile template, TextLineCollection lines, List<DirectiveError> directiveErrors, List<TemplateParseError> parseErrors)
     {
-        var lines = SourceText.From(template.Content, Encoding.UTF8).Lines;
         foreach (var error in directiveErrors)
         {
             var location = Location.Create(template.Path, error.Span, lines.GetLinePositionSpan(error.Span));

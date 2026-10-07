@@ -38,7 +38,11 @@ public partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.TextT
 
         writer.Write("[ordinary] ");
 
-        Write((model) is { } __anglePlatesValue5 ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+#line (5, 15) - (5, 19) 16 "Templates/example.html"
+        Write((model) is { } __anglePlatesValue5
+#line (5, 15) - (5, 19) 143 "Templates/example.html"
+            ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+#line default
 
         writer.Write("\r\na");
 
