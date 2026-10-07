@@ -1,21 +1,21 @@
 # AnglePlates
 
-AnglePlates is a source generator that turns raw templates into typed C# compiled templates. It offers a simpler template syntax than T4, Razor, or Liquid.
+AnglePlates is like T4 templates for modern .NET. It uses a source generator to turn templates into typed C# classes without having to learn a custom syntax like Razor or Liquid.
 
-Performance and minimal memory consumption are project goals. Templates render to a `TextWriter` or UTF-8 `IBufferWriter<byte>`. HTML is the primary use case, so expressions are HTML-encoded by default.
+It's built to render quickly without chewing through memory. AnglePlates writes directly to a `TextWriter` or UTF-8 `IBufferWriter<byte>`. HTML is the main target, so expressions are HTML-encoded by default, but templates can use any text format.
 
-## Add the package
+## Installation
 
 ```shell
 # TODO publish the package
 dotnet package add SlusserLabs.AnglePlates
 ```
 
-The source generator runs at compile time. Deploy your application with its compiled templates; the AnglePlates package is not needed at runtime.
+The source generator runs when you compile your application. The compiled templates become part of your application, so you do not need to deploy the AnglePlates package with it.
 
 > Generated classes depend on `System.IO.Pipelines`. Add the package if your project does not already reference it.
 
-Consumer verification covers .NET 10 with C# 11. Generated UTF-8 literals require C# 11 or later.
+AnglePlates has been tested with .NET 10 and C# 11. UTF-8 compiled templates require C# 11 or later because they use UTF-8 string literals.
 
 ## Anatomy of a template
 
@@ -35,7 +35,7 @@ A template starts with a directive section followed by a body containing literal
 [% } %]
 ```
 
-This generates `public` `GreetingTextTemplate` and ``GreetingUtf8Template` classes in `MyApp.Templates`. The `GreetingModel` is your custom model/view-model, e.g.:
+The generator creates two `public` classes in `MyApp.Templates`: `GreetingTextTemplate` and `GreetingUtf8Template`. A model can be any object you want to render. Here's one example:
 
 ```csharp
 namespace MyApp;
@@ -58,11 +58,11 @@ Directives occupy consecutive lines at the very beginning of the file. The first
 | `#namespace` | Yes | Namespace for compiled template classes. | `#namespace MyApp.Templates` |
 | `#render` | No | Defaults to `Text`. Add `Utf8` to generate both compiled templates. Values are comma-separated and case-insensitive; text output remains enabled even with `#render Utf8`. | `#render Text, Utf8` |
 | `#access` | No | Compiled template accessibility; defaults to `public`. | `#access public` or `#access internal` |
-| `#using` | No | Parsed as comma-separated namespace names, but currently does not emit imports. Use fully qualified C# names instead. | `#using System, System.Linq` |
+| `#using` | No | Accepts comma-separated namespace names, but doesn't emit imports yet. Use fully qualified C# names instead. | `#using System, System.Linq` |
 
-### Template body syntax
+### Template syntax
 
-Literal text is preserved, including line endings. Expressions and C# blocks execute in the generated render method; both `model` and `Model` refer to the supplied model.
+AnglePlates preserves literal text, including line endings. Expressions and C# blocks run inside the generated render method. You can refer to the supplied model as either `model` or `Model`.
 
 | Syntax | Example | Behavior |
 | --- | --- | --- |
@@ -72,11 +72,11 @@ Literal text is preserved, including line endings. Expressions and C# blocks exe
 | Comment | `[* This is not rendered. *]` | Omits the comment from output. |
 | Raw output in C# | `[% WriteRaw(model.Html, writer); %]` | Writes a string without encoding in either rendering path. |
 
-C# blocks can call `Write(value, writer)` for encoded strings or `WriteRaw(value, writer)` for raw strings. Expressions are converted with `Convert.ToString` before encoding. Closed empty expressions, code blocks, and comments produce no output. There is no delimiter escape syntax: closing delimiters inside C# strings or comments still end the block.
+C# blocks can call `Write(value, writer)` to encode a string or `WriteRaw(value, writer)` to write it without encoding. AnglePlates converts expressions with `Convert.ToString` before encoding them. Empty expressions, C# blocks, and comments produce no output. There isn't an escape syntax for delimiters, so a closing delimiter inside a C# string or comment still ends the block.
 
 ### Whitespace trimming
 
-Place a `-` immediately after an opening delimiter or before a closing delimiter to trim adjacent literal whitespace. Trim markers work with expressions, C# blocks, and comments, including empty blocks. They remove spaces, tabs, and line breaks (`[ \t\r\n]+`) from the adjacent literal text; they do not trim expression values.
+Place a `-` immediately after an opening delimiter or before a closing delimiter to trim nearby whitespace from the literal text. Trim markers work with expressions, C# blocks, and comments, including empty blocks. They remove spaces, tabs, and line breaks (`[ \t\r\n]+`), but they do not trim expression values.
 
 | Trim | Example | Behavior |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ Place a `-` immediately after an opening delimiter or before a closing delimiter
 
 ### Render the template
 
-Compiled templates have the following render method signatures. Text templates write characters to a `TextWriter`; UTF-8 templates write bytes to an `IBufferWriter<byte>` or render and flush a `PipeWriter` through `RenderAsync`. For the greeting template, the signatures are shown below with method bodies omitted. Include `#render Text, Utf8` to generate both templates.
+Each compiled template has a `Render` method. Text templates write characters to a `TextWriter`, while UTF-8 templates write bytes to an `IBufferWriter<byte>`. UTF-8 templates can also write to a `PipeWriter` with `RenderAsync`. Add `#render Text, Utf8` to the template to generate both classes.
 
 ```csharp
 namespace MyApp.Templates;
@@ -107,7 +107,7 @@ public partial class GreetingUtf8Template
 
 #### Text rendering
 
-The text renderer (e.g. `GreetingTextTemplate`) is suited to character-based destinations such as console output, files opened through a `TextWriter`, and APIs that consume strings or characters. It renders directly to the supplied writer, so a console application can pass `Console.Out` without an intermediate string.
+Use the text renderer, such as `GreetingTextTemplate`, with a `TextWriter`. This works for console output, files, and APIs that accept strings or characters. The renderer writes directly to the destination, so a console application can pass `Console.Out` without creating an intermediate string.
 
 ```csharp
 using System;
@@ -123,11 +123,11 @@ var model = new GreetingModel
 GreetingTextTemplate.Default.Render(model, Console.Out);
 ```
 
-This writes the rendered heading `<h1>Hello, Ada &amp; Grace!</h1>` and the welcome paragraph to standard output. The template comment is omitted; literal whitespace and line breaks are preserved.
+This writes `<h1>Hello, Ada &amp; Grace!</h1>` and the welcome paragraph to standard output. Comments do not appear in the output. The original whitespace and line breaks remain unchanged.
 
 #### UTF-8 streaming
 
-The UTF-8 renderer (e.g. `GreetingUtf8Template`) is suited to byte-oriented destinations such as an HTTP response. Passing the response's `PipeWriter` avoids creating an intermediate string and encoding it before transmission. `RenderAsync` renders synchronously into the pipe and then flushes it asynchronously with the request's cancellation token.
+Use the UTF-8 renderer, such as `GreetingUtf8Template`, when the destination expects bytes. An HTTP response is a common example. Passing the response's `PipeWriter` avoids creating and encoding an intermediate string. `RenderAsync` writes to the pipe synchronously, then flushes it asynchronously with the request's cancellation token.
 
 ```csharp
 using Microsoft.AspNetCore.Builder;
@@ -158,15 +158,15 @@ ASP.NET Core owns the response writer's lifetime, so the endpoint does not dispo
 
 ### Encoding and options
 
-Literal text is written unchanged. Expressions use `HtmlEncoder.Default`; null expressions write nothing by default. Construct a compiled template with `SlusserLabs.AnglePlates.TemplateOptions` to supply a different `Encoder`, set `Encoder` to `null` to disable expression encoding, or set `NullVariable` to replacement text for null expressions.
+AnglePlates writes literal text unchanged and encodes expressions with `HtmlEncoder.Default`. A null expression writes nothing by default. Pass `SlusserLabs.AnglePlates.TemplateOptions` to a compiled template to choose another `Encoder`. Set `Encoder` to `null` to disable expression encoding, or set `NullVariable` to choose what AnglePlates writes for a null expression.
 
-The project property `AnglePlateBaseAccessModifier` controls generated support types' accessibility and defaults to `public`. If you set it to `internal`, also use `#access internal` for compiled templates to avoid exposing less accessible base types.
+Generated support types are `public` by default. Set the `AnglePlateBaseAccessModifier` project property to `internal` to change their accessibility. When you do, also add `#access internal` to your templates so their generated classes do not expose less accessible base types.
 
 ## How templates are discovered
 
-AnglePlates recursively collects every file under your project's `Templates` and `Views` folders, regardless of extension. The examples use `.html`.
+By default, AnglePlates finds every file under your project's `Templates` and `Views` folders, including files in subfolders. The file extension does not matter, although these examples use `.html`.
 
-Collected files become compiler `AdditionalFiles`. The generator processes only nonempty additional files whose content starts immediately with `#`. A leading space or newline causes a file to be skipped. Directly supplied `AdditionalFiles` items receive the same content check, even outside those folders.
+AnglePlates passes these files to the compiler as `AdditionalFiles`. The generator only processes files that contain text and start with `#`, so it skips a file that begins with a space or newline. It applies the same check to `AdditionalFiles` supplied from other locations.
 
 | Override | Default | Purpose |
 | --- | --- | --- |
@@ -175,7 +175,7 @@ Collected files become compiler `AdditionalFiles`. The generator processes only 
 | `AnglePlateExclude` | Empty | Exclude files from both automatic searches using MSBuild patterns. |
 | `AnglePlate` items | Files found in the two folders | Explicitly include templates from other locations. |
 
-For example, in your project file:
+You can configure discovery in your project file:
 
 ```xml
 <PropertyGroup>
@@ -188,7 +188,7 @@ For example, in your project file:
 </ItemGroup>
 ```
 
-The build deduplicates `AnglePlate` items before adding them to `AdditionalFiles`. `AnglePlateExclude` applies to automatic discovery; it does not exclude explicitly added items.
+If the same `AnglePlate` item appears more than once, AnglePlates adds it to `AdditionalFiles` only once. `AnglePlateExclude` applies to files found automatically, but it does not exclude items you add explicitly.
 
 ## Current limitations
 
@@ -211,7 +211,7 @@ dotnet test --solution AnglePlates.slnx --no-build
 dotnet run --project samples/HelloWorld --no-build --no-launch-profile
 ```
 
-The solution contains the generator, console sample, and tests. See the [project lexicon](docs/lexicon.md) for terminology, [testing guidance](docs/testing.md) for helpers and snapshots, and the [roadmap](docs/roadmap.md) for known defects and plans.
+You'll find the generator, a console sample, and the tests in the solution. See the [project lexicon](docs/lexicon.md) for terms that have a specific meaning in AnglePlates. The [testing guide](docs/testing.md) explains the test helpers and snapshots, and the [roadmap](docs/roadmap.md) lists known defects and planned work.
 
 Build and validate a local package with a fresh version for each run:
 
@@ -220,4 +220,8 @@ dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -
 ./eng/validate-package.ps1 -Version 0.1.0-alpha.local.1
 ```
 
-The [isolated package consumer](tests/AnglePlates.PackageTests/README.md) validates the packed package independently of source project references.
+The [package validation project](tests/AnglePlates.PackageTests/README.md) installs and tests the package without referencing the source project.
+
+## AI disclosure
+
+This project was built with the help of Codex for code generation. As with any tool I use for coding, I am fully responsible for the end result and only put forward this project with full confidence that I have reviewed every line. Whether a line of code in this project was fully AI generated, AI assisted, or entirely from my own Muppet fingers on the keyboard, it is held to the same expectations.

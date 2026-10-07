@@ -1,12 +1,22 @@
 # Repository Instructions
 
 - Treat requests to update project rules or `AGENTS.md` as requests to update this file
-- Keep these rules terse, direct, and specific to AnglePlates
+- Keep agent instructions concise and specific to AnglePlates
+- Write README files and project documentation in plain American English with concrete subjects and ordinary verbs; do not copy the compressed style of internal verification notes into user-facing prose
+- Preserve the author's conversational voice in `README.md`. When using `/humanizer`, treat the Author Voice section below as the user-provided writing sample described by the skill's Voice instructions
 - Explicit user instructions take precedence over skill guidelines
 - If a skill causes a permission request, pause, unfinished work, or departure from user intent, link the exact `SKILL.md`, quote the relevant instruction, and explain its application; distinguish requirements from interpretation
 - Use [README.md](README.md) for package usage, contributor setup, and consumer limitations and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
 - Update affected documentation when behavior or repository structure changes, including README files; keep implemented behavior separate from planned work
 - Use [docs/lexicon.md](docs/lexicon.md) for project terminology
+
+## Author Voice
+
+Match this voice in README files and other human-facing project prose:
+
+> AnglePlates is like T4 templates for modern .NET. Give it a template and any model you want to render, and it generates the C# classes at compile time. The compiled templates write straight to a `TextWriter` or UTF-8 buffer, so there is no runtime package to drag along. That's it! You can make it fancier, but you don't have to.
+
+Keep the writing conversational and technically specific. Use contractions, concrete examples, and direct opinions. First person is welcome when explaining a preference or accepting responsibility. A little dry humor is part of the voice, but it should not get in the way of the instructions.
 
 ## Current Repository
 
@@ -18,16 +28,16 @@
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
 - Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target unless a compatibility change is deliberate and tested
 
-## Current Verification Context
+## Verified behavior and limitations
 
-- The generator targets `netstandard2.0` with Roslyn 4.14.0; the sample, generated-compilation tests, and package consumer exercise .NET 10 with C# 11. Earlier frameworks and compiler hosts remain unqualified.
+- The generator targets `netstandard2.0` and uses Roslyn 4.14.0. The sample, generated-compilation tests, and package tests run on .NET 10 with C# 11. Do not claim support for earlier frameworks or compiler hosts without testing them.
 - Both renderer base classes are emitted even for text-only templates, requiring `System.IO.Pipelines` in every consumer; repository applications supply it through `Microsoft.AspNetCore.App`.
-- The sample references the generator and discovery assets from source; it does not establish installed-package usability.
+- The sample references the generator and discovery assets from source. Use the package tests, rather than the sample, to verify the installed package.
 - Package validation copies the consumer to a temporary directory and restores from a local feed into an isolated cache. It checks metadata/assets, Source Link commit metadata, reproducibility records, portable-symbol identity/checksum, analyzer loading, default/custom/explicit discovery, duplicates, exclusions, base-class accessibility, and exact encoded text/UTF-8 output. Use a unique version for each run.
 - Focused regressions cover ordinary brackets, empty/unclosed blocks, invalid-template isolation, stable source names, and pooled-buffer ownership. Reviewed snapshots cover both renderers, support types, and unclosed-block diagnostics; the full parser/rendering/directive/incremental suite remains incomplete.
 - Closed empty blocks preserve trim flags. Unclosed blocks report `SLAP004` at the opener and suppress only that template. Duplicate generated types receive compiler errors; delimiters inside C# strings/comments still close blocks. `#using` is not emitted, and render selection always includes text.
 - Template changes are collected into one generation callback; per-template incremental generation remains planned.
-- No CI or publishing workflow is checked in. Cross-platform, framework, compiler, ASP.NET, transitive-use, and multi-assembly validation remain release work; do not claim release readiness.
+- The repository has no CI or publishing workflow. Do not claim release readiness until the project has been tested across the platforms, frameworks, compilers, ASP.NET scenarios, transitive references, and multi-assembly scenarios listed in the roadmap.
 - `global.json` selects Microsoft.Testing.Platform for repository tests. The package includes portable symbols in a companion `.snupkg`.
 
 ## Skill Routing
