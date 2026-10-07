@@ -76,7 +76,7 @@ AnglePlates preserves literal text, including line endings. C# variables and C# 
 | Comment | `[* This is not rendered. *]` | Omits the comment from output. |
 | Raw output in C# | `[% WriteRaw(model.Html, writer); %]` | Writes a string without encoding in either rendering path. |
 
-AnglePlates converts C# variables with `Convert.ToString` and the invariant culture before encoding them, so numbers and dates render the same on every machine. To write output directly, C# blocks can call `Write(value, writer)` to write a string through the configured encoder or `WriteRaw(value, writer)` to bypass encoding.
+AnglePlates converts C# variables with `Convert.ToString` and the invariant culture before encoding them, so numbers and dates render the same on every machine. A null C# variable of any type, whether it's a `string`, an `object`, or an `int?`, writes the `NullVariable` option, which is nothing unless you set it (see [Encoding and options](#encoding-and-options)). A bare `[[ null ]]` doesn't compile. If you really want a placeholder that only ever writes `NullVariable`, cast it: `[[ (string?)null ]]`. To write output directly, C# blocks can call `Write(value, writer)` to write a string through the configured encoder or `WriteRaw(value, writer)` to bypass encoding.
 
 Empty C# variables, C# blocks, and comments produce no output.
 
@@ -164,7 +164,7 @@ ASP.NET Core owns the response writer's lifetime, so the endpoint does not dispo
 
 ### Encoding and options
 
-AnglePlates writes literal text unchanged and encodes C# variables with `HtmlEncoder.Default`. A null C# variable writes nothing by default. Pass `SlusserLabs.AnglePlates.TemplateOptions` to a compiled template to choose another `Encoder`. Set `Encoder` to `null` to disable C# variable encoding, or set `NullVariable` to choose what AnglePlates writes for a null C# variable.
+AnglePlates writes literal text unchanged and encodes C# variables with `HtmlEncoder.Default`. A null C# variable writes nothing by default, whatever its type. Pass `SlusserLabs.AnglePlates.TemplateOptions` to a compiled template to choose another `Encoder`. Set `Encoder` to `null` to disable C# variable encoding, or set `NullVariable` to choose what AnglePlates writes for a null C# variable.
 
 Generated support types are `public` by default. Set the `AnglePlateBaseAccessModifier` project property to `internal` to change their accessibility. When you do, also add `#access internal` to your templates so their generated classes do not expose less accessible base types.
 
@@ -201,6 +201,7 @@ If the same `AnglePlate` item appears more than once, AnglePlates adds it to `Ad
 - Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling.
 - Any `AdditionalFiles` input that starts with `#` is a template as far as AnglePlates is concerned. A file like `PublicAPI.Shipped.txt`, which starts with `#nullable enable`, fails the build with `SLAP001` through `SLAP003`.
 - A closing delimiter ends its block even inside a C# string or comment, so keep `]]` out of C# variables and `%]` out of C# blocks.
+- The generated render method already declares `model`, `Model`, `writer`, and a `__anglePlatesValue<N>` variable for each C# variable, so don't reuse those names for locals in your C# blocks.
 - Two templates that generate the same class name in the same namespace cause C# compiler errors, the same as two hand-written classes would.
 - Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, or `#using`. Each error stops that template from generating, but your other templates still generate. See [diagnostics](docs/diagnostics.md).
 

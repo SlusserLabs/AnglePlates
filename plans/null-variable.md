@@ -3,7 +3,9 @@
 ## Status
 
 - Done: C# variables now convert with `Convert.ToString(value, CultureInfo.InvariantCulture)`. `TemplateTranspiler.Transpile` emits both renderers from one token loop. `Initialize_CSharpVariableUnderNonInvariantCulture_FormatsWithInvariantCulture` in `TemplateGeneratorTests.Regression.cs` renders `double`, `decimal`, and `DateTime` values under `de-DE` and expects invariant output from both renderers.
-- Remaining: null handling, described below.
+- Done: null handling, as described below. `TemplateTranspiler` emits the pattern form, regressions in `TemplateGeneratorTests.Regression.cs` cover null and non-null values, repeated C# variables, and the compiler errors, and the package consumer renders a null `int?` model with `NullVariable` set.
+- Added during implementation: text that doesn't parse as one complete C# expression keeps the old plain emission. See [Stray text fallback](#stray-text-fallback).
+- Decided: `[[ null ]]` no longer compiles. The README documents it and suggests `[[ (string?)null ]]`.
 
 ## Problem
 
@@ -46,6 +48,12 @@ Why this shape:
 
 Pattern variables declared in an expression statement are scoped to the enclosing block. Two C# variables in the same block would collide (`CS0128`), so the name needs a per-token suffix. The token index `i` in the transpiler's token loop works. Template C# that declares a local with the same name would also collide; treat the `__anglePlates` prefix as reserved, like `model`, `Model`, and `writer`.
 
+### Stray text fallback
+
+The wrapping parentheses turn a top-level comma list into a tuple. A stray `[[1, 2]]`, such as a JavaScript `const grid = [[1, 2]];`, used to fail with `CS1501` because `Convert.ToString(1, 2, provider)` has no overload. Wrapped as `(1, 2) is { } v`, it compiles and writes `(1, 2)`. Unbalanced text such as `x) + (y` has the same problem.
+
+The transpiler now checks each C# variable with `SyntaxFactory.ParseExpression`. When the parse reports diagnostics, it emits the old plain `Convert.ToString` call so the compiler rejects the template the same way it always did. An explicit tuple such as `[[ (a, b) ]]` parses cleanly and still renders through the pattern form, as it did before through the `object` overload.
+
 ### Alternatives considered
 
 - **Generic helper on the base classes** (`protected static string? ToTemplateString<T>(T value)`): this centralizes the logic, but it loses compile-time overload selection. Value types go through `object` or interface calls that may box, which needs measuring. Revisit it if the emitted code gets too noisy.
@@ -53,11 +61,12 @@ Pattern variables declared in an expression statement are scoped to the enclosin
 
 ### Edge cases to cover
 
-A scratch compilation on .NET 10 with C# 14 confirmed the following. Re-check the exact messages under the test compilation's C# 11.
+A scratch compilation on .NET 10 with C# 14 confirmed the following. The regressions assert the exact C# 11 messages; under C# 11 the `Span<char>` message names `object?` instead of `bool`.
 
 - `[[ null ]]`: this compiles today. `Convert.ToString(null, provider)` binds to the `string` overload, returns `null`, and writes `NullVariable`. The pattern form fails with `CS8117` ("Invalid operand for pattern match; value required, but found '<null>'"). This is a breaking change; see the open questions.
 - `[[ default ]]`: this fails today with `CS0121` (ambiguous `Convert.ToString` overloads). The pattern form fails with `CS8716` ("There is no target type for the default literal"). It stays a compile error with a different ID.
-- Ref structs such as `Span<char>`: both forms fail with the same `CS1503` (cannot convert from `System.Span<char>` to `bool`).
+- Ref structs such as `Span<char>`: both forms fail with `CS1503` (cannot convert from `System.Span<char>`).
+- A top-level comma list such as `[[1, 2]]`: see [Stray text fallback](#stray-text-fallback). It still fails with `CS1501`.
 - Non-null objects whose `ToString()` returns `null`: today `Convert.ToString(object, ...)` returns that `null`, and `NullVariable` applies. The pattern form keeps this behavior.
 - `Write(value, writer)` called directly from C# blocks is unchanged.
 
@@ -79,7 +88,7 @@ A scratch compilation on .NET 10 with C# 14 confirmed the following. Re-check th
    - `plans/performance.md`: the "Format without a string" step waits on this plan; update its note once this lands.
 6. Optional: extend `tests/AnglePlates.PackageTests` to render one null non-string value with `NullVariable` set. The roadmap's release plan step 2 already lists null values among the installed-package rendering checks.
 
-## Open questions
+## Decisions
 
-- Should `[[ null ]]` keep compiling? It's useless in a real template, so the recommendation is to accept the `CS8117` break and document it. If it should keep working, the transpiler could parse the variable with `SyntaxFactory.ParseExpression` and emit `Write(null, writer)` for a bare `null` literal.
-- Should `NullVariable` also apply when a non-null value formats to an empty string? The recommendation is no; empty output is a legitimate value.
+- `[[ null ]]` no longer compiles (`CS8117`). It's useless in a real template, so the break is accepted and documented. The transpiler now parses every C# variable for the stray text fallback, so emitting `Write(null, writer)` for a bare `null` literal would be a one-line change if this needs to come back.
+- `NullVariable` doesn't apply when a non-null value formats to an empty string; empty output is a legitimate value.

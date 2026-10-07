@@ -16,6 +16,8 @@ namespace SlusserLabs.AnglePlates.Tests;
 
 public sealed partial class TemplateGeneratorTests
 {
+    private const string _nullTextSource = "namespace Consumer { public sealed class NullText { public override string? ToString() => null; } }";
+
     [Test]
     [Arguments(0)]
     [Arguments(1)]
@@ -124,6 +126,85 @@ public sealed partial class TemplateGeneratorTests
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    [Arguments("model", null)]
+    [Arguments("model", "<null>")]
+    [Arguments("(object?)null", null)]
+    [Arguments("(object?)null", "<null>")]
+    [Arguments("(System.Uri?)null", null)]
+    [Arguments("(System.Uri?)null", "<null>")]
+    [Arguments("(int?)null", null)]
+    [Arguments("(int?)null", "<null>")]
+    [Arguments("(dynamic?)null", null)]
+    [Arguments("(dynamic?)null", "<null>")]
+    [Arguments("new NullText()", null)]
+    [Arguments("new NullText()", "<null>")]
+    public async Task Initialize_NullCSharpVariable_WritesNullVariable(string expression, string? nullVariable)
+    {
+        var expected = nullVariable is null ? "ab" : "a&lt;null&gt;b";
+        var compilation = GeneratorTestHelper.CreateCompilation([_nullTextSource]);
+        var template = RenderingTestHelper.Template($"a[[ {expression} ]]b");
+        var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([template]));
+
+        var output = RenderingTestHelper.Render(result.Compilation, model: null, nullVariable: nullVariable);
+
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    [Arguments("model", "&lt;value&gt;")]
+    [Arguments("(object?)\"x<\"", "x&lt;")]
+    [Arguments("new System.Uri(\"http://example.com/\")", "http://example.com/")]
+    [Arguments("(int?)5", "5")]
+    [Arguments("(dynamic?)1.5", "1.5")]
+    [Arguments("(decimal?)1234.5m", "1234.5")]
+    [Arguments("string.Empty", "")]
+    public async Task Initialize_NonNullCSharpVariable_IgnoresNullVariable(string expression, string expected)
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template($"[[ {expression} ]]"));
+
+        var output = RenderingTestHelper.Render(result.Compilation, nullVariable: "<null>");
+
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    public async Task Initialize_CSharpVariablesInSameBlock_Compile()
+    {
+        const string body = "[[ model ]][[ model ]][% foreach (var item in new int?[] { 1, null, 3 }) { %][[ item ]][[ item ]];[% } %]";
+        const string expected = "&lt;value&gt;&lt;value&gt;11;--;33;";
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+
+        var output = RenderingTestHelper.Render(result.Compilation, nullVariable: "-");
+
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    [Arguments("null", 14, 6, "CS8117", "Invalid operand for pattern match; value required, but found '<null>'.")]
+    [Arguments("default", 15, 7, "CS8716", "There is no target type for the default literal.")]
+    [Arguments("default(System.Span<char>)", 104, 19, "CS1503", "Argument 1: cannot convert from 'System.Span<char>' to 'object?'")]
+    [Arguments("1, 2", 37, 8, "CS1501", "No overload for method 'ToString' takes 3 arguments")]
+    public async Task Initialize_InvalidCSharpVariable_ReportsCompilerError(string expression, int column, int length, string id, string message)
+    {
+        // Generate one renderer at a time because the compiler doesn't report errors from separate trees in a stable order.
+        // Directives are tokens 0 to 4, so the variable is token 5 and the Write call is the first statement after Model.
+        foreach (var target in new[] { "Text", "Utf8" })
+        {
+            var template = RenderingTestHelper.Template($"#generate {target}\r\n[[ {expression} ]]");
+            var compilation = GeneratorTestHelper.CreateCompilation();
+            var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
+            var tree = driver.GetRunResult().GeneratedTrees.Skip(3).Single();
+
+            var result = GeneratorTestHelper.Run(compilation, driver, [CompilerError(tree, 37, column, length, id, message)]);
+
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+        }
     }
 
     [Test]

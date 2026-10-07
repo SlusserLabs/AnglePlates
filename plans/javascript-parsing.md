@@ -48,7 +48,7 @@ Do this in phases:
    - A backslash anywhere else is literal, as today.
    - `\\[[` means a literal backslash followed by a block. Only the backslash directly before the opener is consumed, so this needs an explicit rule and tests.
    - Escapes aren't recognized inside blocks or in the directive section.
-3. **Later, if needed: option C.** Add a `#delimiters` directive for templates where escaping would be everywhere (large scripts, Bash, TOML). Build it on the strict directive parser from [directive-parsing.md](directive-parsing.md).
+3. **Later, if needed: option C.** Add a `#delimiters` directive for templates where escaping would be everywhere (large scripts, Bash, TOML). Build it on the strict directive parsing in `TemplateParser` and `TemplateTranspilerOptions`, which landed with the directive-parsing plan.
 
 Option B isn't recommended. It adds another delimiter pair with its own escaping problem, and C covers the same need more generally.
 
@@ -66,6 +66,10 @@ The lexer doesn't need to be a full C# parser; it only has to know where literal
 ## Better errors, whichever option is chosen
 
 Emit `#line` directives that map generated C# variable and C# block code back to the template file and line. A stray `[[1, 2]]` then produces a compiler error on the template line instead of deep in generated code. `docs/roadmap.md` already lists missing `#line` mapping under finding 8.
+
+C# variables now have two emission forms (see [null-variable.md](null-variable.md)). A valid expression is wrapped as `Write((expr) is { } __anglePlatesValue<N> ? ... : null, writer)`, and text that doesn't parse as one expression, such as a stray `[[1, 2]]`, keeps the plain `Write(Convert.ToString(expr, ...), writer)` call so it still fails to compile. Map the expression's span in both forms with the C# 10 span form of `#line`, so the column offset accounts for the generated prefix. Some errors land on generated code rather than the expression, such as `CS1503` on the pattern variable for a `Span<char>` value; decide where those should point.
+
+The C#-aware block scanning in [Related: closing delimiters inside C# strings](#related-closing-delimiters-inside-c-strings) doesn't remove the need for the fallback: `[[1, 2]]` is a complete C# variable to the parser, and only the C# expression parse can tell that it isn't one expression.
 
 ## Steps for the escape (phase 2)
 

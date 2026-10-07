@@ -12,13 +12,15 @@ internal static class RenderingTestHelper
         return new TemplateAdditionalText($"#type {type}\r\n#model string\r\n#namespace {ns}\r\n#using System\r\n{body}", path);
     }
 
-    public static (string text, byte[] bytes) Render(Compilation compilation, string model = "<value>", string type = "Consumer.Example")
+    public static (string text, byte[] bytes) Render(Compilation compilation, string? model = "<value>", string type = "Consumer.Example", string? nullVariable = null)
     {
         using var generated = GeneratedAssembly.Load(compilation);
+        var options = Activator.CreateInstance(generated.Assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions", throwOnError: true)!)!;
+        options.GetType().GetProperty("NullVariable")!.SetValue(options, nullVariable);
         using var writer = new StringWriter();
         var buffer = new ArrayBufferWriter<byte>();
-        Render(generated, type + "TextTemplate", model, writer);
-        Render(generated, type + "Utf8Template", model, buffer);
+        Render(generated, type + "TextTemplate", model, writer, options);
+        Render(generated, type + "Utf8Template", model, buffer, options);
 
         return (writer.ToString(), buffer.WrittenSpan.ToArray());
     }

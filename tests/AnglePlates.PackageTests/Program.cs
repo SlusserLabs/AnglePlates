@@ -27,11 +27,14 @@ internal static class Program
         using var explicitTemplate = new StringWriter(CultureInfo.InvariantCulture);
         CustomTextTemplate.Default.Render(model, custom);
         ExplicitTextTemplate.Default.Render(model, explicitTemplate);
+        using var nullable = new StringWriter(CultureInfo.InvariantCulture);
+        new NullableTextTemplate(new TemplateOptions { NullVariable = "<none>" }).Render(null, nullable);
 
         if (!string.Equals(text.ToString(), expected, StringComparison.Ordinal) ||
             !utf8.WrittenSpan.SequenceEqual(Encoding.UTF8.GetBytes(expected)) ||
             !string.Equals(custom.ToString(), "Custom &lt;AnglePlates&gt;!", StringComparison.Ordinal) ||
-            !string.Equals(explicitTemplate.ToString(), "Explicit &lt;AnglePlates&gt;!", StringComparison.Ordinal))
+            !string.Equals(explicitTemplate.ToString(), "Explicit &lt;AnglePlates&gt;!", StringComparison.Ordinal) ||
+            !string.Equals(nullable.ToString(), "Nullable &lt;none&gt;!", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("The package renderers did not produce the expected text and UTF-8 bytes.");
         }

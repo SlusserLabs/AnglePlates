@@ -125,7 +125,20 @@ internal static class TemplateTranspiler
 
                     var variable = text.Slice(offset, length).ToString();
                     WriteBlankLine();
-                    writer.WriteLine($"Write(global::System.Convert.ToString({variable}, global::System.Globalization.CultureInfo.InvariantCulture), writer);");
+
+                    // Text that isn't one complete expression, such as a stray "[[1, 2]]", keeps the plain call so the compiler
+                    // still rejects it; the parentheses below would turn it into a tuple that renders
+                    if (SyntaxFactory.ParseExpression(variable).ContainsDiagnostics)
+                    {
+                        writer.WriteLine($"Write(global::System.Convert.ToString({variable}, global::System.Globalization.CultureInfo.InvariantCulture), writer);");
+                        break;
+                    }
+
+                    // Check for null before converting so every null value reaches NullVariable, not only strings.
+                    // The pattern variable evaluates the expression once, unwraps nullable value types, and needs
+                    // a per-token suffix because expression variables share the enclosing block's scope.
+                    var valueName = $"__anglePlatesValue{i}";
+                    writer.WriteLine($"Write(({variable}) is {{ }} {valueName} ? global::System.Convert.ToString({valueName}, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);");
                     break;
 
                 case TokenType.Code:

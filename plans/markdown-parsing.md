@@ -65,7 +65,7 @@ To tell them apart, set `AnglePlateSource="Discovered"` metadata in the folder `
 
 ### 3. Let Markdown bodies start with a heading
 
-Coordinate with [directive-parsing.md](directive-parsing.md): a directive line must start with one of the known directive names followed by whitespace. `# Heading`, `## Heading`, and `#!` end the directive section and render as literal text, so this works:
+The directive parsing that landed with the directive-parsing plan already handles this: a directive line must start with one of the known directive names followed by whitespace. `# Heading`, `## Heading`, and `#!` end the directive section and render as literal text, so this works:
 
 ```text
 #type ReleaseNotes
