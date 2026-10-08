@@ -16,7 +16,7 @@ The current tests are focused, not complete. Finish coverage for the parser, dir
 
 ### Compatibility validation
 
-Only .NET 10 consumers with C# 11 on Windows have been tested. Validate the frameworks and compilers the README will advertise, Linux path handling, console, library, and ASP.NET projects, solutions where more than one project uses AnglePlates (including a library with public templates), and packages that depend on AnglePlates transitively. Then document the minimum framework and C# version a consumer needs. Known floors so far: generated code calls .NET 6 APIs such as `ArgumentNullException.ThrowIfNull`, UTF-8 templates need C# 11 for `u8` literals, and a UTF-8 consumer older than .NET 9 would need the `System.IO.Pipelines` package for `RenderAsync`. The generator targets `netstandard2.0` with Roslyn 4.14.0, but older compiler hosts haven't been tested either.
+The supported floor is .NET 10 and C# 11. Enforcing and validating it is part of [plans/performance.md](../plans/performance.md).
 
 ### CI and publishing
 
