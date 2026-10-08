@@ -14,28 +14,6 @@ namespace SlusserLabs.AnglePlates.Tests;
 public sealed partial class TemplateGeneratorTests
 {
     [Test]
-    public async Task Initialize_DefaultSettings_GeneratesInternalTypes()
-    {
-        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("default"));
-        string[] typeNames =
-        [
-            "SlusserLabs.AnglePlates.TemplateOptions",
-            "SlusserLabs.AnglePlates.TextTemplate`1",
-            "SlusserLabs.AnglePlates.Utf8Template`1",
-            "Consumer.ExampleTextTemplate",
-            "Consumer.ExampleUtf8Template"
-        ];
-
-        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        foreach (var typeName in typeNames)
-        {
-            await Assert.That(result.Compilation.GetTypeByMetadataName(typeName)!.DeclaredAccessibility).IsEqualTo(Accessibility.Internal);
-        }
-
-        await AssertRenders(result.Compilation, "Consumer.Example", "default");
-    }
-
-    [Test]
     public async Task Initialize_PublicTemplateWithInternalSupportTypes_ReportsInconsistentAccessibility()
     {
         var template = RenderingTestHelper.Template("#access public\r\n#generate Text\r\npublic");

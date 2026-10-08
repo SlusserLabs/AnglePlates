@@ -21,14 +21,29 @@ public sealed partial class TemplateGeneratorTests
         var edited = RenderingTestHelper.Template("edited", type: "Second", path: "Templates/second.html");
         var compilation = GeneratorTestHelper.CreateCompilation();
         var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([first, second]));
+        var firstHintNames = before.RunResult.Results.Single().GeneratedSources
+            .Where(source => source.SourceText.ToString().Contains("class FirstTextTemplate", StringComparison.Ordinal) ||
+                source.SourceText.ToString().Contains("class FirstUtf8Template", StringComparison.Ordinal))
+            .Select(source => source.HintName)
+            .ToArray();
 
         var after = GeneratorTestHelper.Run(compilation, before.Driver.ReplaceAdditionalText(second, edited));
+        var outputReasons = after.RunResult.Results.Single().TrackedOutputSteps.SelectMany(step => step.Value).SelectMany(step => step.Outputs)
+            .Select(output => output.Reason).ToArray();
 
         await Assert.That(StepReasons(after, "TemplateResults")).IsEquivalentTo(new[] { IncrementalStepRunReason.Cached, IncrementalStepRunReason.Modified });
         await Assert.That(StepReasons(after, "NeedsUtf8")).IsEquivalentTo(new[] { IncrementalStepRunReason.Unchanged });
+        await Assert.That(outputReasons.Count(reason => reason == IncrementalStepRunReason.Modified)).IsEqualTo(1);
         await Assert.That(first.GetTextCount).IsEqualTo(1);
         await Assert.That(edited.GetTextCount).IsEqualTo(1);
         await Assert.That(HintNames(after)).IsEqualTo(HintNames(before));
+        // Roslyn 4.14 parses a new tree for every generated source on each run, so the reused text is what proves the cache
+        await Assert.That(firstHintNames.Length).IsEqualTo(2);
+        foreach (var hintName in firstHintNames)
+        {
+            await Assert.That(ReferenceEquals(GeneratedSource(after, hintName).SourceText, GeneratedSource(before, hintName).SourceText)).IsTrue();
+        }
+
         await AssertRenders(after.Compilation, "Consumer.First", "first");
         await AssertRenders(after.Compilation, "Consumer.Second", "edited");
     }
@@ -153,33 +168,6 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(SupportHintNames(widened)).IsEquivalentTo(new[] { "TemplateOptions.g.cs", "TextTemplate.g.cs", "Utf8Template.g.cs" });
         await AssertRenders(widened.Compilation, "Consumer.Example", "target");
         await Assert.That(SupportHintNames(narrowed)).IsEquivalentTo(new[] { "TemplateOptions.g.cs", "TextTemplate.g.cs" });
-    }
-
-    [Test]
-    public async Task Initialize_OtherTemplateEdited_ReusesUnchangedGeneratedSources()
-    {
-        var first = RenderingTestHelper.Template("first", type: "First", path: "Templates/first.html");
-        var second = RenderingTestHelper.Template("second", type: "Second", path: "Templates/second.html");
-        var edited = RenderingTestHelper.Template("edited", type: "Second", path: "Templates/second.html");
-        var compilation = GeneratorTestHelper.CreateCompilation();
-        var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([first, second]));
-        var firstHintNames = before.RunResult.Results.Single().GeneratedSources
-            .Where(source => source.SourceText.ToString().Contains("class FirstTextTemplate", StringComparison.Ordinal) ||
-                source.SourceText.ToString().Contains("class FirstUtf8Template", StringComparison.Ordinal))
-            .Select(source => source.HintName)
-            .ToArray();
-
-        var after = GeneratorTestHelper.Run(compilation, before.Driver.ReplaceAdditionalText(second, edited));
-        var outputReasons = after.RunResult.Results.Single().TrackedOutputSteps.SelectMany(step => step.Value).SelectMany(step => step.Outputs)
-            .Select(output => output.Reason).ToArray();
-
-        // Roslyn 4.14 parses a new tree for every generated source on each run, so the reused text is what proves the cache
-        await Assert.That(firstHintNames.Length).IsEqualTo(2);
-        await Assert.That(outputReasons.Count(reason => reason == IncrementalStepRunReason.Modified)).IsEqualTo(1);
-        foreach (var hintName in firstHintNames)
-        {
-            await Assert.That(ReferenceEquals(GeneratedSource(after, hintName).SourceText, GeneratedSource(before, hintName).SourceText)).IsTrue();
-        }
     }
 
     private static IncrementalStepRunReason[] StepReasons(GeneratorTestResult result, string stepName)

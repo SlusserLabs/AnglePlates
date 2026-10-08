@@ -55,27 +55,18 @@ public sealed class TemplateParserTests
     [Arguments(@"\[[servers]]", "[[servers]]")]
     [Arguments(@"/\[*+?]/", "/[*+?]/")]
     [Arguments(@"See \[[Home]].", "See [[Home]].")]
+    // Trim markers next to an escaped opener trim only whitespace
+    [Arguments("[[ model -]] \r\n \\[[x]] \r\n [[- model ]]", "&lt;value&gt;[[x]]&lt;value&gt;")]
+    [Arguments("[[ model -]] \n \\\\[[- model ]]", @"&lt;value&gt;\&lt;value&gt;")]
+    [Arguments("[[ model -]]\\[[x]]", "&lt;value&gt;[[x]]")]
+    [Arguments("\\[[x]] \n [[- model ]]", "[[x]]&lt;value&gt;")]
+    [Arguments(" \\[[x]] [*- *]", " [[x]]")]
     public async Task Parse_EscapedOpener_WritesOpenerLiterally(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
         var output = RenderingTestHelper.Render(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(output.text).IsEqualTo(expected);
-        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
-    }
-
-    [Test]
-    [Arguments("[[ model -]] \r\n \\[[x]] \r\n [[- model ]]", "&lt;value&gt;[[x]]&lt;value&gt;")]
-    [Arguments("[[ model -]] \n \\\\[[- model ]]", @"&lt;value&gt;\&lt;value&gt;")]
-    [Arguments("[[ model -]]\\[[x]]", "&lt;value&gt;[[x]]")]
-    [Arguments("\\[[x]] \n [[- model ]]", "[[x]]&lt;value&gt;")]
-    [Arguments(" \\[[x]] [*- *]", " [[x]]")]
-    public async Task Parse_EscapedOpenerNextToTrimMarkers_TrimsOnlyWhitespace(string body, string expected)
-    {
-        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
-
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
     }
@@ -152,19 +143,5 @@ public sealed class TemplateParserTests
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
-    }
-
-    [Test]
-    [Arguments("#")]
-    [Arguments("#   ")]
-    [Arguments("#\r\n#\t\r\n")]
-    public async Task Parse_EmptyDirectives_AreNotDirectivesAndDoNotThrow(string template)
-    {
-        // A bare # isn't a known directive, so a discovered file is skipped and an explicit one has no directives
-        var discovered = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
-        var explicitFile = GeneratorTestHelper.Run(new TemplateAdditionalText(template, anglePlate: TemplateAdditionalText.Explicit));
-
-        await Assert.That(discovered.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(string.Join(",", explicitFile.RunResult.Diagnostics.Select(d => d.Id))).IsEqualTo("SLAP008");
     }
 }

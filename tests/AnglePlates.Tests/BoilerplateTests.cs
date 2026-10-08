@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -15,18 +16,12 @@ namespace SlusserLabs.AnglePlates.Tests;
 public sealed class BoilerplateTests
 {
     [Test]
-    [Arguments(false, 1, 0)]
-    [Arguments(true, 1, 0)]
-    [Arguments(false, 100000, 0)]
-    [Arguments(true, 100000, 0)]
-    [Arguments(false, 100000, 100)]
-    [Arguments(true, 100000, 100)]
-    public async Task Write_EncodedValues_ReturnsEachRentedArrayOnce(bool utf8, int length, int extraLength)
+    [MethodDataSource(nameof(EncodedValueCases))]
+    public async Task Write_EncodedValues_ReturnsEachRentedArrayOnce(bool utf8, string value, int extraLength)
     {
         var pool = new CountingCharPool { ExtraLength = extraLength };
         using var generated = CreateRenderer();
         var options = CreateOptions(generated, pool, HtmlEncoder.Default);
-        var value = new string('<', length) + "\U0001F600é\"&";
         var expected = HtmlEncoder.Default.Encode(value);
 
         for (int i = 0; i < 2; i++)
@@ -41,20 +36,16 @@ public sealed class BoilerplateTests
         await Assert.That(pool.MaximumRequest).IsLessThanOrEqualTo(32768);
     }
 
-    [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Write_UnicodeAtChunkBoundary_PreservesCompleteScalars(bool utf8)
+    public static IEnumerable<(bool utf8, string value, int extraLength)> EncodedValueCases()
     {
-        using var generated = CreateRenderer();
-        var pool = new CountingCharPool();
-        var options = CreateOptions(generated, pool, HtmlEncoder.Default);
-        var value = new string('a', 32767) + "\U0001F600" + new string('<', 20000);
-
-        await Assert.That(Render(generated, options, value, utf8)).IsEqualTo(HtmlEncoder.Default.Encode(value));
-        await Assert.That(pool.Rents).IsEqualTo(1);
-        await Assert.That(pool.Returns).IsEqualTo(1);
-        await Assert.That(pool.Outstanding).IsEqualTo(0);
+        foreach (var utf8 in new[] { false, true })
+        {
+            yield return (utf8, "<\U0001F600é\"&", 0);
+            yield return (utf8, new string('<', 100000) + "\U0001F600é\"&", 0);
+            yield return (utf8, new string('<', 100000) + "\U0001F600é\"&", 100);
+            // A surrogate pair straddling the chunk boundary must survive as one scalar
+            yield return (utf8, new string('a', 32767) + "\U0001F600" + new string('<', 20000), 0);
+        }
     }
 
     [Test]

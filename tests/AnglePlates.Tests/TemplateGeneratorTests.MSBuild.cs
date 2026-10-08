@@ -62,13 +62,27 @@ public sealed partial class TemplateGeneratorTests
         var body = expected == "public" ? "#access public\r\naccess" : "access";
         var result = RunWithAccessModifier(value, RenderingTestHelper.Template(body));
         var supportSources = result.RunResult.Results.Single().GeneratedSources.Take(3).Select(source => source.SourceText.ToString()).ToArray();
+        var accessibility = expected == "public" ? Accessibility.Public : Accessibility.Internal;
+        string[] typeNames =
+        [
+            "SlusserLabs.AnglePlates.TemplateOptions",
+            "SlusserLabs.AnglePlates.TextTemplate`1",
+            "SlusserLabs.AnglePlates.Utf8Template`1",
+            "Consumer.ExampleTextTemplate",
+            "Consumer.ExampleUtf8Template"
+        ];
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
         await Assert.That(supportSources[0]).Contains($"{expected} class TemplateOptions");
         await Assert.That(supportSources[1]).Contains($"{expected} abstract class TextTemplate<TModel>");
         await Assert.That(supportSources[2]).Contains($"{expected} abstract class Utf8Template<TModel>");
-        await Assert.That(RenderingTestHelper.Render(result.Compilation).text).IsEqualTo("access");
+        foreach (var typeName in typeNames)
+        {
+            await Assert.That(result.Compilation.GetTypeByMetadataName(typeName)!.DeclaredAccessibility).IsEqualTo(accessibility);
+        }
+
+        await AssertRenders(result.Compilation, "Consumer.Example", "access");
     }
 
     [Test]
@@ -106,7 +120,13 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("/srv/build/Shared/receipt.html", "/srv/build/App", "../Shared/receipt.html")]
     [Arguments("/Repo/App/Templates/a.html", "/repo/app/", "../../Repo/App/Templates/a.html")]
     [Arguments("/Templates/a.html", "/", "Templates/a.html")]
-    public async Task Initialize_TemplatePath_IsRelativeToProjectFolder(string path, string projectDir, string expected)
+    // Paths with no relative form fall back to the full path
+    [Arguments("D:\\Templates\\a.html", "C:\\App\\", "D:/Templates/a.html")]
+    [Arguments("/Templates/a.html", "C:\\App\\", "/Templates/a.html")]
+    [Arguments("C:\\Templates\\a.html", "/App/", "C:/Templates/a.html")]
+    [Arguments("\\\\server\\other\\Templates\\a.html", "\\\\server\\share\\App\\", "//server/other/Templates/a.html")]
+    [Arguments("C:\\Templates\\a.html", "", "C:/Templates/a.html")]
+    public async Task Initialize_TemplatePath_IsRelativeToProjectFolderOrFull(string path, string projectDir, string expected)
     {
         var result = RunWithProjectDir(path, projectDir);
         var sources = result.RunResult.Results.Single().GeneratedSources.Skip(3).Select(source => source.SourceText.ToString()).ToArray();
@@ -119,28 +139,22 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("D:\\Templates\\a.html", "C:\\App\\", "D:/Templates/a.html")]
-    [Arguments("/Templates/a.html", "C:\\App\\", "/Templates/a.html")]
-    [Arguments("C:\\Templates\\a.html", "/App/", "C:/Templates/a.html")]
-    [Arguments("\\\\server\\other\\Templates\\a.html", "\\\\server\\share\\App\\", "//server/other/Templates/a.html")]
-    [Arguments("C:\\Templates\\a.html", "", "C:/Templates/a.html")]
-    public async Task Initialize_TemplatePathWithoutRelativeForm_UsesFullPath(string path, string projectDir, string expected)
+    public async Task Initialize_TemplateIdentity_DependsOnlyOnRelativePath()
     {
-        var result = RunWithProjectDir(path, projectDir);
-        var sources = result.RunResult.Results.Single().GeneratedSources.Skip(3).Select(source => source.SourceText.ToString()).ToArray();
+        var expected = HintNames(RunWithProjectDir("Shared/receipt.html", string.Empty));
+        var fromApp = HintNames(RunWithProjectDir("C:\\agent\\1\\s\\Shared\\receipt.html", "C:\\agent\\1\\s\\App\\"));
 
-        await Assert.That(sources.All(source => source.Contains($"render the contents of '{expected}'.", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(HintNames(result)).IsEqualTo(HintNames(RunWithProjectDir(expected, string.Empty)));
-    }
-
-    [Test]
-    public async Task Initialize_TemplatePath_IsStableAcrossProjectLocations()
-    {
-        var windows = HintNames(RunWithProjectDir("C:\\agent\\1\\s\\Shared\\receipt.html", "C:\\agent\\1\\s\\App\\"));
-
-        await Assert.That(HintNames(RunWithProjectDir("D:\\dev\\repo\\Shared\\receipt.html", "D:\\dev\\repo\\App"))).IsEqualTo(windows);
-        await Assert.That(HintNames(RunWithProjectDir("/home/runner/work/repo/Shared/receipt.html", "/home/runner/work/repo/App/"))).IsEqualTo(windows);
-        await Assert.That(HintNames(RunWithProjectDir("/home/runner/work/repo/Shared/Receipt.html", "/home/runner/work/repo/App/"))).IsNotEqualTo(windows);
+        // Separators and project locations normalize away; case and the relative path itself don't
+        await Assert.That(HintNames(RunWithProjectDir("Shared\\receipt.html", string.Empty))).IsEqualTo(expected);
+        await Assert.That(HintNames(RunWithProjectDir("C:\\repo\\Shared\\receipt.html", "C:\\repo\\"))).IsEqualTo(expected);
+        await Assert.That(HintNames(RunWithProjectDir("/repo/Shared/receipt.html", "/repo/"))).IsEqualTo(expected);
+        await Assert.That(HintNames(RunWithProjectDir("Shared/Receipt.html", string.Empty))).IsNotEqualTo(expected);
+        await Assert.That(HintNames(RunWithProjectDir("Shared/invoice.html", string.Empty))).IsNotEqualTo(expected);
+        await Assert.That(HintNames(RunWithProjectDir("/repository/Shared/receipt.html", "/repo"))).IsNotEqualTo(expected);
+        await Assert.That(HintNames(RunWithProjectDir("D:\\dev\\repo\\Shared\\receipt.html", "D:\\dev\\repo\\App"))).IsEqualTo(fromApp);
+        await Assert.That(HintNames(RunWithProjectDir("/home/runner/work/repo/Shared/receipt.html", "/home/runner/work/repo/App/"))).IsEqualTo(fromApp);
+        await Assert.That(HintNames(RunWithProjectDir("/home/runner/work/repo/Shared/Receipt.html", "/home/runner/work/repo/App/"))).IsNotEqualTo(fromApp);
+        await Assert.That(fromApp).IsNotEqualTo(expected);
     }
 
     [Test]

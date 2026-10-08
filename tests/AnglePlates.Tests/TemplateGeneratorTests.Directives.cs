@@ -17,6 +17,71 @@ public sealed partial class TemplateGeneratorTests
 {
     private const string _requiredDirectives = "#type Example\r\n#model string\r\n#namespace Consumer\r\n";
 
+    private const string _frameworkNames = """
+            public class System { }
+            public class Convert { }
+            public class Globalization { }
+            public class CultureInfo { }
+            public class Span<T> { }
+            public class ReadOnlySpan<T> { }
+            public class OperationStatus { }
+            public class MethodImplAttribute { }
+            public class MethodImplOptions { }
+            public class TextWriter { }
+            public class ReadOnlyMemory<T> { }
+            public class ArrayPool<T> { }
+            public class TextEncoder { }
+            public class HtmlEncoder { }
+            public class Encoding { }
+            public class Math { }
+            public class Lazy<T> { }
+            public class IBufferWriter<T> { }
+            public class PipeWriter { }
+            public class CancellationToken { }
+            public class ValueTask { }
+            public class ValueTask<T> { }
+            public class FlushResult { }
+        """;
+
+    // Names declared in the template's own namespace and in the support type namespace
+    private const string _consumerConflicts = $$"""
+        namespace Consumer
+        {
+        {{_frameworkNames}}
+            public class SlusserLabs { }
+            public class TemplateOptions { }
+            public class TextTemplate<T> { }
+            public class Utf8Template<T> { }
+        }
+        namespace SlusserLabs.AnglePlates
+        {
+        {{_frameworkNames}}
+        }
+        """;
+
+    // Names brought into scope by a #using directive
+    private const string _importedConflicts = """
+        namespace Conflicts
+        {
+            public class System { }
+            public class Convert { }
+            public class CultureInfo { }
+            public class Lazy<T> { }
+            public class Span<T> { }
+            public class ReadOnlyMemory<T> { }
+            public class IBufferWriter<T> { }
+            public class TextWriter { }
+            public class SlusserLabs { }
+            public class TemplateOptions { }
+            public class TextTemplate { }
+            public class TextTemplate<T> { }
+            public class Utf8Template { }
+            public class Utf8Template<T> { }
+            public class ExampleTextTemplate { }
+            public class ExampleUtf8Template { }
+        }
+        """;
+
     [Test]
     [Arguments("#typeGreeting")]
     [Arguments("#models X")]
@@ -71,19 +136,6 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("")]
-    [Arguments("\n")]
-    [Arguments("\r\n")]
-    public async Task Initialize_BlankTypeAtLineOrTextEnd_ReportsAtDirectiveName(string terminator)
-    {
-        var template = "#model string\n#namespace Consumer\n#type" + terminator;
-        var diagnostic = GenerateDiagnostics(template).Single();
-
-        await Assert.That(diagnostic.Id).IsEqualTo("SLAP001");
-        await AssertLocation(diagnostic, template, 2, 0, "#type".Length);
-    }
-
-    [Test]
     public async Task Initialize_DirectiveErrorsWithLf_MapLines()
     {
         var template = "#type Example\n#model string\n#namespace Consumer\n#access privat\n#model int\nbody";
@@ -110,18 +162,22 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("#type", "SLAP001")]
-    [Arguments("#type  \t", "SLAP001")]
-    [Arguments("#model", "SLAP003")]
-    [Arguments("#namespace ", "SLAP002")]
-    public async Task Initialize_BlankRequiredDirective_ReportsAtDirectiveName(string line, string id)
+    [Arguments("#type", "\r\nbody", "SLAP001")]
+    [Arguments("#type  \t", "\r\nbody", "SLAP001")]
+    [Arguments("#model", "\r\nbody", "SLAP003")]
+    [Arguments("#namespace ", "\r\nbody", "SLAP002")]
+    [Arguments("#type", "", "SLAP001")]
+    [Arguments("#type", "\n", "SLAP001")]
+    [Arguments("#type", "\r\n", "SLAP001")]
+    public async Task Initialize_BlankRequiredDirective_ReportsAtDirectiveName(string line, string tail, string id)
     {
-        var template = ReplaceDirective(line) + "body";
+        // The blank directive is last so the tail can end the line, the text, or neither
+        var template = ReplaceDirective(line, last: true).TrimEnd('\r', '\n') + tail;
         var diagnostic = GenerateDiagnostics(template).Single();
         var name = line.TrimEnd();
 
         await Assert.That(diagnostic.Id).IsEqualTo(id);
-        await AssertLocation(diagnostic, template, LineOf(template, line), 0, name.Length);
+        await AssertLocation(diagnostic, template, 2, 0, name.Length);
     }
 
     [Test]
@@ -149,15 +205,17 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_InvalidThenValidGenerate_ReportsBoth()
+    [Arguments("Bad")]
+    [Arguments("Text, Utf8")]
+    public async Task Initialize_InvalidThenValidGenerate_ReportsBoth(string target)
     {
-        var template = _requiredDirectives + "#generate Bad\r\n#generate Text\r\nbody";
+        var template = _requiredDirectives + $"#generate {target}\r\n#generate Text\r\nbody";
         var diagnostics = GenerateDiagnostics(template);
 
         await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP005,SLAP006");
         await Assert.That(diagnostics[0].GetMessage()).IsEqualTo(
-            "Template file 'Templates/example.html' has invalid generation target 'Bad'; expected 'Text' or 'Utf8'");
-        await AssertLocation(diagnostics[0], template, 3, 10, 3);
+            $"Template file 'Templates/example.html' has invalid generation target '{target}'; expected 'Text' or 'Utf8'");
+        await AssertLocation(diagnostics[0], template, 3, "#generate ".Length, target.Length);
         await AssertLocation(diagnostics[1], template, 4, 0, "#generate Text".Length);
     }
 
@@ -259,63 +317,24 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_UsingDirectiveWithConflictingNames_Compiles()
+    [Arguments("", "", "Hello [[ model ]]", "Hello &lt;value&gt;")]
+    [Arguments(_consumerConflicts, "", "Hello [[ model ]]", "Hello &lt;value&gt;")]
+    [Arguments(_importedConflicts, "#using Conflicts\r\n", "Hello [[ model ]]", "Hello &lt;value&gt;")]
+    [Arguments("global using System.Text;", "#using System.Text\r\n", "> [[ new StringBuilder(model) ]]", "> &lt;value&gt;")]
+    public async Task Initialize_ConsumerSources_CompileWithEmittedCodeWithoutWarnings(string consumerSource, string usingDirective, string body, string expected)
     {
-        const string conflicts = """
-            namespace Conflicts
-            {
-                public class System { }
-                public class Convert { }
-                public class CultureInfo { }
-                public class Lazy<T> { }
-                public class Span<T> { }
-                public class ReadOnlyMemory<T> { }
-                public class IBufferWriter<T> { }
-                public class TextWriter { }
-                public class SlusserLabs { }
-                public class TemplateOptions { }
-                public class TextTemplate { }
-                public class TextTemplate<T> { }
-                public class Utf8Template { }
-                public class Utf8Template<T> { }
-                public class ExampleTextTemplate { }
-                public class ExampleUtf8Template { }
-            }
-            """;
-        var template = _requiredDirectives + "#using Conflicts\r\nHello [[ model ]]";
-        var compilation = GeneratorTestHelper.CreateCompilation([conflicts]);
-        var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([new TemplateAdditionalText(template)]));
-        var output = RenderingTestHelper.Render(result.Compilation);
-
-        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(output.text).IsEqualTo("Hello &lt;value&gt;");
-        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(output.text))).IsTrue();
-    }
-
-    [Test]
-    public async Task Initialize_UsingDirectiveMatchingGlobalUsing_DoesNotWarn()
-    {
-        var template = _requiredDirectives + "#using System.Text\r\n> [[ new StringBuilder(model) ]]";
-        var compilation = GeneratorTestHelper.CreateCompilation(["global using System.Text;"]);
+        // Run fails the test when the generated consumer has any emit error; the consumer has no implicit imports
+        var template = _requiredDirectives + usingDirective + body;
+        var compilation = GeneratorTestHelper.CreateCompilation(consumerSource.Length == 0 ? [] : [consumerSource]);
         var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([new TemplateAdditionalText(template)]));
         var warnings = result.Compilation.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning);
-
-        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(string.Join(", ", warnings.Select(d => $"{d.Id} {d.GetMessage()}"))).IsEqualTo(string.Empty);
-        await Assert.That(RenderingTestHelper.Render(result.Compilation).text).IsEqualTo("> &lt;value&gt;");
-    }
-
-    [Test]
-    public async Task Initialize_DirectiveErrorTemplate_GeneratesOtherTemplates()
-    {
-        var result = GeneratorTestHelper.Run(
-            new TemplateAdditionalText(_requiredDirectives + "#type Other\r\nbad", "Templates/bad.html"),
-            RenderingTestHelper.Template("good [[ model ]]"));
         var output = RenderingTestHelper.Render(result.Compilation);
 
-        await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id))).IsEqualTo("SLAP006");
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
-        await Assert.That(output.text).IsEqualTo("good &lt;value&gt;");
+        await Assert.That(string.Join(", ", warnings.Select(d => $"{d.Id} {d.GetMessage()}"))).IsEqualTo(string.Empty);
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
     }
 
     [Test]
@@ -337,19 +356,24 @@ public sealed partial class TemplateGeneratorTests
         return result.RunResult.Diagnostics.ToArray();
     }
 
-    // Swaps the directive with the same name into the required set, or appends it
-    private static string ReplaceDirective(string line)
+    // Swaps the directive with the same name into the required set, or appends it; last moves the swapped directive to the end
+    private static string ReplaceDirective(string line, bool last = false)
     {
         var separator = line.IndexOf(' ');
         var name = (separator < 0 ? line : line.Substring(0, separator)) + " ";
         var lines = _requiredDirectives.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).ToList();
         var index = lines.FindIndex(l => l.StartsWith(name, StringComparison.Ordinal));
-        if (index >= 0)
+        if (index >= 0 && !last)
         {
             lines[index] = line;
         }
         else
         {
+            if (index >= 0)
+            {
+                lines.RemoveAt(index);
+            }
+
             lines.Add(line);
         }
 

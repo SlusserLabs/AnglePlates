@@ -32,12 +32,14 @@ public sealed partial class TemplateGeneratorTests
         var invalidPath = new[] { "Templates/0.html", "Templates/m.html", "Templates/zz.html" }[invalidPosition];
         templates.Insert(invalidPosition, new TemplateAdditionalText("#generate Text\r\n[[", invalidPath));
         templates.Add(RenderingTestHelper.Template("[% unclosed", "Bad", path: "Templates/bad.html"));
+        templates.Add(new TemplateAdditionalText(_requiredDirectives + "#type Other\r\nbad", "Templates/duplicate.html"));
         var result = GeneratorTestHelper.Run(templates.ToArray());
         var first = RenderingTestHelper.Render(result.Compilation, type: "Consumer.First");
         var second = RenderingTestHelper.Render(result.Compilation, type: "Consumer.Second");
 
+        // Missing directives, unclosed blocks, and directive errors each skip only their own template
         await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id).Order(StringComparer.Ordinal)))
-            .IsEqualTo("SLAP001,SLAP002,SLAP003,SLAP004,SLAP004");
+            .IsEqualTo("SLAP001,SLAP002,SLAP003,SLAP004,SLAP004,SLAP006");
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(7);
         await Assert.That(first.text).IsEqualTo("first &lt;value&gt;");
         await Assert.That(second.text).IsEqualTo("second &lt;value&gt;");
@@ -62,39 +64,6 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(HintNames(result)).IsEqualTo(HintNames(changed));
         await Assert.That(RenderingTestHelper.Render(result.Compilation, type: "One.Example").text).IsEqualTo("one");
         await Assert.That(RenderingTestHelper.Render(result.Compilation, type: "Two.Example").text).IsEqualTo("two");
-    }
-
-    [Test]
-    public async Task Initialize_PathIdentity_NormalizesSeparatorsAndPreservesCase()
-    {
-        string Names(string path, string projectDirectory)
-        {
-            var options = new TestAnalyzerConfigOptionsProvider(new Dictionary<string, string> { ["build_property.ProjectDir"] = projectDirectory });
-            var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(),
-                GeneratorTestHelper.CreateDriver([RenderingTestHelper.Template("text", path: path)], options));
-
-            return HintNames(result);
-        }
-
-        var expected = Names("Templates/a.html", string.Empty);
-
-        await Assert.That(Names("Templates\\a.html", string.Empty)).IsEqualTo(expected);
-        await Assert.That(Names("C:\\repo\\Templates\\a.html", "C:\\repo\\")).IsEqualTo(expected);
-        await Assert.That(Names("/repo/Templates/a.html", "/repo/")).IsEqualTo(expected);
-        await Assert.That(Names("Templates/A.html", string.Empty)).IsNotEqualTo(expected);
-        await Assert.That(Names("Templates/b.html", string.Empty)).IsNotEqualTo(expected);
-        await Assert.That(Names("/repository/Templates/a.html", "/repo")).IsNotEqualTo(expected);
-    }
-
-    [Test]
-    public async Task Initialize_ChangedTemplate_ReusesNamesWithOriginalConsumerCompilation()
-    {
-        var compilation = GeneratorTestHelper.CreateCompilation();
-        var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([RenderingTestHelper.Template("before")]));
-        var after = GeneratorTestHelper.Run(compilation, before.Driver.ReplaceAdditionalTexts([RenderingTestHelper.Template("after")]));
-
-        await Assert.That(HintNames(after)).IsEqualTo(HintNames(before));
-        await Assert.That(RenderingTestHelper.Render(after.Compilation).text).IsEqualTo("after");
     }
 
     [Test]
@@ -155,47 +124,35 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("model", null)]
-    [Arguments("model", "<null>")]
-    [Arguments("(object?)null", null)]
-    [Arguments("(object?)null", "<null>")]
-    [Arguments("(System.Uri?)null", null)]
-    [Arguments("(System.Uri?)null", "<null>")]
-    [Arguments("(int?)null", null)]
-    [Arguments("(int?)null", "<null>")]
-    [Arguments("(dynamic?)null", null)]
-    [Arguments("(dynamic?)null", "<null>")]
-    [Arguments("new NullText()", null)]
-    [Arguments("new NullText()", "<null>")]
-    public async Task Initialize_NullCSharpVariable_WritesNullVariable(string expression, string? nullVariable)
+    [Arguments("model", null, null)]
+    [Arguments("(object?)null", null, null)]
+    [Arguments("(System.Uri?)null", null, null)]
+    [Arguments("(int?)null", null, null)]
+    [Arguments("(dynamic?)null", null, null)]
+    [Arguments("new NullText()", null, null)]
+    [Arguments("model", "<value>", "&lt;value&gt;")]
+    [Arguments("(object?)\"x<\"", "<value>", "x&lt;")]
+    [Arguments("new System.Uri(\"http://example.com/\")", "<value>", "http://example.com/")]
+    [Arguments("(int?)5", "<value>", "5")]
+    [Arguments("(dynamic?)1.5", "<value>", "1.5")]
+    [Arguments("(decimal?)1234.5m", "<value>", "1234.5")]
+    [Arguments("string.Empty", "<value>", "")]
+    public async Task Initialize_CSharpVariable_WritesNullVariableOnlyForNull(string expression, string? model, string? value)
     {
-        var expected = nullVariable is null ? "ab" : "a&lt;null&gt;b";
+        // A null value writes nothing, or the encoded NullVariable when one is set; other values ignore NullVariable
         var compilation = GeneratorTestHelper.CreateCompilation([_nullTextSource]);
         var template = RenderingTestHelper.Template($"a[[ {expression} ]]b");
         var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([template]));
+        var withoutNullVariable = "a" + value + "b";
+        var withNullVariable = value is null ? "a&lt;null&gt;b" : withoutNullVariable;
 
-        var output = RenderingTestHelper.Render(result.Compilation, model: null, nullVariable: nullVariable);
+        var plain = RenderingTestHelper.Render(result.Compilation, model: model);
+        var substituted = RenderingTestHelper.Render(result.Compilation, model: model, nullVariable: "<null>");
 
-        await Assert.That(output.text).IsEqualTo(expected);
-        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
-    }
-
-    [Test]
-    [Arguments("model", "&lt;value&gt;")]
-    [Arguments("(object?)\"x<\"", "x&lt;")]
-    [Arguments("new System.Uri(\"http://example.com/\")", "http://example.com/")]
-    [Arguments("(int?)5", "5")]
-    [Arguments("(dynamic?)1.5", "1.5")]
-    [Arguments("(decimal?)1234.5m", "1234.5")]
-    [Arguments("string.Empty", "")]
-    public async Task Initialize_NonNullCSharpVariable_IgnoresNullVariable(string expression, string expected)
-    {
-        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template($"[[ {expression} ]]"));
-
-        var output = RenderingTestHelper.Render(result.Compilation, nullVariable: "<null>");
-
-        await Assert.That(output.text).IsEqualTo(expected);
-        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+        await Assert.That(plain.text).IsEqualTo(withoutNullVariable);
+        await Assert.That(plain.bytes.SequenceEqual(Encoding.UTF8.GetBytes(withoutNullVariable))).IsTrue();
+        await Assert.That(substituted.text).IsEqualTo(withNullVariable);
+        await Assert.That(substituted.bytes.SequenceEqual(Encoding.UTF8.GetBytes(withNullVariable))).IsTrue();
     }
 
     [Test]
@@ -212,44 +169,31 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("null", 38, 14, 6, "CS8117", "Invalid operand for pattern match; value required, but found '<null>'.")]
-    [Arguments("default", 38, 15, 7, "CS8716", "There is no target type for the default literal.")]
-    [Arguments("default(System.Span<char>)", 40, 46, 19, "CS1503", "Argument 1: cannot convert from 'System.Span<char>' to 'object?'")]
-    [Arguments("1, 2", 38, 37, 8, "CS1501", "No overload for method 'ToString' takes 3 arguments")]
-    public async Task Initialize_InvalidCSharpVariable_ReportsCompilerErrorAtTemplate(string expression, int line, int column, int length, string id, string message)
+    [Arguments("[[ null ]]", 38, 14, 6, "CS8117", "Invalid operand for pattern match; value required, but found '<null>'.", 5, 3, 4)]
+    [Arguments("[[ default ]]", 38, 15, 7, "CS8716", "There is no target type for the default literal.", 5, 3, 7)]
+    [Arguments("[[ default(System.Span<char>) ]]", 40, 46, 19, "CS1503", "Argument 1: cannot convert from 'System.Span<char>' to 'object?'", 5, 3, 26)]
+    [Arguments("[[ 1, 2 ]]", 38, 37, 8, "CS1501", "No overload for method 'ToString' takes 3 arguments", 5, 3, 4)]
+    [Arguments("<p>[% var count = 1;\r\n  count += missing; %]</p>", 41, 11, 7, "CS0103", "The name 'missing' does not exist in the current context", 6, 11, 7)]
+    public async Task Initialize_InvalidCSharp_ReportsCompilerErrorAtTemplate(
+        string body, int line, int column, int length, string id, string message, int templateLine, int templateColumn, int templateLength)
     {
         // Generate one renderer at a time because the compiler doesn't report errors from separate trees in a stable order.
-        // Directives are tokens 0 to 4, so the variable is token 5 and the Write call is the first statement after Model.
-        // Every error maps to the whole expression on the template's sixth line, including errors in generated code around it.
+        // Directives are tokens 0 to 4, so the body starts at token 5 and the Write call is the first statement after Model.
+        // Every variable error maps to the whole expression on the template's sixth line, including errors in generated code around it,
+        // and a block's second line keeps its template columns, so an undefined name there maps to the seventh line.
+        var mapped = new LinePositionSpan(new LinePosition(templateLine, templateColumn), new LinePosition(templateLine, templateColumn + templateLength));
         foreach (var target in new[] { "Text", "Utf8" })
         {
-            var template = RenderingTestHelper.Template($"#generate {target}\r\n[[ {expression} ]]");
+            var template = RenderingTestHelper.Template($"#generate {target}\r\n{body}");
             var compilation = GeneratorTestHelper.CreateCompilation();
             var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
             var tree = TemplateTrees(driver).Single();
-            var mapped = new LinePositionSpan(new LinePosition(5, 3), new LinePosition(5, 3 + expression.Length));
 
             var result = GeneratorTestHelper.Run(compilation, driver, [CompilerError(tree, line, column, length, id, message, mapped)]);
 
             // Text output skips the UTF-8 base class
             await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(target == "Text" ? 3 : 4);
         }
-    }
-
-    [Test]
-    public async Task Initialize_InvalidCSharpBlock_ReportsCompilerErrorAtTemplate()
-    {
-        // The block's second line keeps its template columns, so the undefined name maps to the template's seventh line
-        var template = RenderingTestHelper.Template("#generate Text\r\n<p>[% var count = 1;\r\n  count += missing; %]</p>");
-        var compilation = GeneratorTestHelper.CreateCompilation();
-        var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
-        var tree = TemplateTrees(driver).Single();
-        var mapped = new LinePositionSpan(new LinePosition(6, 11), new LinePosition(6, 18));
-
-        var result = GeneratorTestHelper.Run(compilation, driver,
-            [CompilerError(tree, 41, 11, 7, "CS0103", "The name 'missing' does not exist in the current context", mapped)]);
-
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(3);
     }
 
     [Test]
