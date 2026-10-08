@@ -1,6 +1,6 @@
 # AnglePlates roadmap
 
-Updated 2026-10-07. AnglePlates is a working prototype: templates compile into C# classes, both renderers produce matching text and UTF-8 output, and the packed analyzer installs and renders in isolated .NET 10 consumers on Windows and Linux, including an ASP.NET Core app and a Native AOT executable. This page lists the work left before it ships as a supported NuGet package. The [README](../README.md) covers what works today, including the caveats under "Good to know", and larger designs live under [plans](../plans).
+Updated 2026-10-08. AnglePlates is a working prototype: templates compile into C# classes, both renderers produce matching text and UTF-8 output, and the packed analyzer installs and renders in isolated .NET 10 consumers on Windows and Linux, including an ASP.NET Core app and a Native AOT executable. This page lists the work left before it ships as a supported NuGet package. The [README](../README.md) covers what works today, including the caveats under "Good to know", and larger designs live under [plans](../plans).
 
 If something here doesn't match the code, trust the code and fix the roadmap.
 
@@ -9,10 +9,6 @@ If something here doesn't match the code, trust the code and fix the roadmap.
 ### Template syntax cleanup
 
 Close the remaining rough edges in the language before calling the syntax stable: closing delimiters inside C# strings and comments end a block early, generated locals like `model` and `writer` can collide with template code, and C# block indentation is a brace-counting guess. The README lists the first two under "Good to know". Decide which ones to fix and which stay documented limitations.
-
-### Regression suite and coverage
-
-The current tests are focused, not complete. Finish coverage for the parser, directives, both rendering paths, and incremental reruns, executing generated renderers to check exact text and bytes. Then measure line and branch coverage for the generator and the emitted code in Visual Studio 2026.
 
 ### CI and publishing
 

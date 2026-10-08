@@ -130,9 +130,11 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#   ", "Templates/padded.html", 4)]
     [Arguments("#\r\n#\t\r\n", "Templates/hashes.html", 1)]
     [Arguments("", "Templates/empty.html", 0)]
-    public async Task Initialize_FileWithoutDirectives_SkipsDiscoveredAndReportsExplicit(string content, string path, int firstLineLength)
+    [Arguments(null, "Templates/unreadable.html", 0)]
+    public async Task Initialize_FileWithoutDirectives_SkipsDiscoveredAndReportsExplicit(string? content, string path, int firstLineLength)
     {
-        // A bare # isn't a known directive either, and the check looks only at content, so the file name doesn't matter
+        // A bare # isn't a known directive either, and the check looks only at content, so the file name doesn't matter.
+        // A file Roslyn can't read counts as empty.
         var valid = RenderingTestHelper.Template("valid", path: "Templates/valid.html");
         var discovered = GeneratorTestHelper.Run(new TemplateAdditionalText(content, path), valid);
         var explicitFile = GeneratorTestHelper.Run(new TemplateAdditionalText(content, path, TemplateAdditionalText.Explicit)).RunResult;

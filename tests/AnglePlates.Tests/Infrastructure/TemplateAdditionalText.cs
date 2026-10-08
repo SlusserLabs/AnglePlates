@@ -9,13 +9,14 @@ internal sealed class TemplateAdditionalText : AdditionalText
     public const string Discovered = "Discovered";
     public const string Explicit = "Explicit";
 
-    private readonly SourceText _text;
+    private readonly SourceText? _text;
     private int _getTextCount;
 
-    // The AnglePlate metadata defaults to Discovered, like a file in the default Templates folder; null leaves the file untagged
-    public TemplateAdditionalText(string template, string path = "Templates/example.html", string? anglePlate = Discovered)
+    // The AnglePlate metadata defaults to Discovered, like a file in the default Templates folder; null leaves the file untagged.
+    // A null template stands in for a file Roslyn couldn't read.
+    public TemplateAdditionalText(string? template, string path = "Templates/example.html", string? anglePlate = Discovered)
     {
-        _text = SourceText.From(template);
+        _text = template is null ? null : SourceText.From(template);
         Path = path;
         AnglePlate = anglePlate;
     }
@@ -26,7 +27,7 @@ internal sealed class TemplateAdditionalText : AdditionalText
 
     public int GetTextCount => Volatile.Read(ref _getTextCount);
 
-    public override SourceText GetText(CancellationToken cancellationToken = default)
+    public override SourceText? GetText(CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _getTextCount);
 

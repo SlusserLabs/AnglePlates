@@ -18,8 +18,6 @@ internal ref struct SpanReader<T> where T : unmanaged, IEquatable<T>
 
     public readonly int Position => _position;
 
-    public readonly bool End => _position == _span.Length;
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Advance(int count)
     {

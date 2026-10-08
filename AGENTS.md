@@ -73,6 +73,6 @@ Keep the writing conversational and technically specific. Use contractions, conc
 ## Validation
 
 - For code changes, restore and build `AnglePlates.slnx`, then run `samples/HelloWorld` when generation or rendering is affected; use the commands in docs/development.md
-- Run focused tests and report their scope; the full parser, rendering, directive, and incremental suite in the roadmap is incomplete, so do not imply it exists
+- Run focused tests and report their scope; check measured coverage against the accepted gaps in [docs/testing.md](docs/testing.md#coverage) before calling coverage complete
 - For documentation-only changes, check links, consistency, whitespace, and line endings; a build is unnecessary
 - Report what changed, what was verified, and any remaining limitations; do not claim release readiness, coverage, or performance without evidence

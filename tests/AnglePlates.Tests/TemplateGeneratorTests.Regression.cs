@@ -67,6 +67,39 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
+    public async Task Initialize_TwoDuplicatePairs_NumbersEachPairIndependentlyOfFileOrder()
+    {
+        // Each pair shares a path and declared type, so the compiler reports duplicate members; only the hint names matter here
+        var templates = new[]
+        {
+            new TemplateAdditionalText("#type Alpha\r\n#model string\r\n#namespace Consumer\r\n#generate Text\r\nfirst", "Templates/a.html"),
+            new TemplateAdditionalText("#type Alpha\r\n#model string\r\n#namespace Consumer\r\n#generate Text\r\nsecond", "Templates/a.html"),
+            new TemplateAdditionalText("#type Beta\r\n#model string\r\n#namespace Consumer\r\n#generate Text\r\nfirst", "Templates/b.html"),
+            new TemplateAdditionalText("#type Beta\r\n#model string\r\n#namespace Consumer\r\n#generate Text\r\nsecond", "Templates/b.html")
+        };
+        var compilation = GeneratorTestHelper.CreateCompilation();
+
+        var result = GeneratorTestHelper.CreateDriver(templates).RunGenerators(compilation).GetRunResult().Results.Single();
+        var reversed = GeneratorTestHelper.CreateDriver(templates.Reverse().ToArray()).RunGenerators(compilation).GetRunResult().Results.Single();
+        var numbered = result.GeneratedSources.Where(source => source.HintName.EndsWith(".1.g.cs", StringComparison.Ordinal)).ToArray();
+
+        await Assert.That(result.Exception).IsNull();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(7);
+        await Assert.That(SourcesByHintName(reversed)).IsEquivalentTo(SourcesByHintName(result));
+        await Assert.That(numbered.Length).IsEqualTo(2);
+        foreach (var source in numbered)
+        {
+            // Duplicates are sorted by content, so the second template always takes the suffix
+            await Assert.That(source.SourceText.ToString()).Contains("\"second\"");
+        }
+
+        static string[] SourcesByHintName(GeneratorRunResult runResult)
+        {
+            return runResult.GeneratedSources.Select(source => $"{source.HintName}={source.SourceText}").ToArray();
+        }
+    }
+
+    [Test]
     public async Task Initialize_BracketsAndEmptyBlocks_MatchesReviewedSources()
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("[ordinary] [[ model ]]\r\na \r\n[[- -]][%- -%][*- -*]\r\nb"));
