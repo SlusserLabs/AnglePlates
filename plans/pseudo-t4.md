@@ -1,13 +1,15 @@
 # Plan: T4-style syntax
 
+> **Status: under consideration for version 2; not approved.** T4-style syntax isn't a goal for the first release. Don't implement any part of this plan, and don't add options, diagnostics, or extension points for it in version 1 work. If it's approved later, check the details below against the code as it stands then.
+
 This plan adds a second template syntax that uses T4 delimiters for the AnglePlates features that have a T4 equivalent. It's meant to make the move easier for people coming from T4 and for anyone who prefers its look. It doesn't add T4 features AnglePlates lacks. [syntax-comparison.md](../docs/syntax-comparison.md) has the background.
 
 A project setting selects the syntax, and each syntax gets its own parser. The delimiters stay hard-coded in each parser; this plan doesn't make delimiters configurable.
 
 ## Dependencies
 
-- Build this after Part 1 of [template-boundaries.md](template-boundaries.md) lands. The T4 parser copies its backslash escape rule, and the transpiler's literal-run merging is what makes escapes work without transpiler changes.
-- [project-dir.md](project-dir.md) claims `SLAP008`. The new diagnostics below take the next free IDs when this is implemented; the plan assumes `SLAP009` through `SLAP011`.
+- The template-boundaries work has landed. The T4 parser copies its backslash escape rule, and the transpiler's literal-run merging is what makes escapes work without transpiler changes.
+- [msbuild-options.md](msbuild-options.md) defines the MSBuild option conventions, the shared option helper, and `SLAP009` for any invalid AnglePlates MSBuild property. `AnglePlateSyntax` follows those conventions and reports an invalid value through `SLAP009`. The other new diagnostics below aren't reserved; they take the next free IDs if this plan is approved. The plan assumes `SLAP010` and `SLAP011`.
 
 ## What T4 mode supports
 
@@ -126,7 +128,7 @@ ITemplateParser parser = syntax == TemplateSyntax.T4 ? new T4TemplateParser() : 
 
 | ID | Title | Location | Fix |
 | --- | --- | --- | --- |
-| `SLAP009` | Invalid template syntax | `Location.None` | Set `AnglePlateSyntax` to `AnglePlates` or `T4`. |
+| `SLAP009` | Invalid AnglePlates MSBuild property, shared with [msbuild-options.md](msbuild-options.md) | `Location.None` | Set `AnglePlateSyntax` to `AnglePlates` or `T4`. |
 | `SLAP010` | Unsupported T4 directive | The `<#@ ... #>` block | Move the setting into the `#` directive section. |
 | `SLAP011` | Unsupported T4 class feature block | The `<#+ ... #>` block | Declare the members in a partial class. |
 

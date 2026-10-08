@@ -56,9 +56,9 @@ Nothing has been benchmarked, so there are no numbers to compare against Razor, 
 | Area | Problem | Plan |
 | --- | --- | --- |
 | Directives | A misspelled directive ends the directive section and becomes literal output. Required directives after it report `SLAP001` to `SLAP003` at the typo, but a misspelled optional directive with no required directive after it isn't reported. | By design; the README documents it |
-| Unrelated additional files | Any `AdditionalFiles` input that starts with `#` is treated as a template. `PublicAPI.Shipped.txt` (`#nullable enable`) or a Markdown file would fail the build with `SLAP001` to `SLAP003`. | [project-dir.md](../plans/project-dir.md) |
+| Unrelated additional files | Any `AdditionalFiles` input that starts with `#` is treated as a template. `PublicAPI.Shipped.txt` (`#nullable enable`) or a Markdown file would fail the build with `SLAP001` to `SLAP003`. | [msbuild-options.md](../plans/msbuild-options.md) |
 | Closing delimiters | Inside a block, a closing delimiter in a C# string or comment ends the block, so `[[ "]]" ]]` ends early. | Not planned yet |
-| Discovery defaults | `$(ProjectDir)` is empty when the props file is evaluated, so the defaults are really the relative paths `Templates` and `Views`. Duplicate removal compares item specs, not full paths. | [project-dir.md](../plans/project-dir.md) |
+| Discovery defaults | `$(ProjectDir)` is empty when the props file is evaluated, so the defaults are really the relative paths `Templates` and `Views`. Duplicate removal compares item specs, not full paths. | [msbuild-options.md](../plans/msbuild-options.md) |
 | Consumer dependencies | Both renderer base classes are always emitted, so even text-only consumers need `System.IO.Pipelines`. Repository projects get it from `Microsoft.AspNetCore.App`. | Release plan, step 1 |
 | Multiple assemblies | Each assembly gets its own public `SlusserLabs.AnglePlates.TemplateOptions` and base classes. A project that references two assemblies with templates sees two definitions of each support type and gets ambiguity errors. | Release plan, step 2 |
 | Generated names | The render method declares `model`, `Model`, and `writer`, plus a `__anglePlatesValue<N>` pattern variable for each C# variable. Template code can collide with them. Indentation of C# blocks is a brace-counting guess. | Not planned yet |
