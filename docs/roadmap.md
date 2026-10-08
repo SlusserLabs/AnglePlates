@@ -8,11 +8,11 @@ If something here doesn't match the code, trust the code and fix the roadmap.
 
 ### Multiple assemblies
 
-Each assembly with templates gets its own public copy of `TemplateOptions` and the base classes, so referencing two of them causes ambiguity errors. Settle how the support types are shared or hidden across assemblies.
+Each assembly with templates gets its own copy of `TemplateOptions` and the base classes in the `SlusserLabs.AnglePlates` namespace, so a project that references two of them gets ambiguity errors, and one with its own templates gets `CS0436` warnings. Setting `AnglePlateBaseAccessModifier` to `internal` only helps partly, because `InternalsVisibleTo` brings the collisions back. [plans/multiple-assemblies.md](../plans/multiple-assemblies.md) proposes a support namespace per assembly.
 
 ### Template syntax cleanup
 
-Close the remaining rough edges in the language before calling the syntax stable: closing delimiters inside C# strings and comments end a block early, generated locals like `model` and `writer` can collide with template code, and C# block indentation is a brace-counting guess. Anything left as is gets documented as a limitation.
+Close the remaining rough edges in the language before calling the syntax stable: closing delimiters inside C# strings and comments end a block early, generated locals like `model` and `writer` can collide with template code, and C# block indentation is a brace-counting guess. The README lists the first two under "Good to know". Decide which ones to fix and which stay documented limitations.
 
 ### Regression suite and coverage
 
@@ -20,7 +20,7 @@ The current tests are focused, not complete. Finish coverage for the parser, dir
 
 ### Compatibility validation
 
-Only .NET 10 consumers with C# 11 on Windows have been tested. Validate the frameworks and compilers the README will advertise, Linux path handling, console, library, and ASP.NET projects, and packages that depend on AnglePlates transitively. Then document the minimum framework and C# version a consumer needs. `Utf8Template.RenderAsync` uses `System.IO.Pipelines`, which is part of the base framework starting with .NET 9, so an older UTF-8 consumer would need the `System.IO.Pipelines` package; text-only consumers don't use it.
+Only .NET 10 consumers with C# 11 on Windows have been tested. Validate the frameworks and compilers the README will advertise, Linux path handling, console, library, and ASP.NET projects, and packages that depend on AnglePlates transitively. Then document the minimum framework and C# version a consumer needs. Known floors so far: generated code calls .NET 6 APIs such as `ArgumentNullException.ThrowIfNull`, UTF-8 templates need C# 11 for `u8` literals, and a UTF-8 consumer older than .NET 9 would need the `System.IO.Pipelines` package for `RenderAsync`. The generator targets `netstandard2.0` with Roslyn 4.14.0, but older compiler hosts haven't been tested either.
 
 ### CI and publishing
 
@@ -28,11 +28,11 @@ The repository has no CI. Add a GitHub Actions workflow that builds, tests, pack
 
 ### Documentation
 
-Add a trusted-template security note and the `[[-1]]` trim-marker gotcha to the README, write contributor docs for local packaging and the release process, and compile the README examples in tests so they can't drift.
+Add two notes to the README: templates are trusted C# code, and a `-` right after an opener is always a trim marker, so `[[-1]]` writes `1` (use `[[ -1 ]]` or `[[(-1)]]`). Document the release process once the publishing workflow exists, and compile the README examples in tests so they can't drift.
 
 ### Performance
 
-Benchmark rendering before making any speed claims, and validate AOT and trimming before advertising them. See [plans/performance.md](../plans/performance.md).
+The README describes the design instead of claiming speed. Add benchmarks before making any speed claims, and validate AOT and trimming before advertising them. See [plans/performance.md](../plans/performance.md).
 
 ### Async rendering
 

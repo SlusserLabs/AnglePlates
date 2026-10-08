@@ -2,7 +2,7 @@
 
 AnglePlates is like T4 templates for modern .NET. It uses a source generator to turn templates into typed C# classes without having to learn a custom syntax like Razor or Liquid.
 
-Templates are compiled into your project instead of shipped as separate files and achieve awesome performance and memory consumption because at the end of the day, they're just C# classes. The generated classes provide methods for writing directly to a `TextWriter`, writing UTF-8 bytes to an `IBufferWriter<byte>`, or rendering asynchronously to a `PipeWriter`. HTML is the main target, so C# variables are HTML-encoded by default, but templates can use any text format.
+Templates are compiled into your project instead of shipped as separate files. There's no runtime parsing and no reflection, literals are baked in as static data, and output streams straight to your writer. At the end of the day, they're just C# classes. The generated classes provide methods for writing directly to a `TextWriter`, writing UTF-8 bytes to an `IBufferWriter<byte>`, or rendering asynchronously to a `PipeWriter`. HTML is the main target, so C# variables are HTML-encoded by default, but templates can use any text format.
 
 ## Contents
 
