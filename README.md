@@ -16,9 +16,10 @@ Templates are compiled into your project instead of shipped as separate files an
   - [Text rendering](#text-rendering)
   - [UTF-8 streaming](#utf-8-streaming)
   - [Encoding and options](#encoding-and-options)
-- [How templates are discovered](#how-templates-are-discovered)
-  - [Which files are templates](#which-files-are-templates)
-  - [Where `Include` and `Remove` go](#where-include-and-remove-go)
+  - [Templates inside templates](#templates-inside-templates)
+- [Advanced options](#advanced-options)
+  - [Template locations](#template-locations)
+  - [Internal support types](#internal-support-types)
 - [Good to know](#good-to-know)
 - [Develop AnglePlates](#develop-angleplates)
 - [AI disclosure](#ai-disclosure)
@@ -79,7 +80,7 @@ public sealed class GreetingModel
 
 ### Directives
 
-Directives occupy consecutive lines at the very beginning of the file, so a template starts with a known directive. A file whose first line isn't a directive isn't a template (see [Which files are templates](#which-files-are-templates)). Each directive gets its own line with exactly one value. A line counts as a directive only when it starts with one of the names below, spelled exactly (names are case-sensitive), followed by a space, a tab, or the end of the line.
+Directives occupy consecutive lines at the very beginning of the file, so a template starts with a known directive. A file whose first line isn't a directive isn't a template (see [Template locations](#template-locations)). Each directive gets its own line with exactly one value. A line counts as a directive only when it starts with one of the names below, spelled exactly (names are case-sensitive), followed by a space, a tab, or the end of the line.
 
 The first line that isn't a directive starts the template body. That includes a blank line, an indented line, `# Heading`, `#!`, a CSS rule like `#header { ... }`, and, yes, a misspelled directive. Directive lines and their line breaks never reach the output, so if your markup starts on the line right after the last directive, the output starts with your markup. Want a leading newline? Add a blank line.
 
@@ -211,79 +212,99 @@ ASP.NET Core owns the response writer's lifetime, so the endpoint does not dispo
 
 AnglePlates writes literal text unchanged and encodes C# variables with `HtmlEncoder.Default`. A null C# variable writes nothing by default, whatever its type. Pass `SlusserLabs.AnglePlates.TemplateOptions` to a compiled template to choose another `Encoder`. Set `Encoder` to `null` to disable C# variable encoding, or set `NullVariable` to choose what AnglePlates writes for a null C# variable.
 
-Generated support types are `public` by default. Set the `AnglePlateBaseAccessModifier` project property to `internal` to change their accessibility. When you do, also add `#access internal` to your templates so their generated classes do not expose less accessible base types.
+### Templates inside templates
 
-The property takes `public` or `internal`, in any case and with or without surrounding spaces. Anything else reports `SLAP009`, and AnglePlates generates nothing for the project until you fix it. I'd rather fail the build than guess at the accessibility of your base classes.
+There's no include syntax, because you don't need one. A compiled template is just a class, so a C# block can render another template into the same `writer` and hand it any object it likes. Here's an order that renders a child template for each line, starting with `Templates/order-line.html`:
 
-## How templates are discovered
-
-Put your templates in a `Templates` folder in your project and you're done. Every file in it, including files in subfolders, is a possible template. The extension doesn't matter, although these examples use `.html`.
-
-Behind the scenes, the package adds an `AnglePlate` item for `Templates\**\*`. If you want templates somewhere else, you change that list with plain MSBuild `Include` and `Remove`. That's the whole set of options:
-
-| Name | Kind | Default | Purpose |
-| --- | --- | --- | --- |
-| `AnglePlate` | Item | `Templates\**\*` | The templates. Add more with `Include`; drop some or all of the default with `Remove`. |
-| `AnglePlateBaseAccessModifier` | Property | `public` | Accessibility of the generated support types, `public` or `internal`. See [Encoding and options](#encoding-and-options). |
-
-Here's a project that keeps its email templates in `Emails`, has report templates elsewhere, and wants internal support types:
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-
-    <!-- Make TemplateOptions and the base classes internal. Templates also need #access internal. -->
-    <AnglePlateBaseAccessModifier>internal</AnglePlateBaseAccessModifier>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <!-- PrivateAssets keeps the generator and discovery files from flowing to projects that reference this one. -->
-    <PackageReference Include="SlusserLabs.AnglePlates" Version="0.1.0-alpha">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Drop the default Templates folder. Remove only affects items defined above it, so it goes first. -->
-    <AnglePlate Remove="Templates\**\*" />
-
-    <!-- Every file an Include matches has to be a template, so match only .html. -->
-    <AnglePlate Include="Emails\**\*.html" />
-    <AnglePlate Include="Reports\**\*.html" />
-    <AnglePlate Include="..\Shared\receipt.html" />
-
-    <!-- Leave out drafts. This Remove comes after the Include it trims. -->
-    <AnglePlate Remove="Emails\Drafts\**" />
-  </ItemGroup>
-
-</Project>
+```text
+#generate Text
+#type OrderLine
+#model MyApp.OrderLineModel
+#namespace MyApp.Templates
+<li>[[ model.Quantity ]] x [[ model.Name ]]</li>
 ```
 
-### Which files are templates
+And the parent, `Templates/order.html`, which passes each `OrderLineModel` from its own model to the child:
 
-1. Every file under the project's `Templates` folder, including subfolders, starts out as an `AnglePlate` item, whatever its extension.
-2. Your own `Include` and `Remove` operations change that list. `<AnglePlate Remove="Templates\**\*" />` turns the default off.
-3. AnglePlates adds each `AnglePlate` item to the compiler's `AdditionalFiles` once, even if you list the same file twice or spell its path two ways.
-4. The generator only looks at the `AdditionalFiles` entries AnglePlates added. Files other tools add, like `PublicAPI.Shipped.txt`, are ignored, even when they start with `#`.
-5. A file is a template when it starts with a known directive. A file from the default folder that doesn't, such as a `README.md`, a `.gitkeep`, or an empty file, is skipped quietly. A file you added with an `Include` reports `SLAP008` instead, because you asked for it.
+```text
+#generate Text
+#type Order
+#model MyApp.OrderModel
+#namespace MyApp.Templates
+<h1>Order [[ model.Number ]]</h1>
+<ul>
+[% foreach (var line in model.Lines) { -%]
+[% OrderLineTextTemplate.Default.Render(line, writer); -%]
+[% } -%]
+</ul>
+```
 
-The default folder is going to collect notes and partials sooner or later, and an error for each one would make the folder convention a pain. A file you named in your project file is one you meant to be a template, even through a wildcard. If a wildcard catches extra files, narrow it (`Emails\**\*.html`) or `Remove` them. The catch is that a template in `Templates` with a misspelled first directive gets skipped instead of reported. If a class you expected doesn't exist, check the first line of its template. AnglePlates never looks at file names, only content.
+The models are plain classes:
 
-Templates outside the project folder are named by their path relative to it, such as `../Shared/receipt.html`, in the generated class documentation. That keeps the generated source the same on every machine. Compiler errors still point at the full path.
+```csharp
+namespace MyApp;
 
-### Where `Include` and `Remove` go
+public sealed class OrderModel
+{
+    public string Number { get; init; } = default!;
+    public List<OrderLineModel> Lines { get; } = new();
+}
 
-Item order matters in MSBuild:
+public sealed class OrderLineModel
+{
+    public string Name { get; init; } = default!;
+    public int Quantity { get; init; }
+}
+```
 
-- The project file works anywhere, because the package's default item is imported before the project body.
-- `Directory.Build.targets` works for settings shared by several projects.
-- `Directory.Build.props` can add templates, but it can't remove the default, because it's imported before the package defines the default item.
-- A `Remove` only affects items defined above it. Put it first to drop the default and add your own folder; put it after an `Include` to trim that `Include`.
+Rendering an order with two fish and chips and a tea writes:
 
-Write paths relative to the project folder. Skip `$(ProjectDir)`, because MSBuild hasn't defined it yet when it reads your project file, so `$(ProjectDir)Emails` quietly becomes `Emails` anyway. Use `$(MSBuildProjectDirectory)` when you need an absolute path.
+```html
+<h1>Order 1001</h1>
+<ul>
+<li>2 x Fish &amp; Chips</li>
+<li>1 x Tea</li>
+</ul>
+```
+
+The child writes straight to the parent's `writer`, so nothing gets buffered along the way. The trim markers keep the loop from adding blank lines.
+
+Both templates use `#generate Text` because `writer` is a `TextWriter` in a text template and an `IBufferWriter<byte>` in a UTF-8 template. For UTF-8 output, generate both with `#generate Utf8` and call `OrderLineUtf8Template` instead. `Default` uses the default options, so if you render the parent with custom `TemplateOptions`, pass them along with `new OrderLineTextTemplate(Options)`.
+
+## Advanced options
+
+### Template locations
+
+Put your templates in a `Templates` folder in your project and you're done. Every file in that folder and its subfolders is checked, whatever its extension. A file that starts with a directive becomes a template. Anything else, like a `README.md` or a `.gitkeep`, is skipped.
+
+Want your templates somewhere else? Add or remove `AnglePlate` items in your project file:
+
+```xml
+<ItemGroup>
+  <!-- Turn off the default Templates folder. Put this first. -->
+  <AnglePlate Remove="Templates\**\*" />
+
+  <!-- Add your own templates. -->
+  <AnglePlate Include="Emails\**\*.html" />
+  <AnglePlate Include="..\Shared\receipt.html" />
+</ItemGroup>
+```
+
+Files you add with `Include` have to be templates. If one doesn't start with a directive, the build reports `SLAP008`, so keep your wildcards narrow.
+
+### Internal support types
+
+AnglePlates generates `TemplateOptions` and the template base classes into your project, and they're `public` by default. Set the `AnglePlateBaseAccessModifier` property to make them `internal`:
+
+```xml
+<PropertyGroup>
+  <AnglePlateBaseAccessModifier>internal</AnglePlateBaseAccessModifier>
+</PropertyGroup>
+```
+
+When you do, also add `#access internal` to your templates, so their generated classes don't expose less accessible base types.
+
+The property takes `public` or `internal`, in any case and with or without surrounding spaces. Anything else reports `SLAP009`, and AnglePlates generates nothing for the project until you fix it. I'd rather fail the build than guess at the accessibility of your base classes.
 
 ## Good to know
 
@@ -299,25 +320,7 @@ For an application model and a loop, see the [HelloWorld sample](samples/HelloWo
 
 ## Develop AnglePlates
 
-Use a stable .NET 10 SDK. [global.json](global.json) sets a 10.0.100 minimum and allows later installed .NET 10 feature bands.
-
-```powershell
-dotnet restore AnglePlates.slnx
-dotnet build AnglePlates.slnx --no-restore
-dotnet test --solution AnglePlates.slnx --no-build
-dotnet run --project samples/HelloWorld --no-build --no-launch-profile
-```
-
-You'll find the generator, a console sample, and the tests in the solution. See the [project lexicon](docs/lexicon.md) for terms that have a specific meaning in AnglePlates. The [testing guide](docs/testing.md) explains the test helpers and snapshots, and the [roadmap](docs/roadmap.md) lists known defects and planned work.
-
-Build and validate a local package with a fresh version for each run. I use `0.1.0-alpha.local.<yyyyMMdd>.<n>`, where `<n>` goes up with each pack that day:
-
-```powershell
-dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -p:PackageVersion=0.1.0-alpha.local.20261007.1
-./eng/validate-package.ps1 -Version 0.1.0-alpha.local.20261007.1
-```
-
-The [package validation project](tests/AnglePlates.PackageTests/README.md) installs and tests the package without referencing the source project. The script also runs the small consumers in `tests/AnglePlates.PackageConsumers`, which check `Remove` placement and that discovery stops at the project that references AnglePlates.
+Want to change AnglePlates itself? [Developing AnglePlates](docs/development.md) walks through how the generator works and how to build, test, and validate the package.
 
 ## AI disclosure
 

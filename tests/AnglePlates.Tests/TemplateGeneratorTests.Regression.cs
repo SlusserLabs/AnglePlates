@@ -286,9 +286,9 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName).Distinct().Count()).IsEqualTo(4);
+        // Sources follow the file order, but each hint name must name the same source either way
         var reversedDriver = GeneratorTestHelper.CreateDriver([second, first]).RunGenerators(compilation);
-        await Assert.That(string.Join("\n", reversedDriver.GetRunResult().Results.Single().GeneratedSources.Select(source => source.HintName)))
-            .IsEqualTo(string.Join("\n", result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName)));
+        await Assert.That(SourcesByHintName(reversedDriver.GetRunResult())).IsEqualTo(SourcesByHintName(result.RunResult));
     }
 
     // The support types change with the generation targets, so pick out template classes by hint name
@@ -300,6 +300,12 @@ public sealed partial class TemplateGeneratorTests
             .Where(source => !supportHintNames.Contains(source.HintName, StringComparer.Ordinal))
             .Select(source => source.SyntaxTree)
             .ToArray();
+    }
+
+    private static string SourcesByHintName(GeneratorDriverRunResult runResult)
+    {
+        return string.Join("\n", runResult.Results.Single().GeneratedSources.OrderBy(source => source.HintName, StringComparer.Ordinal)
+            .Select(source => source.HintName + "\n" + source.SourceText));
     }
 
     private static string HintNames(GeneratorTestResult result)

@@ -6,7 +6,7 @@
 - When using `/humanizer`, treat the Author Voice section below as the user-provided writing sample described by the skill's Voice instructions
 - Explicit user instructions take precedence over skill guidelines
 - If a skill causes a permission request, pause, unfinished work, or departure from user intent, link the exact `SKILL.md`, quote the relevant instruction, and explain its application; distinguish requirements from interpretation
-- Use [README.md](README.md) for package usage, contributor setup, and things consumers should know and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
+- Use [README.md](README.md) for package usage and things consumers should know, [docs/development.md](docs/development.md) for contributor setup and architecture, and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
 - Update affected documentation when behavior or repository structure changes, including README files; keep implemented behavior separate from planned work
 - Use [docs/lexicon.md](docs/lexicon.md) for project terminology, [docs/testing.md](docs/testing.md) for test helpers, snapshot review, and current regression coverage, and [docs/diagnostics.md](docs/diagnostics.md) for diagnostic IDs and release tracking
 
@@ -42,7 +42,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 - The sample, generated-compilation tests, and package tests run on .NET 10 with C# 11. Do not claim support for earlier frameworks or compiler hosts without testing them.
 - `Utf8Template` is emitted only when a template generates a UTF-8 class; its `RenderAsync` uses `System.IO.Pipelines`, which .NET 9+ includes in the base framework, so repository consumers need no extra framework or package references.
-- Template changes are collected into one generation callback; per-template incremental generation remains planned.
+- Each template is parsed, transpiled, and added as a source on its own, so editing one leaves the others cached. Only templates with identical hint names are numbered in a shared step. Roslyn 4.14 still parses a new tree for every generated source on each run.
 - The repository has no CI or publishing workflow. Release readiness requires the platform, framework, compiler, ASP.NET, transitive-reference, and multi-assembly testing listed in the roadmap.
 - `global.json` selects Microsoft.Testing.Platform for repository tests.
 
@@ -82,7 +82,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 ## Validation
 
-- For code changes, restore and build `AnglePlates.slnx`, then run `samples/HelloWorld` when generation or rendering is affected; use the commands in README.md
+- For code changes, restore and build `AnglePlates.slnx`, then run `samples/HelloWorld` when generation or rendering is affected; use the commands in docs/development.md
 - Run focused tests and report their scope; the full parser, rendering, directive, and incremental suite in the roadmap is incomplete, so do not imply it exists
 - For documentation-only changes, check links, consistency, whitespace, and line endings; a build is unnecessary
 - Report what changed, what was verified, and any remaining limitations; do not claim release readiness, coverage, or performance without evidence

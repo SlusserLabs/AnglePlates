@@ -14,10 +14,6 @@ Each assembly with templates gets its own public copy of `TemplateOptions` and t
 
 Close the remaining rough edges in the language before calling the syntax stable: closing delimiters inside C# strings and comments end a block early, generated locals like `model` and `writer` can collide with template code, and C# block indentation is a brace-counting guess. Anything left as is gets documented as a limitation.
 
-### Per-template incremental generation
-
-All template changes run through one generation callback, so editing one template regenerates all of them. Cache each template separately and prove the reuse with incremental tests.
-
 ### Regression suite and coverage
 
 The current tests are focused, not complete. Finish coverage for the parser, directives, both rendering paths, and incremental reruns, executing generated renderers to check exact text and bytes. Then measure line and branch coverage for the generator and the emitted code in Visual Studio 2026.
@@ -34,8 +30,10 @@ The repository has no CI. Add a GitHub Actions workflow that builds, tests, pack
 
 Add a trusted-template security note and the `[[-1]]` trim-marker gotcha to the README, write contributor docs for local packaging and the release process, and compile the README examples in tests so they can't drift.
 
-## After the first release
+### Performance
 
-- **Performance:** Benchmark rendering before making any speed claims, and validate AOT and trimming before advertising them. See [plans/performance.md](../plans/performance.md).
-- **Async rendering:** `RenderAsync` renders synchronously and flushes once, so templates can't `await` and cancellation isn't observed.
-- **Template composition:** Child templates work through C# blocks today. Includes, layouts, and a template registry need their own design.
+Benchmark rendering before making any speed claims, and validate AOT and trimming before advertising them. See [plans/performance.md](../plans/performance.md).
+
+### Async rendering
+
+`RenderAsync` renders synchronously and flushes once, so templates can't `await` and cancellation isn't observed.

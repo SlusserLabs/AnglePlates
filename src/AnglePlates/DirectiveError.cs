@@ -5,7 +5,7 @@ namespace SlusserLabs.AnglePlates;
 
 internal sealed class DirectiveError
 {
-    public DirectiveError(DiagnosticDescriptor descriptor, TextSpan span, params object[] arguments)
+    public DirectiveError(DiagnosticDescriptor descriptor, TextSpan span, params string[] arguments)
     {
         Descriptor = descriptor;
         Span = span;
@@ -16,5 +16,5 @@ internal sealed class DirectiveError
 
     public TextSpan Span { get; }
 
-    public object[] Arguments { get; }
+    public string[] Arguments { get; }
 }
