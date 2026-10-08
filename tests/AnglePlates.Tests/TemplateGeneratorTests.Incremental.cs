@@ -71,8 +71,8 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     public async Task Initialize_BaseAccessModifierChanged_RegeneratesSupportTypesFromCachedTemplates()
     {
-        // An internal base class needs internal template classes, which also work under a public base
-        var template = RenderingTestHelper.Template("#access internal\r\naccess");
+        // The default internal template class works under both public and internal support types
+        var template = RenderingTestHelper.Template("access");
         var compilation = GeneratorTestHelper.CreateCompilation();
         var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([template], AccessModifierOptions("public")));
 

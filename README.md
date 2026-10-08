@@ -19,7 +19,7 @@ Templates are compiled into your project instead of shipped as separate files. T
   - [Templates inside templates](#templates-inside-templates)
 - [Advanced options](#advanced-options)
   - [Template locations](#template-locations)
-  - [Internal support types](#internal-support-types)
+  - [Public templates](#public-templates)
 - [Good to know](#good-to-know)
 - [Develop AnglePlates](#develop-angleplates)
 - [AI disclosure](#ai-disclosure)
@@ -66,7 +66,7 @@ A template starts with a directive section followed by a body containing literal
 [% } %]
 ```
 
-The generator creates two `public` classes in `MyApp.Templates`: `GreetingTextTemplate` and `GreetingUtf8Template`. A model can be any object you want to render, for example:
+The generator creates two `internal` classes in `MyApp.Templates`: `GreetingTextTemplate` and `GreetingUtf8Template`. A model can be any object you want to render, for example:
 
 ```csharp
 namespace MyApp;
@@ -92,7 +92,7 @@ The first line that isn't a directive starts the template body. That includes a 
 | `#model` | Yes | Model's C# type. Use a fully qualified name or add a matching `#using`. | `#model MyApp.GreetingModel` |
 | `#namespace` | Yes | Namespace for compiled template classes, as a dotted name. | `#namespace MyApp.Templates` |
 | `#generate` | No | Omit it to generate both compiled templates. Set it to the case-insensitive value `Text` or `Utf8` to generate only that template type. | `#generate Utf8` |
-| `#access` | No | Compiled template accessibility; defaults to `public`. | `#access public` or `#access internal` |
+| `#access` | No | Compiled template accessibility, `public` or `internal`; defaults to `internal`. See [Public templates](#public-templates). | `#access public` |
 | `#using` | No | Adds a `using` directive for the template's C# and the `#model` type. Plain namespace names only; no `static`, aliases, or `global::`. | `#using System.Linq` |
 
 ### Template syntax
@@ -292,17 +292,19 @@ Want your templates somewhere else? Add or remove `AnglePlate` items in your pro
 
 Files you add with `Include` have to be templates. If one doesn't start with a directive, the build reports `SLAP008`, so keep your wildcards narrow.
 
-### Internal support types
+### Public templates
 
-AnglePlates generates `TemplateOptions` and the template base classes into your project, and they're `public` by default. Set the `AnglePlateBaseAccessModifier` property to make them `internal`:
+AnglePlates generates `TemplateOptions` and the template base classes into your project, and they're `internal` by default, just like your compiled templates. Most templates only get used by the project they live in, so that's usually all you need. If another assembly needs your templates, set the `AnglePlateBaseAccessModifier` property to `public`:
 
 ```xml
 <PropertyGroup>
-  <AnglePlateBaseAccessModifier>internal</AnglePlateBaseAccessModifier>
+  <AnglePlateBaseAccessModifier>public</AnglePlateBaseAccessModifier>
 </PropertyGroup>
 ```
 
-When you do, also add `#access internal` to your templates, so their generated classes don't expose less accessible base types.
+Then add `#access public` to each template you want to expose. Templates without it stay `internal`. The other way around doesn't work: a `#access public` template on top of `internal` support types fails to compile with `CS0060` and `CS0051`, because a public class can't expose internal base types.
+
+The support types always use the `SlusserLabs.AnglePlates` namespace, so a project that can see another assembly's copies, because they're `public` or shared through `InternalsVisibleTo`, has two of everything. If that project uses AnglePlates too, it gets `CS0436` warnings and can't pass its own `TemplateOptions` to the other assembly's templates; if it doesn't, and it sees copies from two assemblies, it gets `CS0433` errors wherever it names `TemplateOptions`.
 
 The property takes `public` or `internal`, in any case and with or without surrounding spaces. Anything else reports `SLAP009`, and AnglePlates generates nothing for the project until you fix it. I'd rather fail the build than guess at the accessibility of your base classes.
 

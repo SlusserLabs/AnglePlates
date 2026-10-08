@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- Access modifier of the generated support types: public or internal -->
-    <AnglePlateBaseAccessModifier Condition="'$(AnglePlateBaseAccessModifier)' == ''">public</AnglePlateBaseAccessModifier>
+    <AnglePlateBaseAccessModifier Condition="'$(AnglePlateBaseAccessModifier)' == ''">internal</AnglePlateBaseAccessModifier>
   </PropertyGroup>
 
   <ItemGroup>

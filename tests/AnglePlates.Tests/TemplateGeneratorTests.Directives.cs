@@ -130,7 +130,7 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#model string", "#model")]
     [Arguments("#namespace Other", "#namespace")]
     [Arguments("#generate Text", "#generate")]
-    [Arguments("#access internal", "#access")]
+    [Arguments("#access public", "#access")]
     [Arguments("#using System", "#using System")]
     [Arguments("#type\t", "#type")]
     public async Task Initialize_RepeatedDirective_ReportsDuplicate(string line, string label)
@@ -216,11 +216,13 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#model System.String", "Consumer.Example")]
     [Arguments("#namespace Consumer.Templates", "Consumer.Templates.Example")]
     [Arguments("#namespace @class", "class.Example")]
-    [Arguments("#access internal", "Consumer.Example")]
+    [Arguments("#access public", "Consumer.Example")]
     [Arguments("#generate utf8", "Consumer.Example")]
     public async Task Initialize_ValidDirectiveValue_Generates(string line, string type)
     {
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(ReplaceDirective(line) + "[[ model ]]"));
+        // A public template class needs public support types
+        var baseAccessModifier = line.StartsWith("#access", StringComparison.Ordinal) ? "public" : null;
+        var result = RunWithAccessModifier(baseAccessModifier, new TemplateAdditionalText(ReplaceDirective(line) + "[[ model ]]"));
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         if (!line.StartsWith("#generate", StringComparison.Ordinal))

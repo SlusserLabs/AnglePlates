@@ -35,8 +35,8 @@ public sealed partial class TemplateGeneratorTests
         var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
 
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(5);
-        await Assert.That(generatedSource).Contains("public partial class ExampleTextTemplate");
-        await Assert.That(generatedSource).Contains("public partial class ExampleUtf8Template");
+        await Assert.That(generatedSource).Contains("internal partial class ExampleTextTemplate");
+        await Assert.That(generatedSource).Contains("internal partial class ExampleUtf8Template");
     }
 
     [Test]
@@ -51,9 +51,9 @@ public sealed partial class TemplateGeneratorTests
 
         // The UTF-8 base class comes only with a UTF-8 template class
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(treeCount);
-        await Assert.That(generatedSource.Contains("public partial class ExampleTextTemplate", StringComparison.Ordinal)).IsEqualTo(hasTextType);
-        await Assert.That(generatedSource.Contains("public partial class ExampleUtf8Template", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
-        await Assert.That(generatedSource.Contains("public abstract class Utf8Template<TModel>", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
+        await Assert.That(generatedSource.Contains("internal partial class ExampleTextTemplate", StringComparison.Ordinal)).IsEqualTo(hasTextType);
+        await Assert.That(generatedSource.Contains("internal partial class ExampleUtf8Template", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
+        await Assert.That(generatedSource.Contains("internal abstract class Utf8Template<TModel>", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
     }
 
     [Test]

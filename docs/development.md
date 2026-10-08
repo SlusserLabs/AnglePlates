@@ -100,7 +100,7 @@ The support types depend on the `AnglePlateBaseAccessModifier` property, which `
 
 The generator only sees what MSBuild gives it, and two files in `src/AnglePlates/buildTransitive` decide that.
 
-`SlusserLabs.AnglePlates.props` loads before the consumer's project body. It defines the default `AnglePlate` item for `Templates\**\*`, sets the default `AnglePlateBaseAccessModifier`, and makes the property and the `AnglePlate` metadata visible to the compiler. Because it loads first, a consumer's `Remove` in the project file can drop the default item.
+`SlusserLabs.AnglePlates.props` loads before the consumer's project body. It defines the default `AnglePlate` item for `Templates\**\*`, sets `AnglePlateBaseAccessModifier` to `internal` when the project leaves it empty (matching the generator's own default), and makes the property and the `AnglePlate` metadata visible to the compiler. Because it loads first, a consumer's `Remove` in the project file can drop the default item.
 
 `SlusserLabs.AnglePlates.targets` runs a target just before the compiler's editorconfig is written. It adds each `AnglePlate` item to `AdditionalFiles` once, using full paths so two spellings of one file count as one, and tags it `Discovered` or `Explicit`. The generator uses that tag to tell its files from other tools' files and to decide whether a file without directives is skipped quietly or reported as `SLAP008`.
 

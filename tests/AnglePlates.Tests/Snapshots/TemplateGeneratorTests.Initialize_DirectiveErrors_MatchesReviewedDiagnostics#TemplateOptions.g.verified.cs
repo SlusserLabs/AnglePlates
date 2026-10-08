@@ -14,7 +14,7 @@ namespace SlusserLabs.AnglePlates;
 /// <summary>
 /// Controls encoding and temporary storage for generated templates.
 /// </summary>
-public class TemplateOptions
+internal class TemplateOptions
 {
     /// <summary>
     /// Gets or sets the buffer pool to use for temporary encoding.

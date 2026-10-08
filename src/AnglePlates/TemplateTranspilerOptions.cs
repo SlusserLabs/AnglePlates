@@ -36,7 +36,7 @@ internal sealed class TemplateTranspilerOptions
 
     public GenerationTarget GenerationTarget { get; private set; } = GenerationTarget.Text | GenerationTarget.Utf8;
 
-    public string AccessModifier { get; private set; } = "public";
+    public string AccessModifier { get; private set; } = "internal";
 
     public List<DirectiveError> Errors { get; } = new();
 

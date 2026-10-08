@@ -15,7 +15,7 @@ namespace SlusserLabs.AnglePlates;
 /// Base class for a text template.
 /// </summary>
 /// <typeparam name="TModel">The type of model supported by the template.</typeparam>
-public abstract class TextTemplate<TModel>
+internal abstract class TextTemplate<TModel>
 {
     // Cap requests at 32K characters; custom pools may return larger arrays
     private const int _maxRental = 32 * 1024;

@@ -18,7 +18,7 @@ namespace SlusserLabs.AnglePlates;
 [Generator]
 public class TemplateGenerator : IIncrementalGenerator
 {
-    private const string _defaultAccessModifier = "public";
+    private const string _defaultAccessModifier = "internal";
     private const string _projectDirKey = "build_property.ProjectDir";
     private const string _baseAccessModifierProperty = "AnglePlateBaseAccessModifier";
     private const string _anglePlateMetadataKey = "build_metadata.AdditionalFiles.AnglePlate";

@@ -48,9 +48,9 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments(null, "public")]
-    [Arguments("", "public")]
-    [Arguments("  ", "public")]
+    [Arguments(null, "internal")]
+    [Arguments("", "internal")]
+    [Arguments("  ", "internal")]
     [Arguments("public", "public")]
     [Arguments(" PUBLIC ", "public")]
     [Arguments("internal", "internal")]
@@ -58,8 +58,8 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("\tinternal ", "internal")]
     public async Task Initialize_BaseAccessModifier_UsesCanonicalSpelling(string? value, string expected)
     {
-        // A public template class can't derive from an internal base class, so internal support types need #access internal
-        var body = expected == "internal" ? "#access internal\r\naccess" : "access";
+        // Templates are internal by default, so public support types also get a public template to check both together
+        var body = expected == "public" ? "#access public\r\naccess" : "access";
         var result = RunWithAccessModifier(value, RenderingTestHelper.Template(body));
         var supportSources = result.RunResult.Results.Single().GeneratedSources.Take(3).Select(source => source.SourceText.ToString()).ToArray();
 

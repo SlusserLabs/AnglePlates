@@ -6,10 +6,6 @@ If something here doesn't match the code, trust the code and fix the roadmap.
 
 ## Before the first release
 
-### Multiple assemblies
-
-Each assembly with templates gets its own copy of `TemplateOptions` and the base classes in the `SlusserLabs.AnglePlates` namespace, so a project that references two of them gets ambiguity errors, and one with its own templates gets `CS0436` warnings. Setting `AnglePlateBaseAccessModifier` to `internal` only helps partly, because `InternalsVisibleTo` brings the collisions back. [plans/multiple-assemblies.md](../plans/multiple-assemblies.md) proposes a support namespace per assembly.
-
 ### Template syntax cleanup
 
 Close the remaining rough edges in the language before calling the syntax stable: closing delimiters inside C# strings and comments end a block early, generated locals like `model` and `writer` can collide with template code, and C# block indentation is a brace-counting guess. The README lists the first two under "Good to know". Decide which ones to fix and which stay documented limitations.
@@ -20,7 +16,7 @@ The current tests are focused, not complete. Finish coverage for the parser, dir
 
 ### Compatibility validation
 
-Only .NET 10 consumers with C# 11 on Windows have been tested. Validate the frameworks and compilers the README will advertise, Linux path handling, console, library, and ASP.NET projects, and packages that depend on AnglePlates transitively. Then document the minimum framework and C# version a consumer needs. Known floors so far: generated code calls .NET 6 APIs such as `ArgumentNullException.ThrowIfNull`, UTF-8 templates need C# 11 for `u8` literals, and a UTF-8 consumer older than .NET 9 would need the `System.IO.Pipelines` package for `RenderAsync`. The generator targets `netstandard2.0` with Roslyn 4.14.0, but older compiler hosts haven't been tested either.
+Only .NET 10 consumers with C# 11 on Windows have been tested. Validate the frameworks and compilers the README will advertise, Linux path handling, console, library, and ASP.NET projects, solutions where more than one project uses AnglePlates (including a library with public templates), and packages that depend on AnglePlates transitively. Then document the minimum framework and C# version a consumer needs. Known floors so far: generated code calls .NET 6 APIs such as `ArgumentNullException.ThrowIfNull`, UTF-8 templates need C# 11 for `u8` literals, and a UTF-8 consumer older than .NET 9 would need the `System.IO.Pipelines` package for `RenderAsync`. The generator targets `netstandard2.0` with Roslyn 4.14.0, but older compiler hosts haven't been tested either.
 
 ### CI and publishing
 

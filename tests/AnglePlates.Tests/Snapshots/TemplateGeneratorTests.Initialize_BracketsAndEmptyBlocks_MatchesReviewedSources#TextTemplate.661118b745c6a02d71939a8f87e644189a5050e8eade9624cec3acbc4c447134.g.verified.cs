@@ -16,7 +16,7 @@ namespace Consumer;
 /// <summary>
 /// A text template that can render the contents of 'Templates/example.html'.
 /// </summary>
-public partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.TextTemplate<string>
+internal partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.TextTemplate<string>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ExampleTextTemplate" /> class.

@@ -8,9 +8,6 @@
     <IsPackable>false</IsPackable>
     <LangVersion>11.0</LangVersion>
     <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
-
-    <!-- Make TemplateOptions and the base classes internal. Templates also need #access internal. -->
-    <AnglePlateBaseAccessModifier>internal</AnglePlateBaseAccessModifier>
   </PropertyGroup>
   <ItemGroup>
     <!-- PrivateAssets keeps the generator and discovery files from flowing to projects that reference this one. -->

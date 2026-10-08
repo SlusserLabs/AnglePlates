@@ -16,7 +16,7 @@ namespace Consumer;
 /// <summary>
 /// A UTF-8 template that can render the contents of 'Templates/example.html'.
 /// </summary>
-public partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf8Template<string>
+internal partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf8Template<string>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ExampleUtf8Template" /> class.

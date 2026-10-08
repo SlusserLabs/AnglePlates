@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -19,7 +20,7 @@ internal sealed class GeneratedAssembly : IDisposable
 
     public Assembly Assembly { get; }
 
-    public static GeneratedAssembly Load(Compilation compilation)
+    public static GeneratedAssembly Load(Compilation compilation, IEnumerable<byte[]>? dependencies = null)
     {
         var assemblyName = $"SlusserLabs.AnglePlates.GeneratedTests.{Guid.NewGuid():N}";
         compilation = compilation.WithAssemblyName(assemblyName);
@@ -36,6 +37,13 @@ internal sealed class GeneratedAssembly : IDisposable
         var loadContext = new AssemblyLoadContext(assemblyName, isCollectible: true);
         try
         {
+            // Referenced assemblies load into the same context first, so the consumer binds to them by name
+            foreach (var dependency in dependencies ?? [])
+            {
+                using var dependencyStream = new MemoryStream(dependency, writable: false);
+                loadContext.LoadFromStream(dependencyStream);
+            }
+
             return new GeneratedAssembly(loadContext, loadContext.LoadFromStream(assemblyStream));
         }
         catch

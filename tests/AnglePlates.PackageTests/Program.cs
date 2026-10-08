@@ -19,6 +19,12 @@ internal static class Program
 
         EditorConfigValidator.Validate();
 
+        // The project sets no access options, so the support types and templates use the internal defaults
+        if (typeof(TemplateOptions).IsPublic || typeof(TextTemplate<>).IsPublic || typeof(Utf8Template<>).IsPublic || typeof(PackageTextTemplate).IsPublic)
+        {
+            throw new InvalidOperationException("The generated support types and templates should be internal by default.");
+        }
+
         const string model = "<AnglePlates>";
         const string expected = "Hello &lt;AnglePlates&gt;!";
         using var text = new StringWriter(CultureInfo.InvariantCulture);
