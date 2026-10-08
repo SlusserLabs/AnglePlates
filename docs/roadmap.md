@@ -24,7 +24,7 @@ The repository has no CI. Add a GitHub Actions workflow that builds, tests, pack
 
 ### Documentation
 
-Add two notes to the README: templates are trusted C# code, and a `-` right after an opener is always a trim marker, so `[[-1]]` writes `1` (use `[[ -1 ]]` or `[[(-1)]]`). Document the release process once the publishing workflow exists, and compile the README examples in tests so they can't drift.
+Document the release process once the publishing workflow exists, and compile the README examples in tests so they can't drift.
 
 ### Performance
 

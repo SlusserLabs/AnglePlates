@@ -138,6 +138,8 @@ Place a `-` immediately after an opening delimiter or before a closing delimiter
 | After the block | `[[ model.Title -]]` | Removes following literal whitespace. |
 | Both sides | `[[- model.Title -]]` | Removes literal whitespace on both sides. |
 
+A `-` right after an opener is always a trim marker, even when you meant a minus sign. `[[-1]]` trims the whitespace in front of it and writes `1`. To write `-1`, put a space after the opener with `[[ -1 ]]` or wrap the value in parentheses with `[[(-1)]]`.
+
 ## Using compiled templates
 
 Each compiled template has a `Render` method. Text templates write characters to a `TextWriter`, while UTF-8 templates write bytes to an `IBufferWriter<byte>`. Both template types are generated unless you configure the `#generate` directive. UTF-8 templates can also write to a `PipeWriter` with `RenderAsync`.
@@ -310,6 +312,7 @@ The property takes `public` or `internal`, in any case and with or without surro
 
 ## Good to know
 
+- Templates are trusted C# code. Everything in a C# variable or C# block compiles into your application and runs with the same permissions as the rest of your code. HTML encoding protects the values a template writes, not your application from the template, so only compile templates you'd trust as source files.
 - Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling after the first line.
 - A misspelled first line leaves the file with no directives at all. In the `Templates` folder, that file is skipped without an error, just like a `README.md` would be. A file you added with an `Include` reports `SLAP008` instead.
 - A closing delimiter ends its block even inside a C# string or comment, so keep `]]` out of C# variables and `%]` out of C# blocks.
