@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -39,18 +40,43 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("Text", true, false)]
-    [Arguments("Utf8", false, true)]
-    public async Task Initialize_GenerateDirectiveSpecified_GeneratesSelectedType(string generationTarget, bool hasTextType, bool hasUtf8Type)
+    [Arguments("Text", true, false, 3)]
+    [Arguments("Utf8", false, true, 4)]
+    public async Task Initialize_GenerateDirectiveSpecified_GeneratesSelectedType(string generationTarget, bool hasTextType, bool hasUtf8Type, int treeCount)
     {
         var template = _requiredDirectives + $"#generate {generationTarget}\r\nHello [[ model ]]";
 
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template)).RunResult;
         var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
 
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
+        // The UTF-8 base class comes only with a UTF-8 template class
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(treeCount);
         await Assert.That(generatedSource.Contains("public partial class ExampleTextTemplate", StringComparison.Ordinal)).IsEqualTo(hasTextType);
         await Assert.That(generatedSource.Contains("public partial class ExampleUtf8Template", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
+        await Assert.That(generatedSource.Contains("public abstract class Utf8Template<TModel>", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
+    }
+
+    [Test]
+    public async Task Initialize_TextOnlyTemplate_CompilesWithoutPipelines()
+    {
+        var allReferences = GeneratorTestHelper.CreateCompilation().References.ToArray();
+        var references = allReferences
+            .Where(reference => !string.Equals(Path.GetFileName(reference.Display), "System.IO.Pipelines.dll", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var compilation = GeneratorTestHelper.CreateCompilation(references: references);
+        var template = _requiredDirectives + "#generate Text\r\nHello [[ model ]]";
+
+        // Run fails the test when the generated consumer has any emit error
+        var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([new TemplateAdditionalText(template)]));
+        using var generated = GeneratedAssembly.Load(result.Compilation);
+        var options = Activator.CreateInstance(generated.Assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions", throwOnError: true)!);
+        using var writer = new StringWriter();
+        RenderingTestHelper.Render(generated, "Consumer.ExampleTextTemplate", "World", writer, options);
+
+        await Assert.That(references.Length).IsEqualTo(allReferences.Length - 1);
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(result.RunResult.GeneratedTrees.Select(tree => Path.GetFileName(tree.FilePath))).DoesNotContain("Utf8Template.g.cs");
+        await Assert.That(writer.ToString()).IsEqualTo("Hello World");
     }
 
     [Test]
@@ -64,7 +90,7 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(result.Diagnostics[0].Id).IsEqualTo("SLAP005");
         await Assert.That(result.Diagnostics[0].GetMessage()).IsEqualTo(
             "Template file 'Templates/example.html' has invalid generation target 'Text, Utf8'; expected 'Text' or 'Utf8'");
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(2);
     }
 
     [Test]
@@ -88,7 +114,7 @@ public sealed partial class TemplateGeneratorTests
         // The directive section ends at the body, so that's where the missing directive is reported
         await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan("Templates/example.html",
             new LinePosition(2, 0), new LinePosition(2, 5)));
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(2);
     }
 
     [Test]
@@ -97,7 +123,7 @@ public sealed partial class TemplateGeneratorTests
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText("#generate Text\r\nHello")).RunResult;
 
         await Assert.That(string.Join(",", result.Diagnostics.Select(diagnostic => diagnostic.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(2);
     }
 
     [Test]
@@ -121,7 +147,7 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(diagnostic.GetMessage()).IsEqualTo(
             $"Template file '{path}' has no directives; a file added with an AnglePlate Include must start with a directive such as '#type MyTemplate'");
         await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(path, new LinePosition(0, 0), new LinePosition(0, firstLineLength)));
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(2);
     }
 
     [Test]

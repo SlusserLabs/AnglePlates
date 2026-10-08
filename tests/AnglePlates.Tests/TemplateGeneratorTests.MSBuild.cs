@@ -29,7 +29,7 @@ public sealed partial class TemplateGeneratorTests
         var result = GeneratorTestHelper.Run(file).RunResult;
 
         await Assert.That(result.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(2);
         await Assert.That(file.GetTextCount).IsEqualTo(0);
     }
 

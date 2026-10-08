@@ -41,7 +41,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 ## Verified behavior and limitations
 
 - The sample, generated-compilation tests, and package tests run on .NET 10 with C# 11. Do not claim support for earlier frameworks or compiler hosts without testing them.
-- Both renderer base classes are emitted even for text-only templates, requiring `System.IO.Pipelines` in every consumer; repository applications supply it through `Microsoft.AspNetCore.App`.
+- `Utf8Template` is emitted only when a template generates a UTF-8 class; its `RenderAsync` uses `System.IO.Pipelines`, which .NET 9+ includes in the base framework, so repository consumers need no extra framework or package references.
 - Template changes are collected into one generation callback; per-template incremental generation remains planned.
 - The repository has no CI or publishing workflow. Release readiness requires the platform, framework, compiler, ASP.NET, transitive-reference, and multi-assembly testing listed in the roadmap.
 - `global.json` selects Microsoft.Testing.Platform for repository tests.

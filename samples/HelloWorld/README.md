@@ -6,4 +6,4 @@ From the repository root, run `dotnet run --project samples/HelloWorld --no-laun
 
 `#type`, `#model` and `#namespace` identify the generated classes and their model. Omitting `#generate` generates both compiled template types, and `#access internal` matches the sample model's accessibility. `[[ C# variable ]]` encodes dynamic output, `[% statements %]` embeds trusted C#, and `[* comment *]` contributes no output. Delimiter-adjacent `-` characters trim neighboring whitespace. The final `#not directive` is intentional literal output because directives are recognized only at the start.
 
-The explicit `Microsoft.AspNetCore.App` framework reference supplies `System.IO.Pipelines` for the generated runtime support classes. This is a console application and starts no web server. Its [entry point](Program.cs) demonstrates both synchronous rendering APIs; callers own the output writers.
+This is a plain console application with no extra framework or package references. Its [entry point](Program.cs) demonstrates both synchronous rendering APIs; callers own the output writers.

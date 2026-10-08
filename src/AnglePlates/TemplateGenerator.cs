@@ -53,7 +53,7 @@ public class TemplateGenerator : IIncrementalGenerator
             .WithTrackingName("TemplateFiles")
             .Collect();
 
-        // 4. Generate the support types once, then one class per template and generation target
+        // 4. Generate one class per template and generation target, then the support types those classes need
         context.RegisterSourceOutput(templateFiles.Combine(baseAccessModifier), static (ctx, data) =>
         {
             var (templates, accessModifier) = data;
@@ -65,13 +65,11 @@ public class TemplateGenerator : IIncrementalGenerator
                 return;
             }
 
-            ctx.AddSource("TemplateOptions.g.cs", Boilerplate.TemplateOptions(accessModifier.Value));
-            ctx.AddSource("TextTemplate.g.cs", Boilerplate.TextTemplate(accessModifier.Value));
-            ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier.Value));
-
             var parserOptions = TemplateParserOptions.Default;
             var parser = new TemplateParser(parserOptions);
             var hintNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            var templateSources = new List<(string HintName, string Source)>();
+            var emittedTargets = GenerationTarget.None;
 
             // Sort so hint name suffixes don't depend on the order MSBuild lists the files
             foreach (var template in templates.OrderBy(file => file.Path, StringComparer.Ordinal).ThenBy(file => file.Content, StringComparer.Ordinal))
@@ -111,9 +109,23 @@ public class TemplateGenerator : IIncrementalGenerator
                     {
                         var source = TemplateTranspiler.Transpile(
                             template.RelativePath, template.Path, lines, transpilerOptions, target, template.Content.AsSpan(), parseResult.Tokens);
-                        ctx.AddSource(CreateHintName(template.RelativePath, transpilerOptions, target, hintNameCounts), source);
+                        templateSources.Add((CreateHintName(template.RelativePath, transpilerOptions, target, hintNameCounts), source));
+                        emittedTargets |= target;
                     }
                 }
+            }
+
+            // Only the UTF-8 base class uses System.IO.Pipelines, so text-only projects never need it
+            ctx.AddSource("TemplateOptions.g.cs", Boilerplate.TemplateOptions(accessModifier.Value));
+            ctx.AddSource("TextTemplate.g.cs", Boilerplate.TextTemplate(accessModifier.Value));
+            if ((emittedTargets & GenerationTarget.Utf8) != 0)
+            {
+                ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier.Value));
+            }
+
+            foreach (var (hintName, source) in templateSources)
+            {
+                ctx.AddSource(hintName, source);
             }
         });
     }

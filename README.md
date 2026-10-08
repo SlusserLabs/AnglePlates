@@ -4,6 +4,25 @@ AnglePlates is like T4 templates for modern .NET. It uses a source generator to 
 
 Templates are compiled into your project instead of shipped as separate files and achieve awesome performance and memory consumption because at the end of the day, they're just C# classes. The generated classes provide methods for writing directly to a `TextWriter`, writing UTF-8 bytes to an `IBufferWriter<byte>`, or rendering asynchronously to a `PipeWriter`. HTML is the main target, so C# variables are HTML-encoded by default, but templates can use any text format.
 
+## Contents
+
+- [Installation](#installation)
+- [Anatomy of a template](#anatomy-of-a-template)
+  - [Directives](#directives)
+  - [Template syntax](#template-syntax)
+  - [Escaping openers](#escaping-openers)
+  - [Whitespace trimming](#whitespace-trimming)
+- [Using compiled templates](#using-compiled-templates)
+  - [Text rendering](#text-rendering)
+  - [UTF-8 streaming](#utf-8-streaming)
+  - [Encoding and options](#encoding-and-options)
+- [How templates are discovered](#how-templates-are-discovered)
+  - [Which files are templates](#which-files-are-templates)
+  - [Where `Include` and `Remove` go](#where-include-and-remove-go)
+- [Good to know](#good-to-know)
+- [Develop AnglePlates](#develop-angleplates)
+- [AI disclosure](#ai-disclosure)
+
 ## Installation
 
 ```shell
@@ -24,7 +43,7 @@ AnglePlates is a development dependency, so `dotnet package add` marks the refer
 
 Without them, a project that references yours picks up the template discovery files but not the generator, and the files in its `Templates` folder become inputs that nothing reads.
 
-> Generated classes depend on `System.IO.Pipelines`. Add the package if your project does not already reference it.
+You don't need any other packages. Text templates only use what ships with .NET. UTF-8 templates add a `RenderAsync` method that writes to a `PipeWriter`, and `System.IO.Pipelines` has been part of the base framework since .NET 9. A project with only text templates never gets the UTF-8 base class, so it never touches Pipelines at all.
 
 AnglePlates has been tested with .NET 10 and C# 11. UTF-8 compiled templates require C# 11 or later because they use UTF-8 string literals.
 

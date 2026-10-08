@@ -1,39 +1,46 @@
 # Project lexicon
 
-Use this reference when generating documentation, code comments, diagnostics, issue text, or other project prose. It gives agents a consistent name for concepts that could otherwise be described several ways. The definitions are also intended for contributors and users who need to understand the distinction between similar terms. See the [README](../README.md) for template syntax and package usage.
+This lexicon gives each AnglePlates concept one name. Use it when you write documentation, code comments, diagnostic messages, or issues, so similar ideas don't end up with three names. Template syntax and package usage are in the [README](../README.md).
 
-## Usage rules
+When a term below fits, use it instead of a synonym. Write `AnglePlate` (singular) in MSBuild names, the way MSBuild names `Compile`, and AnglePlates (plural) for the product, the package, and prose.
 
-- Use the term that matches the context shown in the table. Do not introduce a synonym when an established term already fits.
-- A **template** is a source file. A **compiled template** is the generated C# class used by caller code.
-- Use **generation** for compile-time source production and **rendering** for runtime output.
-- In user-facing text, call `[[ ... ]]` a **C# variable**, matching the parser's `TokenType.Variable` name.
-- Call the leading configuration lines **directives** and their complete group the **directive section**. Do not call the section frontmatter.
-- Reserve **transpiler** for the source generator's internal C# emitters. Applications use compiled templates.
-- Say **discovered** or **explicit** for how a template was added, not "automatic" or "manual". Use the singular `AnglePlate` for MSBuild names and the plural AnglePlates for the product, package, and prose.
+## Templates
 
-## Terms
+| Term | Meaning |
+| --- | --- |
+| Template | The source file AnglePlates reads. It has a directive section followed by the template body. Don't call the generated class a template; that's a compiled template. |
+| Directive | A configuration line at the start of a template, such as `#model System.String`. It starts with a known directive name followed by whitespace or the end of the line. |
+| Directive section | The consecutive directive lines at the start of a template. AnglePlates directives are line based, so don't call the section frontmatter. |
+| Generation target | The kind of compiled template that `#generate` selects: `Text` or `Utf8`. Without the directive, AnglePlates generates both. |
+| C# variable | C# inside `[[ ... ]]`. Its value is converted to a string and passed through the configured encoder. The name matches the parser's `TokenType.Variable`. |
+| C# block | C# inside `[% ... %]`. It becomes part of the generated render method, so it holds statements and control flow instead of a value to write. |
+| Escaped opener | A `[[`, `[%`, or `[*` in literal text that follows an odd number of backslashes. AnglePlates writes the opener as literal text, plus one backslash for each pair before it. |
 
-| Term | Context | Meaning |
-| --- | --- | --- |
-| Template | Source generator input | The source file that AnglePlates reads. A template contains a directive section followed by its body. |
-| Compiled template | Caller code | A generated C# class that application code calls to render a template. Use "template" for the source file and "compiled template" for the generated class. |
-| Directive | Template authoring | A configuration line at the start of a template that begins with a known directive name followed by whitespace or the end of the line, such as `#model System.String`. |
-| Directive section | Template authoring | The consecutive directive lines at the start of a template. AnglePlates uses line-based directives, so do not call this section frontmatter. |
-| Generation target | Template authoring and source generator | The compiled template class kind selected by `#generate`: `Text` or `Utf8`. Omitting the directive generates both kinds. |
-| C# variable | Template body | C# inside `[[ ... ]]`. AnglePlates converts its value to a string and passes it through the configured encoder. The parser represents it as `TokenType.Variable`. |
-| C# block | Template body | C# inside `[% ... %]` that becomes part of the generated render method. This term distinguishes control flow and statements from C# variables. |
-| Escaped opener | Template body | A `[[`, `[%`, or `[*` in literal text preceded by an odd number of backslashes. AnglePlates writes the opener as literal text, along with one backslash for each pair before it. |
-| Encoded output | Template body and rendering | Dynamic text that AnglePlates passes through the configured encoder. C# variables and `Write(value, writer)` produce encoded output. |
-| Raw output | Template body and rendering | Dynamic text written without encoding by `WriteRaw(value, writer)`. Literal template text is also written unchanged. |
-| `AnglePlate` item | MSBuild | An MSBuild item that names a possible template. In prose, write "add an `AnglePlate` item"; the singular matches MSBuild item types such as `Compile`. |
-| Default item | MSBuild | The `AnglePlate` item for `Templates\**\*` that the package props file defines. Users drop it with `<AnglePlate Remove="Templates\**\*" />`. |
-| Discovered template | MSBuild and source generator | A possible template that comes only from the default item. A discovered file that doesn't start with a known directive is skipped without a diagnostic. |
-| Explicit template | MSBuild and source generator | A possible template that a project adds with its own `AnglePlate` `Include`, even through a wildcard. An explicit file that doesn't start with a known directive reports `SLAP008`. When a file is both discovered and explicit, it's explicit. |
-| Template discovery | MSBuild | The build step that adds each `AnglePlate` item to the compiler's `AdditionalFiles` once, tagged as discovered or explicit. The generator ignores `AdditionalFiles` that discovery didn't tag, then checks the content of the rest for directives. |
-| Generator setting | MSBuild and source generator | A compiler-visible MSBuild property that the generator reads, such as `AnglePlateBaseAccessModifier`. A missing or empty value means the default, and an invalid value reports `SLAP009`. |
-| Support types | Source generator and caller code | The generated `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` types that compiled templates share. |
-| Generation | Source generator | The compile-time process that turns a template into C# source. |
-| Rendering | Caller code | The runtime process that executes a compiled template and writes its output. |
-| Transpiler | Source generator internals | The internal component that emits the C# source for a text or UTF-8 compiled template. This term refers to the implementation, not the generated class used by an application. |
-| Consumer | Package boundary | An application or library that references AnglePlates and compiles the generated source. |
+## Output
+
+| Term | Meaning |
+| --- | --- |
+| Encoded output | Dynamic text that goes through the configured encoder. C# variables and `Write(value, writer)` produce encoded output. |
+| Raw output | Dynamic text that `WriteRaw(value, writer)` writes without encoding. Literal template text is also written unchanged. |
+
+## Build and discovery
+
+| Term | Meaning |
+| --- | --- |
+| `AnglePlate` item | An MSBuild item that names a possible template. In prose, write "add an `AnglePlate` item." |
+| Default item | The `AnglePlate` item for `Templates\**\*` that the package props file defines. A project removes it with `<AnglePlate Remove="Templates\**\*" />`. |
+| Template discovery | The build step that adds each `AnglePlate` item to the compiler's `AdditionalFiles` once and tags it as discovered or explicit. The generator ignores untagged `AdditionalFiles`, then checks the content of the tagged ones for directives. |
+| Discovered template | A possible template that comes only from the default item. If it doesn't start with a known directive, the generator skips it without a diagnostic. |
+| Explicit template | A possible template that the project adds with its own `AnglePlate` `Include`, wildcards included. If it doesn't start with a known directive, the generator reports `SLAP008`. A file that's both discovered and explicit counts as explicit. Say "discovered" and "explicit," not "automatic" and "manual." |
+| Generator setting | A compiler-visible MSBuild property that the generator reads, such as `AnglePlateBaseAccessModifier`. A missing or empty value uses the default, and an invalid value reports `SLAP009`. |
+
+## Generated code
+
+| Term | Meaning |
+| --- | --- |
+| Generation | The compile-time process that turns a template into C# source. |
+| Rendering | The runtime process that runs a compiled template and writes its output. |
+| Compiled template | The generated C# class that application code calls to render a template. |
+| Support types | The generated `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` types that compiled templates share. `Utf8Template<TModel>` is generated only when a template generates a UTF-8 class. |
+| Transpiler | The internal generator component that emits the C# source for a text or UTF-8 compiled template. Use it only for the generator's internals; applications use compiled templates. |
+| Consumer | An application or library that references AnglePlates and compiles the generated source. |

@@ -226,12 +226,13 @@ public sealed partial class TemplateGeneratorTests
             var template = RenderingTestHelper.Template($"#generate {target}\r\n[[ {expression} ]]");
             var compilation = GeneratorTestHelper.CreateCompilation();
             var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
-            var tree = driver.GetRunResult().GeneratedTrees.Skip(3).Single();
+            var tree = TemplateTrees(driver).Single();
             var mapped = new LinePositionSpan(new LinePosition(5, 3), new LinePosition(5, 3 + expression.Length));
 
             var result = GeneratorTestHelper.Run(compilation, driver, [CompilerError(tree, line, column, length, id, message, mapped)]);
 
-            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+            // Text output skips the UTF-8 base class
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(target == "Text" ? 3 : 4);
         }
     }
 
@@ -242,13 +243,13 @@ public sealed partial class TemplateGeneratorTests
         var template = RenderingTestHelper.Template("#generate Text\r\n<p>[% var count = 1;\r\n  count += missing; %]</p>");
         var compilation = GeneratorTestHelper.CreateCompilation();
         var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
-        var tree = driver.GetRunResult().GeneratedTrees.Skip(3).Single();
+        var tree = TemplateTrees(driver).Single();
         var mapped = new LinePositionSpan(new LinePosition(6, 11), new LinePosition(6, 18));
 
         var result = GeneratorTestHelper.Run(compilation, driver,
             [CompilerError(tree, 41, 11, 7, "CS0103", "The name 'missing' does not exist in the current context", mapped)]);
 
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(3);
     }
 
     [Test]
@@ -269,7 +270,7 @@ public sealed partial class TemplateGeneratorTests
         var second = new TemplateAdditionalText(_requiredDirectives + "#generate Text\r\n", secondPath);
         var compilation = GeneratorTestHelper.CreateCompilation();
         var driver = GeneratorTestHelper.CreateDriver([first, second]).RunGenerators(compilation);
-        var trees = driver.GetRunResult().GeneratedTrees.Skip(3).ToArray();
+        var trees = TemplateTrees(driver);
         const string ambiguousConstructor = "The call is ambiguous between the following methods or properties: " +
             "'ExampleTextTemplate.ExampleTextTemplate(TemplateOptions?)' and 'ExampleTextTemplate.ExampleTextTemplate(TemplateOptions?)'";
         var expected = new[]
@@ -282,12 +283,23 @@ public sealed partial class TemplateGeneratorTests
         };
         var result = GeneratorTestHelper.Run(compilation, driver, expected);
 
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName).Distinct().Count()).IsEqualTo(5);
+        await Assert.That(result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName).Distinct().Count()).IsEqualTo(4);
         var reversedDriver = GeneratorTestHelper.CreateDriver([second, first]).RunGenerators(compilation);
         await Assert.That(string.Join("\n", reversedDriver.GetRunResult().Results.Single().GeneratedSources.Select(source => source.HintName)))
             .IsEqualTo(string.Join("\n", result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName)));
+    }
+
+    // The support types change with the generation targets, so pick out template classes by hint name
+    private static SyntaxTree[] TemplateTrees(GeneratorDriver driver)
+    {
+        string[] supportHintNames = ["TemplateOptions.g.cs", "TextTemplate.g.cs", "Utf8Template.g.cs"];
+
+        return driver.GetRunResult().Results.Single().GeneratedSources
+            .Where(source => !supportHintNames.Contains(source.HintName, StringComparer.Ordinal))
+            .Select(source => source.SyntaxTree)
+            .ToArray();
     }
 
     private static string HintNames(GeneratorTestResult result)

@@ -133,7 +133,7 @@ public sealed class TemplateParserTests
                 await Assert.That(diagnostic.Location.SourceSpan).IsEqualTo(new TextSpan(header.Length + 7, 2));
                 await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(template.Path,
                     new LinePosition(3, 7), new LinePosition(3, 9)));
-                await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(3);
+                await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(2);
             }
         }
     }
