@@ -39,9 +39,9 @@ internal partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.Tex
         writer.Write("[ordinary] ");
 
 #line (5, 15) - (5, 19) 16 "Templates/example.html"
-        Write((model) is { } __anglePlatesValue5
-#line (5, 15) - (5, 19) 143 "Templates/example.html"
-            ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+        Write((model)
+#line (5, 15) - (5, 19) 170 "Templates/example.html"
+            is { } __anglePlatesValue5 ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
 #line default
 
         writer.Write("\r\na");

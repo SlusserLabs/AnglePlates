@@ -1,8 +1,9 @@
 using System;
-using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using SlusserLabs.AnglePlates.Tests.Infrastructure;
 using TUnit.Assertions;
@@ -15,7 +16,7 @@ public sealed partial class TemplateGeneratorTests
 {
     [Test]
     [Arguments("", true, true, 5)]
-    [Arguments("#generate Text\r\n", true, false, 3)]
+    [Arguments("#generate Text\r\n", true, false, 4)]
     [Arguments("#generate Utf8\r\n", false, true, 4)]
     public async Task Initialize_GenerateDirective_GeneratesSelectedTypes(string generateDirective, bool hasTextType, bool hasUtf8Type, int treeCount)
     {
@@ -24,35 +25,65 @@ public sealed partial class TemplateGeneratorTests
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template)).RunResult;
         var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
 
-        // The UTF-8 base class comes only with a UTF-8 template class
+        // Both base classes are generated whatever the template's targets
         await Assert.That(result.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(treeCount);
         await Assert.That(generatedSource.Contains("internal partial class ExampleTextTemplate", StringComparison.Ordinal)).IsEqualTo(hasTextType);
         await Assert.That(generatedSource.Contains("internal partial class ExampleUtf8Template", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
-        await Assert.That(generatedSource.Contains("internal abstract class Utf8Template<TModel>", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
+        await Assert.That(generatedSource.Contains("internal abstract class TextTemplate<TModel>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generatedSource.Contains("internal abstract class Utf8Template<TModel>", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
-    public async Task Initialize_TextOnlyTemplate_CompilesWithoutPipelines()
+    [Arguments(LanguageVersion.CSharp9, "9.0")]
+    [Arguments(LanguageVersion.CSharp10, "10.0")]
+    public async Task Initialize_LanguageVersionBelowFloor_ReportsUnsupportedLanguageVersionAndGeneratesNothing(LanguageVersion languageVersion, string displayVersion)
     {
-        var allReferences = GeneratorTestHelper.CreateCompilation().References.ToArray();
-        var references = allReferences
-            .Where(reference => !string.Equals(Path.GetFileName(reference.Display), "System.IO.Pipelines.dll", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-        var compilation = GeneratorTestHelper.CreateCompilation(references: references);
-        var template = _requiredDirectives + "#generate Text\r\nHello [[ model ]]";
+        var templates = new[] { RenderingTestHelper.Template("ignored"), new TemplateAdditionalText("<p>No directives</p>", "Emails/a.html", TemplateAdditionalText.Explicit) };
+        var compilation = GeneratorTestHelper.CreateCompilation(languageVersion: languageVersion);
 
-        // Run fails the test when the generated consumer has any emit error
-        var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([new TemplateAdditionalText(template)]));
-        using var generated = GeneratedAssembly.Load(result.Compilation);
-        var options = Activator.CreateInstance(generated.Assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions", throwOnError: true)!);
-        using var writer = new StringWriter();
-        RenderingTestHelper.Render(generated, "Consumer.ExampleTextTemplate", "World", writer, options);
+        var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver(templates, languageVersion: languageVersion)).RunResult;
 
-        await Assert.That(references.Length).IsEqualTo(allReferences.Length - 1);
+        await Assert.That(result.Diagnostics.Length).IsEqualTo(1);
+        var diagnostic = result.Diagnostics[0];
+        await Assert.That(diagnostic.Id).IsEqualTo("SLAP010");
+        await Assert.That(diagnostic.Descriptor.Title.ToString()).IsEqualTo("Unsupported C# language version");
+        await Assert.That(diagnostic.Descriptor.Category).IsEqualTo("SlusserLabs.AnglePlates");
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Descriptor.IsEnabledByDefault).IsTrue();
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo(
+            $"AnglePlates requires C# 11 or later, but this project uses C# {displayVersion}; set LangVersion to 11 or later");
+        await Assert.That(diagnostic.Location).IsEqualTo(Location.None);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments(LanguageVersion.CSharp11)]
+    [Arguments(LanguageVersion.CSharp12)]
+    [Arguments(LanguageVersion.Latest)]
+    [Arguments(LanguageVersion.Preview)]
+    public async Task Initialize_LanguageVersionAtOrAboveFloor_GeneratesAndRenders(LanguageVersion languageVersion)
+    {
+        var compilation = GeneratorTestHelper.CreateCompilation(languageVersion: languageVersion);
+
+        var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([RenderingTestHelper.Template("Hello [[ model ]]")], languageVersion: languageVersion));
+
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(result.RunResult.GeneratedTrees.Select(tree => Path.GetFileName(tree.FilePath))).DoesNotContain("Utf8Template.g.cs");
-        await Assert.That(writer.ToString()).IsEqualTo("Hello World");
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        await AssertRenders(result.Compilation, "Consumer.Example", "Hello &lt;value&gt;");
+    }
+
+    [Test]
+    public async Task Initialize_LanguageVersionAndBaseAccessModifierInvalid_ReportsBoth()
+    {
+        var options = new TestAnalyzerConfigOptionsProvider([new KeyValuePair<string, string>(_baseAccessModifierKey, "private")]);
+        var compilation = GeneratorTestHelper.CreateCompilation(languageVersion: LanguageVersion.CSharp10);
+        var driver = GeneratorTestHelper.CreateDriver([RenderingTestHelper.Template("ignored")], options, LanguageVersion.CSharp10);
+
+        var result = GeneratorTestHelper.Run(compilation, driver).RunResult;
+
+        await Assert.That(result.Diagnostics.Select(diagnostic => diagnostic.Id)).IsEquivalentTo(new[] { "SLAP010", "SLAP009" });
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(0);
     }
 
     [Test]
@@ -76,7 +107,7 @@ public sealed partial class TemplateGeneratorTests
         // The directive section ends at the body, so that's where the missing directive is reported
         await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan("Templates/example.html",
             new LinePosition(2, 0), new LinePosition(2, 5)));
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(2);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
     }
 
     [Test]
@@ -85,7 +116,7 @@ public sealed partial class TemplateGeneratorTests
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText("#generate Text\r\nHello")).RunResult;
 
         await Assert.That(string.Join(",", result.Diagnostics.Select(diagnostic => diagnostic.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(2);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
     }
 
     [Test]
@@ -119,6 +150,6 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(diagnostic.GetMessage()).IsEqualTo(
             $"Template file '{path}' has no directives; a file added with an AnglePlate Include must start with a directive such as '#type MyTemplate'");
         await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(path, new LinePosition(0, 0), new LinePosition(0, firstLineLength)));
-        await Assert.That(explicitFile.GeneratedTrees.Length).IsEqualTo(2);
+        await Assert.That(explicitFile.GeneratedTrees.Length).IsEqualTo(3);
     }
 }

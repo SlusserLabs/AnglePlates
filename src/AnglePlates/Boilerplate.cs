@@ -182,6 +182,8 @@ internal static class Boilerplate
         {
             // Cap requests at 32K characters; custom pools may return larger arrays
             private const int _maxRental = 32 * 1024;
+            // RenderAsync flushes at a check once this many bytes are waiting in the pipe
+            private const int _flushThreshold = 16 * 1024;
             private readonly TemplateOptions _options;
 
             /// <summary>
@@ -207,17 +209,19 @@ internal static class Boilerplate
             public abstract void Render(TModel model, global::System.Buffers.IBufferWriter<byte> writer);
 
             /// <summary>
-            /// Renders the template to a <see cref="global::System.IO.Pipelines.PipeWriter" />.
+            /// Renders the template to a <see cref="global::System.IO.Pipelines.PipeWriter" />, flushing it as the output grows.
             /// </summary>
             /// <param name="model">The data model to render.</param>
             /// <param name="writer">The <see cref="global::System.IO.Pipelines.PipeWriter" /> to render the template to.</param>
             /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-            /// <returns>The result of flushing the writer.</returns>
-            public global::System.Threading.Tasks.ValueTask<global::System.IO.Pipelines.FlushResult> RenderAsync(TModel model, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken = default)
-            {
-                Render(model, writer);
-                return writer.FlushAsync(cancellationToken);
-            }
+            /// <remarks>
+            /// The render checks for cancellation, and flushes when enough output is waiting, at the first write after each C# block.
+            /// It flushes once more at the end.
+            /// </remarks>
+            /// <exception cref="global::System.OperationCanceledException">
+            /// The <paramref name="cancellationToken" /> was canceled, or a flush reported that the reader completed or the flush was canceled.
+            /// </exception>
+            public abstract global::System.Threading.Tasks.ValueTask RenderAsync(TModel model, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken = default);
 
             /// <summary>
             /// Encodes the specified <paramref name="value" /> and writes it to the output.
@@ -292,6 +296,64 @@ internal static class Boilerplate
                 {
                     global::System.Text.EncodingExtensions.GetBytes(global::System.Text.Encoding.UTF8, global::System.MemoryExtensions.AsSpan(value), writer);
                 }
+            }
+
+            /// <summary>
+            /// Writes the specified UTF-8 <paramref name="value" />, then flushes if enough output is waiting.
+            /// </summary>
+            /// <param name="value">The UTF-8 bytes to write.</param>
+            /// <param name="writer">The template writer.</param>
+            /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+            protected global::System.Threading.Tasks.ValueTask WriteAsync(global::System.ReadOnlySpan<byte> value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+            {
+                global::System.Buffers.BuffersExtensions.Write(writer, value);
+                return FlushIfNeededAsync(writer, cancellationToken);
+            }
+
+            /// <summary>
+            /// Encodes and writes the specified <paramref name="value" />, then flushes if enough output is waiting.
+            /// </summary>
+            /// <param name="value">The string value to write.</param>
+            /// <param name="writer">The template writer.</param>
+            /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+            protected global::System.Threading.Tasks.ValueTask WriteAsync(string? value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+            {
+                Write(value, writer);
+                return FlushIfNeededAsync(writer, cancellationToken);
+            }
+
+            /// <summary>
+            /// Flushes the <paramref name="writer" /> and stops the render if the reader completed or the flush was canceled.
+            /// </summary>
+            /// <param name="writer">The template writer.</param>
+            /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+            protected static async global::System.Threading.Tasks.ValueTask FlushAsync(global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+            {
+                global::System.IO.Pipelines.FlushResult result = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+
+                // Generated code can't check a result after every write, so an exception unwinds nested C# blocks and child templates
+                if (result.IsCanceled)
+                {
+                    throw new global::System.OperationCanceledException("The template stopped rendering because a flush was canceled.");
+                }
+
+                if (result.IsCompleted)
+                {
+                    throw new global::System.OperationCanceledException("The template stopped rendering because the pipe reader completed.");
+                }
+            }
+
+            // Checks for cancellation on every call and flushes only when enough output is waiting, so most writes don't suspend.
+            // A writer that can't report its unflushed bytes flushes every time.
+            private static global::System.Threading.Tasks.ValueTask FlushIfNeededAsync(global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (writer.CanGetUnflushedBytes && writer.UnflushedBytes < _flushThreshold)
+                {
+                    return default;
+                }
+
+                return FlushAsync(writer, cancellationToken);
             }
         }
         """;

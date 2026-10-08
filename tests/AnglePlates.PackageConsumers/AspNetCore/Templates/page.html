@@ -1,0 +1,10 @@
+#type Page
+#model AspNetCore.PageModel
+#namespace AspNetCore.Templates
+#generate Utf8
+<h1>[[ model.Title ]]</h1>
+<ul>
+[% foreach (var row in model.Rows) { -%]
+<li>[[ row ]]</li>
+[% } -%]
+</ul>

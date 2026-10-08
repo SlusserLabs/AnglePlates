@@ -39,13 +39,33 @@ internal partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf
         global::System.Buffers.BuffersExtensions.Write(writer, "[ordinary] "u8);
 
 #line (5, 15) - (5, 19) 16 "Templates/example.html"
-        Write((model) is { } __anglePlatesValue5
-#line (5, 15) - (5, 19) 143 "Templates/example.html"
-            ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+        Write((model)
+#line (5, 15) - (5, 19) 170 "Templates/example.html"
+            is { } __anglePlatesValue5 ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
 #line default
 
         global::System.Buffers.BuffersExtensions.Write(writer, "\r\na"u8);
 
         global::System.Buffers.BuffersExtensions.Write(writer, "b"u8);
+    }
+
+    /// <inheritdoc />
+    public override async global::System.Threading.Tasks.ValueTask RenderAsync(string model, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken = default)
+    {
+        string Model = model; // Allows alternate casing
+
+        global::System.Buffers.BuffersExtensions.Write(writer, "[ordinary] "u8);
+
+#line (5, 15) - (5, 19) 16 "Templates/example.html"
+        Write((model)
+#line (5, 15) - (5, 19) 170 "Templates/example.html"
+            is { } __anglePlatesValue5 ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+#line default
+
+        global::System.Buffers.BuffersExtensions.Write(writer, "\r\na"u8);
+
+        global::System.Buffers.BuffersExtensions.Write(writer, "b"u8);
+
+        await FlushAsync(writer, cancellationToken).ConfigureAwait(false);
     }
 }

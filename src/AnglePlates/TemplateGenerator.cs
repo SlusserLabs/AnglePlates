@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 
@@ -31,6 +32,10 @@ public class TemplateGenerator : IIncrementalGenerator
         var baseAccessModifier = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
             GeneratorSetting.ReadChoice(
                 options.GlobalOptions, _baseAccessModifierProperty, _defaultAccessModifier, TemplateTranspilerOptions.ExpectedAccessModifier, "public", "internal"));
+
+        // Below C# 11, generated code would fail with a wall of errors inside generated files, so SLAP010 replaces them
+        var languageVersion = context.ParseOptionsProvider.Select(static (options, cancellationToken) => ((CSharpParseOptions)options).LanguageVersion);
+        var settings = baseAccessModifier.Combine(languageVersion);
 
         var projectDir = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
             options.GlobalOptions.TryGetValue(_projectDirKey, out var value) ? value : string.Empty);
@@ -61,12 +66,6 @@ public class TemplateGenerator : IIncrementalGenerator
             .WithTrackingName("TemplateResults");
         var allResults = templateResults.Collect();
 
-        // Only the UTF-8 base class uses System.IO.Pipelines, so text-only projects never need it. This stays cached
-        // until the answer changes, so ordinary template edits don't touch the support types.
-        var needsUtf8 = allResults
-            .Select(static (results, cancellationToken) => results.Any(result => result.Sources.Any(source => source.Target == GenerationTarget.Utf8)))
-            .WithTrackingName("NeedsUtf8");
-
         // Identical templates share a hint name, so they're numbered together below. This is empty in almost every
         // project and stays cached, so the per-template output can skip the shared names without depending on the others.
         var duplicates = allResults
@@ -74,31 +73,37 @@ public class TemplateGenerator : IIncrementalGenerator
             .WithTrackingName("DuplicateTemplates");
         var duplicatePrefixes = duplicates.Select(static (duplicate, cancellationToken) => duplicate.Prefixes);
 
-        // 5. Generate the support types. A class with the wrong accessibility isn't a safe fallback, so an invalid
-        // setting generates nothing at all.
-        context.RegisterSourceOutput(baseAccessModifier.Combine(needsUtf8), static (ctx, data) =>
+        // 5. Generate the support types. Trimming removes the ones an app doesn't use. A class with the wrong accessibility
+        // isn't a safe fallback, and code for an older C# version can't compile, so either problem generates nothing at all.
+        context.RegisterSourceOutput(settings, static (ctx, data) =>
         {
-            var (accessModifier, utf8) = data;
+            var (accessModifier, langVersion) = data;
+            if (langVersion < LanguageVersion.CSharp11)
+            {
+                ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedLanguageVersion, Location.None, langVersion.ToDisplayString()));
+            }
+
             if (!accessModifier.IsValid)
             {
                 ctx.ReportDiagnostic(accessModifier.CreateDiagnostic());
+            }
+
+            if (!CanGenerate(data))
+            {
                 return;
             }
 
             ctx.AddSource("TemplateOptions.g.cs", Boilerplate.TemplateOptions(accessModifier.Value));
             ctx.AddSource("TextTemplate.g.cs", Boilerplate.TextTemplate(accessModifier.Value));
-            if (utf8)
-            {
-                ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier.Value));
-            }
+            ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier.Value));
         });
 
         // 6. Report each template's diagnostics and add its sources on their own, so the driver keeps the generated trees
         // of templates that didn't change
-        context.RegisterSourceOutput(templateResults.Combine(duplicatePrefixes).Combine(baseAccessModifier), static (ctx, data) =>
+        context.RegisterSourceOutput(templateResults.Combine(duplicatePrefixes).Combine(settings), static (ctx, data) =>
         {
-            var ((result, sharedPrefixes), accessModifier) = data;
-            if (!accessModifier.IsValid)
+            var ((result, sharedPrefixes), generatorSettings) = data;
+            if (!CanGenerate(generatorSettings))
             {
                 return;
             }
@@ -118,10 +123,10 @@ public class TemplateGenerator : IIncrementalGenerator
         });
 
         // 7. Number the sources of identical templates, which are already sorted so the numbers don't depend on file order
-        context.RegisterSourceOutput(duplicates.Combine(baseAccessModifier), static (ctx, data) =>
+        context.RegisterSourceOutput(duplicates.Combine(settings), static (ctx, data) =>
         {
-            var (duplicate, accessModifier) = data;
-            if (!accessModifier.IsValid)
+            var (duplicate, generatorSettings) = data;
+            if (!CanGenerate(generatorSettings))
             {
                 return;
             }
@@ -132,6 +137,12 @@ public class TemplateGenerator : IIncrementalGenerator
                 ctx.AddSource(CreateHintName(source.HintPrefix, hintNameCounts), source.Source);
             }
         });
+    }
+
+    // The support types report why generation stopped; the template outputs only skip their sources
+    private static bool CanGenerate((GeneratorSetting AccessModifier, LanguageVersion LanguageVersion) settings)
+    {
+        return settings.AccessModifier.IsValid && settings.LanguageVersion >= LanguageVersion.CSharp11;
     }
 
     // Finds the sources whose hint names collide, in the order that numbers them
@@ -223,7 +234,7 @@ public class TemplateGenerator : IIncrementalGenerator
             {
                 var source = TemplateTranspiler.Transpile(
                     template.RelativePath, template.Path, lines, transpilerOptions, target, template.Content.AsSpan(), parseResult.Tokens);
-                sources.Add(new GeneratedTemplate(target, CreateHintPrefix(template.RelativePath, transpilerOptions, target), source));
+                sources.Add(new GeneratedTemplate(CreateHintPrefix(template.RelativePath, transpilerOptions, target), source));
             }
         }
 
@@ -320,14 +331,11 @@ public class TemplateGenerator : IIncrementalGenerator
 
     private sealed record GeneratedTemplate
     {
-        public GeneratedTemplate(GenerationTarget target, string hintPrefix, string source)
+        public GeneratedTemplate(string hintPrefix, string source)
         {
-            Target = target;
             HintPrefix = hintPrefix;
             Source = source;
         }
-
-        public GenerationTarget Target { get; }
 
         public string HintPrefix { get; }
 

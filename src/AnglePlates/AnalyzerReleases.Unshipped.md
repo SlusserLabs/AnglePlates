@@ -9,6 +9,9 @@
 ; Breaking: only AdditionalFiles added through AnglePlate items are templates; other AdditionalFiles are ignored even when they start with #
 ; Breaking: a file is a template only when it starts with a known directive; other files from the default Templates folder are skipped, and explicit AnglePlate items report SLAP008
 ; Breaking: AnglePlateBaseAccessModifier accepts only public or internal, case-insensitively, and reports SLAP009 otherwise
+; Breaking: a project below C# 11 reports SLAP010 and generates nothing
+; Breaking: every project gets the TemplateOptions, TextTemplate, and Utf8Template support types, whatever its templates generate
+; Breaking: Utf8Template.RenderAsync returns ValueTask instead of ValueTask<FlushResult>, flushes while it renders, and throws OperationCanceledException when a flush reports a completed reader or a canceled flush
 
 ### New Rules
 
@@ -23,3 +26,4 @@ SLAP006 | SlusserLabs.AnglePlates | Error | Duplicate directive
 SLAP007 | SlusserLabs.AnglePlates | Error | Invalid directive value
 SLAP008 | SlusserLabs.AnglePlates | Error | Template has no directives
 SLAP009 | SlusserLabs.AnglePlates | Error | Invalid AnglePlates MSBuild property
+SLAP010 | SlusserLabs.AnglePlates | Error | Unsupported C# language version

@@ -18,6 +18,9 @@
   <Folder Name="/samples/">
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/AnglePlates.Benchmarks/AnglePlates.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AnglePlates.Tests/AnglePlates.Tests.csproj" />
   </Folder>

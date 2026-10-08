@@ -13,6 +13,7 @@ internal static class DiagnosticDescriptors
     public const string InvalidDirectiveValueId = "SLAP007";
     public const string NoDirectivesId = "SLAP008";
     public const string InvalidMSBuildPropertyId = "SLAP009";
+    public const string UnsupportedLanguageVersionId = "SLAP010";
 
     private const string _category = "SlusserLabs.AnglePlates";
 
@@ -84,6 +85,14 @@ internal static class DiagnosticDescriptors
         InvalidMSBuildPropertyId,
         "Invalid AnglePlates MSBuild property",
         "MSBuild property '{0}' has invalid value '{1}'; expected {2}",
+        _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnsupportedLanguageVersion = new(
+        UnsupportedLanguageVersionId,
+        "Unsupported C# language version",
+        "AnglePlates requires C# 11 or later, but this project uses C# {0}; set LangVersion to 11 or later",
         _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

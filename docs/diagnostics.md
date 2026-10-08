@@ -19,10 +19,13 @@ Template diagnostics point at a line and column in the original template, whethe
 | `SLAP007` | A directive value is invalid: `#type` isn't an identifier, `#model` isn't a type name, `#namespace` or `#using` isn't a plain dotted name, `#access` isn't `public` or `internal`, or `#generate`, `#access`, or `#using` is blank. | The value, or the directive name when the value is blank. | Fix the value. The message says what's expected. |
 | `SLAP008` | An explicit template doesn't start with a known directive. | The first line of the file, or a zero-length span at the start when the file or its first line is empty. | Start the file with its directives, or narrow or `Remove` the `AnglePlate` item that matched it. |
 | `SLAP009` | A generator setting is invalid, such as an `AnglePlateBaseAccessModifier` other than `public` or `internal`. | None. The message names the MSBuild property and its value. | Fix the MSBuild property. The message says what's expected. |
+| `SLAP010` | The project compiles with a C# version below 11. | None. The message names the project's C# version. | Set `LangVersion` to 11 or later, or remove it so the .NET 10 SDK picks its default. |
 
 A template with an error doesn't generate a compiled template, but the project's other valid templates still do.
 
-`SLAP009` is the exception. An invalid generator setting stops generation for the whole project, support types included, because a class with the wrong accessibility isn't a safe fallback. The generator doesn't check templates until the setting is fixed.
+`SLAP009` and `SLAP010` are the exceptions. Each one stops generation for the whole project, support types included. A class with the wrong accessibility isn't a safe fallback, and code generated for an older C# version would bury the real problem under errors inside generated files. The generator doesn't check templates until the problem is fixed. When both apply, the build reports both.
+
+`SLAP010` is the only compatibility check. A project that targets a framework older than .NET 10 gets ordinary compiler errors about missing types instead of a diagnostic, the same as most source generators.
 
 ## Mistakes without a diagnostic
 
@@ -41,7 +44,7 @@ The prototype used different IDs and category `AnglePlates.Template`. If your di
 | `ANGLE002` | `SLAP002` |
 | `ANGLE003` | `SLAP003` |
 
-`SLAP004` to `SLAP009` are new. `SLAP001` to `SLAP003` and `SLAP005` used `Location.None` in the prototype and now point into the template.
+`SLAP004` to `SLAP010` are new. `SLAP001` to `SLAP003` and `SLAP005` used `Location.None` in the prototype and now point into the template.
 
 ## Release tracking
 

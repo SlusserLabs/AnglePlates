@@ -348,7 +348,7 @@ public sealed partial class TemplateGeneratorTests
     private static Diagnostic[] GenerateDiagnostics(string template)
     {
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
-        if (result.RunResult.GeneratedTrees.Length != 2)
+        if (result.RunResult.GeneratedTrees.Length != 3)
         {
             throw new InvalidOperationException("A template with directive errors should not generate.");
         }

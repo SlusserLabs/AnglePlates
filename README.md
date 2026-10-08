@@ -20,6 +20,7 @@ Templates are compiled into your project instead of shipped as separate files. T
 - [Advanced options](#advanced-options)
   - [Template locations](#template-locations)
   - [Public templates](#public-templates)
+- [AOT and trimming](#aot-and-trimming)
 - [Good to know](#good-to-know)
 - [Develop AnglePlates](#develop-angleplates)
 - [AI disclosure](#ai-disclosure)
@@ -44,9 +45,9 @@ AnglePlates is a development dependency, so `dotnet package add` marks the refer
 
 Without them, a project that references yours picks up the template discovery files but not the generator, and the files in its `Templates` folder become inputs that nothing reads.
 
-You don't need any other packages. Text templates only use what ships with .NET. UTF-8 templates add a `RenderAsync` method that writes to a `PipeWriter`, and `System.IO.Pipelines` has been part of the base framework since .NET 9. A project with only text templates never gets the UTF-8 base class, so it never touches Pipelines at all.
+AnglePlates needs .NET 10 or later and C# 11 or later. A .NET 10 project gets a newer C# version by default, so you only have to think about this if your project sets `LangVersion`. Set it below 11 and the build reports `SLAP010` instead of a wall of errors inside generated files. Target an older framework and you'll get ordinary compiler errors about missing types; AnglePlates doesn't check for that one.
 
-AnglePlates has been tested with .NET 10 and C# 11. UTF-8 compiled templates require C# 11 or later because they use UTF-8 string literals.
+You don't need any other packages. Everything the generated code uses ships with .NET 10, including `System.IO.Pipelines` for `RenderAsync`.
 
 ## Anatomy of a template
 
@@ -155,7 +156,7 @@ public partial class GreetingTextTemplate
 public partial class GreetingUtf8Template
 {
     public override void Render(GreetingModel model, IBufferWriter<byte> writer);
-    public ValueTask<FlushResult> RenderAsync(GreetingModel model, PipeWriter writer, CancellationToken cancellationToken = default);
+    public override ValueTask RenderAsync(GreetingModel model, PipeWriter writer, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -181,7 +182,7 @@ This writes `<h1>Hello, Ada &amp; Grace!</h1>` and the welcome paragraph to stan
 
 ### UTF-8 streaming
 
-Use the UTF-8 renderer, such as `GreetingUtf8Template`, when the destination expects bytes. An HTTP response is a common example. Passing the response's `PipeWriter` avoids creating and encoding an intermediate string. `RenderAsync` writes to the pipe synchronously, then flushes it asynchronously with the request's cancellation token.
+Use the UTF-8 renderer, such as `GreetingUtf8Template`, when the destination expects bytes. An HTTP response is a common example. Passing the response's `PipeWriter` to `RenderAsync` avoids creating and encoding an intermediate string, and it streams: a big page goes out while it's still rendering instead of piling up in the pipe.
 
 ```csharp
 using Microsoft.AspNetCore.Builder;
@@ -209,6 +210,12 @@ app.Run();
 ```
 
 ASP.NET Core owns the response writer's lifetime, so the endpoint does not dispose it.
+
+At the first write after each C# block, `RenderAsync` checks the cancellation token and flushes if 16 KB or more are waiting in the pipe. It flushes once more at the end. Loops live in C# blocks, so every loop iteration that writes something gets a check, and a large page applies backpressure as it goes. A template with no C# blocks flushes only at the end. Most checks find less than 16 KB waiting and carry on without awaiting anything.
+
+If the token is canceled, the next check throws an `OperationCanceledException`. A client that disconnects shows up the same way, either through the request's canceled token or because a flush reports that the reader has completed. Either way, the render stops at the next check instead of rendering a page nobody will read. A flush canceled with `CancelPendingFlush` also throws `OperationCanceledException`. The message says which one happened.
+
+`Render` works with a `PipeWriter` too, because a `PipeWriter` is an `IBufferWriter<byte>`. It never flushes, so the whole page waits in the pipe until you flush it yourself.
 
 ### Encoding and options
 
@@ -271,7 +278,7 @@ Rendering an order with two fish and chips and a tea writes:
 
 The child writes straight to the parent's `writer`, so nothing gets buffered along the way. The trim markers keep the loop from adding blank lines.
 
-Both templates use `#generate Text` because `writer` is a `TextWriter` in a text template and an `IBufferWriter<byte>` in a UTF-8 template. For UTF-8 output, generate both with `#generate Utf8` and call `OrderLineUtf8Template` instead. `Default` uses the default options, so if you render the parent with custom `TemplateOptions`, pass them along with `new OrderLineTextTemplate(Options)`.
+Both templates use `#generate Text` because `writer` is a `TextWriter` in a text template and an `IBufferWriter<byte>` in a UTF-8 template. For UTF-8 output, generate both with `#generate Utf8` and call `OrderLineUtf8Template` instead. Keep calling the child's `Render`, even from the parent's `RenderAsync`, where `writer` is a `PipeWriter` and still an `IBufferWriter<byte>`. The child doesn't flush; the parent's next flush check picks up its output. In the order above, that's the `</ul>` after the loop, because the loop body is nothing but C# blocks. If a loop like that renders a huge amount, put a literal in the loop body, even a line break, so each iteration gets a flush check. `Default` uses the default options, so if you render the parent with custom `TemplateOptions`, pass them along with `new OrderLineTextTemplate(Options)`.
 
 ## Advanced options
 
@@ -310,16 +317,28 @@ The support types always use the `SlusserLabs.AnglePlates` namespace, so a proje
 
 The property takes `public` or `internal`, in any case and with or without surrounding spaces. Anything else reports `SLAP009`, and AnglePlates generates nothing for the project until you fix it. I'd rather fail the build than guess at the accessibility of your base classes.
 
+## AOT and trimming
+
+Compiled templates are plain C# with no reflection, so they publish with Native AOT and trimming. The package tests publish a native app with the AOT analyzers on and every warning treated as an error. It builds without a single IL warning and writes the same bytes as the JIT build. That app covers text and UTF-8 templates, `Render` and `RenderAsync`, public and internal templates, a child template rendered from a C# block, and C# variables that are enums, `[Flags]` enums, nullable value types, numbers, dates, and an object whose `ToString` returns `null`. So far the native publish has run on Linux x64.
+
+Native AOT already trims the whole app, and any support type your app doesn't use gets trimmed away with everything else. [Performance](docs/performance.md) records how much the templates add to the native app's size.
+
+Two things are up to you:
+
+- Template C# is your code. A C# block that uses reflection, `Type.GetType`, or compiles a `System.Linq.Expressions` tree gets the same AOT and trimming warnings it would get in a hand-written class, and those warnings are right.
+- A `dynamic` C# variable, or a template with `#model dynamic`, converts its value through the C# runtime binder, which doesn't work with Native AOT. It's still a supported input, and you'll get the framework's own `IL2026` or `IL3050` warnings. AnglePlates doesn't suppress them.
+
 ## Good to know
 
 - Templates are trusted C# code. Everything in a C# variable or C# block compiles into your application and runs with the same permissions as the rest of your code. HTML encoding protects the values a template writes, not your application from the template, so only compile templates you'd trust as source files.
 - Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling after the first line.
 - A misspelled first line leaves the file with no directives at all. In the `Templates` folder, that file is skipped without an error, just like a `README.md` would be. A file you added with an `Include` reports `SLAP008` instead.
 - A closing delimiter ends its block even inside a C# string or comment, so keep `]]` out of C# variables and `%]` out of C# blocks.
-- Compiler errors in C# variables and C# blocks point at the template's path, line, and column, because the generated code maps them back with `#line`. An error in the code AnglePlates wraps around a C# variable, such as a `Span<char>` value it can't convert to a string, points at the whole C# variable.
-- The generated render method already declares `model`, `Model`, `writer`, and a `__anglePlatesValue<N>` variable for each C# variable, so don't reuse those names for locals in your C# blocks.
+- Compiler errors in C# variables and C# blocks point at the template's path, line, and column, because the generated code maps them back with `#line`. An error in the code AnglePlates wraps around a C# variable, such as a `Span<char>` value it can't convert to a string, points at the whole C# variable. A UTF-8 template compiles your C# twice, once in `Render` and once in `RenderAsync`, so you may see the same error twice at the same spot.
+- The generated render methods already declare `model`, `Model`, `writer`, and a `__anglePlatesValue<N>` variable for each C# variable, and `RenderAsync` adds `cancellationToken`, so don't reuse those names for locals in your C# blocks.
+- `RenderAsync` is an async method, and your C# blocks go into it, so UTF-8 templates pick up the usual async rules. With C# 11 or 12, a ref struct local such as a `Span<char>` in a C# block reports `CS9058`. From C# 13, it's fine unless the local is still in use after a flush check, which reports `CS4007`. A `lock` or `unsafe` block that contains a write right after a C# block reports `CS1996` or `CS4004`, because that write awaits. Text templates have none of these rules, so if you need one of these constructs, use `#generate Text`.
 - Two templates that generate the same class name in the same namespace cause C# compiler errors, the same as two hand-written classes would.
-- Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, or `#using`. An explicit file with no directives reports `SLAP008`. Each error stops that template from generating, but your other templates still generate. An invalid `AnglePlateBaseAccessModifier` is the exception: it reports `SLAP009` and stops everything. See [diagnostics](docs/diagnostics.md).
+- Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, or `#using`. An explicit file with no directives reports `SLAP008`. Each error stops that template from generating, but your other templates still generate. An invalid `AnglePlateBaseAccessModifier` and a C# version below 11 are the exceptions: they report `SLAP009` and `SLAP010` and stop everything. See [diagnostics](docs/diagnostics.md).
 
 For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
 

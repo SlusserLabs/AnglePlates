@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using SlusserLabs.AnglePlates.Tests.Infrastructure;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
@@ -32,7 +33,6 @@ public sealed partial class TemplateGeneratorTests
             .Select(output => output.Reason).ToArray();
 
         await Assert.That(StepReasons(after, "TemplateResults")).IsEquivalentTo(new[] { IncrementalStepRunReason.Cached, IncrementalStepRunReason.Modified });
-        await Assert.That(StepReasons(after, "NeedsUtf8")).IsEquivalentTo(new[] { IncrementalStepRunReason.Unchanged });
         await Assert.That(outputReasons.Count(reason => reason == IncrementalStepRunReason.Modified)).IsEqualTo(1);
         await Assert.That(first.GetTextCount).IsEqualTo(1);
         await Assert.That(edited.GetTextCount).IsEqualTo(1);
@@ -110,6 +110,23 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
+    public async Task Initialize_LanguageVersionRaisedToFloor_GeneratesFromCachedTemplates()
+    {
+        var template = RenderingTestHelper.Template("version");
+        var before = GeneratorTestHelper.Run(
+            GeneratorTestHelper.CreateCompilation(languageVersion: LanguageVersion.CSharp10), GeneratorTestHelper.CreateDriver([template], languageVersion: LanguageVersion.CSharp10));
+
+        var after = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), before.Driver.WithUpdatedParseOptions(new CSharpParseOptions(LanguageVersion.CSharp11)));
+
+        await Assert.That(before.RunResult.Diagnostics.Select(diagnostic => diagnostic.Id)).IsEquivalentTo(new[] { "SLAP010" });
+        await Assert.That(before.RunResult.GeneratedTrees.Length).IsEqualTo(0);
+        await Assert.That(StepReasons(after, "TemplateResults")).IsEquivalentTo(new[] { IncrementalStepRunReason.Cached });
+        await Assert.That(after.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(template.GetTextCount).IsEqualTo(1);
+        await AssertRenders(after.Compilation, "Consumer.Example", "version");
+    }
+
+    [Test]
     public async Task Initialize_OtherTemplateEdited_ReportsCachedDiagnosticsAgain()
     {
         var broken = new TemplateAdditionalText(_requiredDirectives + "a\r\n[[ model", "Templates/broken.html");
@@ -153,7 +170,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_GenerationTargetEdited_AddsAndRemovesUtf8BaseClass()
+    public async Task Initialize_GenerationTargetEdited_KeepsSupportTypesCached()
     {
         var textOnly = new TemplateAdditionalText(_requiredDirectives + "#generate Text\r\ntarget");
         var both = new TemplateAdditionalText(_requiredDirectives + "target");
@@ -161,24 +178,19 @@ public sealed partial class TemplateGeneratorTests
         var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([textOnly]));
 
         var widened = GeneratorTestHelper.Run(compilation, before.Driver.ReplaceAdditionalText(textOnly, both));
-        var narrowed = GeneratorTestHelper.Run(compilation, widened.Driver.ReplaceAdditionalText(both, textOnly));
 
-        await Assert.That(SupportHintNames(before)).IsEquivalentTo(new[] { "TemplateOptions.g.cs", "TextTemplate.g.cs" });
-        await Assert.That(StepReasons(widened, "NeedsUtf8")).IsEquivalentTo(new[] { IncrementalStepRunReason.Modified });
-        await Assert.That(SupportHintNames(widened)).IsEquivalentTo(new[] { "TemplateOptions.g.cs", "TextTemplate.g.cs", "Utf8Template.g.cs" });
+        // The support types depend only on the settings, so editing a template never regenerates them
+        foreach (var hintName in new[] { "TemplateOptions.g.cs", "TextTemplate.g.cs", "Utf8Template.g.cs" })
+        {
+            await Assert.That(ReferenceEquals(GeneratedSource(widened, hintName).SourceText, GeneratedSource(before, hintName).SourceText)).IsTrue();
+        }
+
         await AssertRenders(widened.Compilation, "Consumer.Example", "target");
-        await Assert.That(SupportHintNames(narrowed)).IsEquivalentTo(new[] { "TemplateOptions.g.cs", "TextTemplate.g.cs" });
     }
 
     private static IncrementalStepRunReason[] StepReasons(GeneratorTestResult result, string stepName)
     {
         return result.RunResult.Results.Single().TrackedSteps[stepName].SelectMany(step => step.Outputs).Select(output => output.Reason).ToArray();
-    }
-
-    private static string[] SupportHintNames(GeneratorTestResult result)
-    {
-        // Template classes add a hash between the type and ".g.cs"; support types don't
-        return result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName).Where(name => name.Split('.').Length == 3).ToArray();
     }
 
     private static GeneratedSourceResult GeneratedSource(GeneratorTestResult result, string hintName)

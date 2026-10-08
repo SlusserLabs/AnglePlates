@@ -169,18 +169,18 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("[[ null ]]", 38, 14, 6, "CS8117", "Invalid operand for pattern match; value required, but found '<null>'.", 5, 3, 4)]
-    [Arguments("[[ default ]]", 38, 15, 7, "CS8716", "There is no target type for the default literal.", 5, 3, 7)]
-    [Arguments("[[ default(System.Span<char>) ]]", 40, 46, 19, "CS1503", "Argument 1: cannot convert from 'System.Span<char>' to 'object?'", 5, 3, 26)]
-    [Arguments("[[ 1, 2 ]]", 38, 37, 8, "CS1501", "No overload for method 'ToString' takes 3 arguments", 5, 3, 4)]
-    [Arguments("<p>[% var count = 1;\r\n  count += missing; %]</p>", 41, 11, 7, "CS0103", "The name 'missing' does not exist in the current context", 6, 11, 7)]
+    [Arguments("[[ null ]]", 38, 50, 14, 6, "CS8117", "Invalid operand for pattern match; value required, but found '<null>'.", 5, 3, 4)]
+    [Arguments("[[ default ]]", 38, 50, 15, 7, "CS8716", "There is no target type for the default literal.", 5, 3, 7)]
+    [Arguments("[[ 1, 2 ]]", 38, 48, 37, 8, "CS1501", "No overload for method 'ToString' takes 3 arguments", 5, 3, 4)]
+    [Arguments("<p>[% var count = 1;\r\n  count += missing; %]</p>", 41, 56, 11, 7, "CS0103", "The name 'missing' does not exist in the current context", 6, 11, 7)]
     public async Task Initialize_InvalidCSharp_ReportsCompilerErrorAtTemplate(
-        string body, int line, int column, int length, string id, string message, int templateLine, int templateColumn, int templateLength)
+        string body, int line, int asyncLine, int column, int length, string id, string message, int templateLine, int templateColumn, int templateLength)
     {
         // Generate one renderer at a time because the compiler doesn't report errors from separate trees in a stable order.
         // Directives are tokens 0 to 4, so the body starts at token 5 and the Write call is the first statement after Model.
         // Every variable error maps to the whole expression on the template's sixth line, including errors in generated code around it,
         // and a block's second line keeps its template columns, so an undefined name there maps to the seventh line.
+        // A UTF-8 class reports the same error again from RenderAsync, at the same template location.
         var mapped = new LinePositionSpan(new LinePosition(templateLine, templateColumn), new LinePosition(templateLine, templateColumn + templateLength));
         foreach (var target in new[] { "Text", "Utf8" })
         {
@@ -188,11 +188,41 @@ public sealed partial class TemplateGeneratorTests
             var compilation = GeneratorTestHelper.CreateCompilation();
             var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
             var tree = TemplateTrees(driver).Single();
+            var expected = target == "Text"
+                ? new[] { CompilerError(tree, line, column, length, id, message, mapped) }
+                : new[] { CompilerError(tree, line, column, length, id, message, mapped), CompilerError(tree, asyncLine, column, length, id, message, mapped) };
 
-            var result = GeneratorTestHelper.Run(compilation, driver, [CompilerError(tree, line, column, length, id, message, mapped)]);
+            var result = GeneratorTestHelper.Run(compilation, driver, expected);
 
-            // Text output skips the UTF-8 base class
-            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(target == "Text" ? 3 : 4);
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+        }
+    }
+
+    [Test]
+    public async Task Initialize_RefStructCSharpVariable_ReportsErrorsAtWholeVariable()
+    {
+        // The value can't be converted in either method, and RenderAsync can't hold it in a pattern variable before C# 13
+        var mapped = new LinePositionSpan(new LinePosition(5, 3), new LinePosition(5, 29));
+        const string conversionMessage = "Argument 1: cannot convert from 'System.Span<char>' to 'object?'";
+        const string asyncLocalMessage = "Feature 'ref and unsafe in async and iterator methods' is not available in C# 11.0. Please use language version 13.0 or greater.";
+        foreach (var target in new[] { "Text", "Utf8" })
+        {
+            var template = RenderingTestHelper.Template($"#generate {target}\r\n[[ default(System.Span<char>) ]]");
+            var compilation = GeneratorTestHelper.CreateCompilation();
+            var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
+            var tree = TemplateTrees(driver).Single();
+            var expected = target == "Text"
+                ? new[] { CompilerError(tree, 40, 73, 19, "CS1503", conversionMessage, mapped) }
+                : new[]
+                {
+                    CompilerError(tree, 40, 73, 19, "CS1503", conversionMessage, mapped),
+                    CompilerError(tree, 52, 19, 19, "CS9058", asyncLocalMessage, mapped),
+                    CompilerError(tree, 52, 73, 19, "CS1503", conversionMessage, mapped)
+                };
+
+            var result = GeneratorTestHelper.Run(compilation, driver, expected);
+
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
         }
     }
 
@@ -227,9 +257,9 @@ public sealed partial class TemplateGeneratorTests
         };
         var result = GeneratorTestHelper.Run(compilation, driver, expected);
 
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName).Distinct().Count()).IsEqualTo(4);
+        await Assert.That(result.RunResult.Results.Single().GeneratedSources.Select(source => source.HintName).Distinct().Count()).IsEqualTo(5);
         // Sources follow the file order, but each hint name must name the same source either way
         var reversedDriver = GeneratorTestHelper.CreateDriver([second, first]).RunGenerators(compilation);
         await Assert.That(SourcesByHintName(reversedDriver.GetRunResult())).IsEqualTo(SourcesByHintName(result.RunResult));

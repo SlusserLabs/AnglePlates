@@ -33,6 +33,7 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Discovered template | A possible template that comes only from the default item. If it doesn't start with a known directive, the generator skips it without a diagnostic. |
 | Explicit template | A possible template that the project adds with its own `AnglePlate` `Include`, wildcards included. If it doesn't start with a known directive, the generator reports `SLAP008`. A file that's both discovered and explicit counts as explicit. Say "discovered" and "explicit," not "automatic" and "manual." |
 | Generator setting | A compiler-visible MSBuild property that the generator reads, such as `AnglePlateBaseAccessModifier`. A missing or empty value uses the default, and an invalid value reports `SLAP009`. |
+| Compatibility floor | The oldest consumer framework and C# version AnglePlates supports: .NET 10 and C# 11. The generator reports `SLAP010` below C# 11; an older framework fails with ordinary compiler errors. |
 
 ## Generated code
 
@@ -41,6 +42,7 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Generation | The compile-time process that turns a template into C# source. |
 | Rendering | The runtime process that runs a compiled template and writes its output. |
 | Compiled template | The generated C# class that application code calls to render a template. |
-| Support types | The generated `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` types that compiled templates share. `Utf8Template<TModel>` is generated only when a template generates a UTF-8 class. |
+| Support types | The generated `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` types that compiled templates share. Every project that uses AnglePlates gets all three; trimming removes the ones an app doesn't use. |
+| Flush check | The point in `RenderAsync` where a UTF-8 compiled template checks for cancellation and flushes the pipe if enough output is waiting. It's fused into the first write after each C# block, and every render ends with one unconditional flush. |
 | Transpiler | The internal generator component that emits the C# source for a text or UTF-8 compiled template. Use it only for the generator's internals; applications use compiled templates. |
 | Consumer | An application or library that references AnglePlates and compiles the generated source. |

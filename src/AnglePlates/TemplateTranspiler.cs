@@ -15,8 +15,11 @@ namespace SlusserLabs.AnglePlates;
 internal static class TemplateTranspiler
 {
     private const string _tabString = "    ";
-    private const string _variablePrefix = "Write((";
-    private const string _plainVariablePrefix = "Write(global::System.Convert.ToString(";
+    private const string _write = "Write(";
+    private const string _writeEnd = ", writer);";
+    private const string _flushingWrite = "await WriteAsync(";
+    private const string _flushingWriteEnd = ", writer, cancellationToken).ConfigureAwait(false);";
+    private const string _plainConversion = "global::System.Convert.ToString(";
 
     // Characters that end a line in C# source, including comments and preprocessor directives
     private static readonly char[] _lineBreaks = ['\r', '\n', '\u0085', '\u2028', '\u2029'];
@@ -51,13 +54,30 @@ internal static class TemplateTranspiler
         // template so compiler errors in template C# point at the template. The compiler reports a span that starts
         // before that column as the whole token. The end is 1-based and inclusive, which is the 0-based exclusive end.
         // Directives skip the indented writer like blank lines.
-        void WriteLineMapping(Token token, int prefixLength)
+        void WriteLineMapping(Token token, int prefixLength) => WriteSpanMapping(TextSpan.FromBounds(token.Start, token.End), prefixLength);
+
+        void WriteSpanMapping(TextSpan templateSpan, int prefixLength)
         {
             if (mapLines)
             {
-                var span = lines.GetLinePositionSpan(TextSpan.FromBounds(token.Start, token.End));
+                var span = lines.GetLinePositionSpan(templateSpan);
+                var (start, end) = (span.Start, span.End);
+
+                // An inclusive end can't be column 0, so a span that ends right after a line break ends on the line before it.
+                // A span of only line breaks ends one column after its start.
+                while (end.Character == 0 && end.Line > start.Line)
+                {
+                    var previous = lines[end.Line - 1];
+                    end = new LinePosition(end.Line - 1, previous.End - previous.Start);
+                }
+
+                if (end.Line == start.Line && end.Character <= start.Character)
+                {
+                    end = new LinePosition(start.Line, start.Character + 1);
+                }
+
                 int column = writer.Indent * _tabString.Length + prefixLength + 1;
-                source.WriteLine($"#line ({span.Start.Line + 1}, {span.Start.Character + 1}) - ({span.End.Line + 1}, {span.End.Character}) {column} \"{filePath}\"");
+                source.WriteLine($"#line ({start.Line + 1}, {start.Character + 1}) - ({end.Line + 1}, {end.Character}) {column} \"{filePath}\"");
             }
         }
 
@@ -109,125 +129,168 @@ internal static class TemplateTranspiler
         writer.WriteLine($"public static {typeName} Default {{ get; }} = new {typeName}();");
         WriteBlankLine();
 
-        writer.WriteLine("/// <inheritdoc />");
-        writer.WriteLine($"public override void Render({options.ModelType} model, {writerType} writer)");
-        writer.WriteLine("{");
-        writer.Indent++;
-        writer.WriteLine($"{options.ModelType} Model = model; // Allows alternate casing");
-
-        // Emit each template token in source order
-        for (int i = 0; i < tokens.Count; i++)
+        WriteRenderMethod(text, isAsync: false);
+        if (utf8)
         {
-            var token = tokens[i];
-            var (offset, length) = token.GetOffsetAndLength();
-            switch (token.Type)
-            {
-                case TokenType.Directive:
-                case TokenType.Comment:
-                    continue;
-
-                case TokenType.Literal:
-                    // Escaped openers split literal text into adjacent tokens, so write each run as one literal
-                    int runEnd = i + 1;
-                    while (runEnd < tokens.Count && tokens[runEnd].Type == TokenType.Literal)
-                    {
-                        runEnd++;
-                    }
-
-                    var literal = runEnd == i + 1 ? text.Slice(offset, length) : ConcatenateLiterals(text, tokens, i, runEnd).AsSpan();
-
-                    // Trim markers on neighboring blocks remove whitespace from the run's edges
-                    if (i > 0 && tokens[i - 1].TrimNext)
-                    {
-                        literal = literal.TrimStart(options.Whitespace.Span);
-                    }
-
-                    if (runEnd < tokens.Count && tokens[runEnd].TrimPrevious)
-                    {
-                        literal = literal.TrimEnd(options.Whitespace.Span);
-                    }
-
-                    i = runEnd - 1;
-                    if (literal.IsEmpty)
-                    {
-                        continue;
-                    }
-
-                    // UTF-8 literals use u8 strings, which the compiler stores as bytes in the assembly
-                    var quoted = SyntaxFactory.Literal(literal.ToString()).ToFullString();
-                    WriteBlankLine();
-                    writer.WriteLine(utf8 ? $"global::System.Buffers.BuffersExtensions.Write(writer, {quoted}u8);" : $"writer.Write({quoted});");
-                    break;
-
-                case TokenType.Variable:
-                    if (length == 0)
-                    {
-                        continue;
-                    }
-
-                    var variable = text.Slice(offset, length).ToString();
-                    WriteBlankLine();
-
-                    // Text that isn't one complete expression, such as a stray "[[1, 2]]", keeps the plain call so the compiler
-                    // still rejects it; the parentheses below would turn it into a tuple that renders
-                    if (SyntaxFactory.ParseExpression(variable).ContainsDiagnostics)
-                    {
-                        WriteLineMapping(token, _plainVariablePrefix.Length);
-                        writer.WriteLine($"{_plainVariablePrefix}{variable}, global::System.Globalization.CultureInfo.InvariantCulture), writer);");
-                        WriteDefaultLineMapping();
-                        break;
-                    }
-
-                    // Check for null before converting so every null value reaches NullVariable, not only strings.
-                    // The pattern variable evaluates the expression once, unwraps nullable value types, and needs
-                    // a per-token suffix because expression variables share the enclosing block's scope.
-                    var valueName = $"__anglePlatesValue{i}";
-                    var conversion = $"? global::System.Convert.ToString({valueName}, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);";
-                    WriteLineMapping(token, _variablePrefix.Length);
-                    writer.WriteLine($"{_variablePrefix}{variable}) is {{ }} {valueName}");
-
-                    // Errors in the conversion, such as a ref struct value that can't be converted, point at the whole
-                    // C# variable because the mapping's column is past the end of this line
-                    writer.Indent++;
-                    WriteLineMapping(token, conversion.Length);
-                    writer.WriteLine(conversion);
-                    writer.Indent--;
-                    WriteDefaultLineMapping();
-                    break;
-
-                case TokenType.Code:
-                    if (length == 0)
-                    {
-                        continue;
-                    }
-
-                    // Indent around braces as a best-effort guess; it only affects readability
-                    var code = text.Slice(offset, length).ToString();
-                    WriteBlankLine();
-                    if (code.IndexOf('}') >= 0)
-                    {
-                        writer.Indent--;
-                    }
-
-                    WriteLineMapping(token, 0);
-                    writer.WriteLine(code);
-                    WriteDefaultLineMapping();
-                    if (code.IndexOf('{') >= 0)
-                    {
-                        writer.Indent++;
-                    }
-
-                    break;
-            }
+            WriteBlankLine();
+            WriteRenderMethod(text, isAsync: true);
         }
 
-        // Close the Render method and the class
-        writer.Indent--;
-        writer.WriteLine("}");
+        // Close the class
         writer.Indent--;
         writer.WriteLine("}");
 
         return source.ToString();
+
+        // Render and RenderAsync come from the same walk over the tokens. RenderAsync differs in its signature, a final
+        // flush, and how the first write after each C# block is spelled: that write also checks for a flush, because
+        // loops and child templates live in C# blocks. The check is fused into the write so brace-less C# still sees
+        // one statement, and the writes between two C# blocks are fixed by the template, so they need no checks.
+        void WriteRenderMethod(ReadOnlySpan<char> text, bool isAsync)
+        {
+            int indent = writer.Indent;
+            writer.WriteLine("/// <inheritdoc />");
+            writer.WriteLine(isAsync
+                ? $"public override async global::System.Threading.Tasks.ValueTask RenderAsync({options.ModelType} model, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken = default)"
+                : $"public override void Render({options.ModelType} model, {writerType} writer)");
+            writer.WriteLine("{");
+            writer.Indent++;
+            writer.WriteLine($"{options.ModelType} Model = model; // Allows alternate casing");
+
+            // Emit each template token in source order
+            bool afterCode = false;
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                var token = tokens[i];
+                var (offset, length) = token.GetOffsetAndLength();
+                switch (token.Type)
+                {
+                    case TokenType.Directive:
+                    case TokenType.Comment:
+                        continue;
+
+                    case TokenType.Literal:
+                        // Escaped openers split literal text into adjacent tokens, so write each run as one literal
+                        int runEnd = i + 1;
+                        while (runEnd < tokens.Count && tokens[runEnd].Type == TokenType.Literal)
+                        {
+                            runEnd++;
+                        }
+
+                        var literal = runEnd == i + 1 ? text.Slice(offset, length) : ConcatenateLiterals(text, tokens, i, runEnd).AsSpan();
+
+                        // Trim markers on neighboring blocks remove whitespace from the run's edges
+                        if (i > 0 && tokens[i - 1].TrimNext)
+                        {
+                            literal = literal.TrimStart(options.Whitespace.Span);
+                        }
+
+                        if (runEnd < tokens.Count && tokens[runEnd].TrimPrevious)
+                        {
+                            literal = literal.TrimEnd(options.Whitespace.Span);
+                        }
+
+                        i = runEnd - 1;
+                        if (literal.IsEmpty)
+                        {
+                            continue;
+                        }
+
+                        // UTF-8 literals use u8 strings, which the compiler stores as bytes in the assembly
+                        var quoted = SyntaxFactory.Literal(literal.ToString()).ToFullString();
+                        WriteBlankLine();
+                        if (isAsync && afterCode)
+                        {
+                            // An await can't appear inside lock or unsafe, so errors anywhere on this line point at the whole literal
+                            var flushingWrite = $"{_flushingWrite}{quoted}u8{_flushingWriteEnd}";
+                            WriteSpanMapping(TextSpan.FromBounds(token.Start, tokens[i].End), flushingWrite.Length);
+                            writer.WriteLine(flushingWrite);
+                            WriteDefaultLineMapping();
+                        }
+                        else
+                        {
+                            writer.WriteLine(utf8 ? $"global::System.Buffers.BuffersExtensions.Write(writer, {quoted}u8);" : $"writer.Write({quoted});");
+                        }
+
+                        afterCode = false;
+                        break;
+
+                    case TokenType.Variable:
+                        if (length == 0)
+                        {
+                            continue;
+                        }
+
+                        var variable = text.Slice(offset, length).ToString();
+                        var (call, end) = isAsync && afterCode ? (_flushingWrite, _flushingWriteEnd) : (_write, _writeEnd);
+                        afterCode = false;
+                        WriteBlankLine();
+
+                        // Text that isn't one complete expression, such as a stray "[[1, 2]]", keeps the plain call so the compiler
+                        // still rejects it; the parentheses below would turn it into a tuple that renders
+                        if (SyntaxFactory.ParseExpression(variable).ContainsDiagnostics)
+                        {
+                            WriteLineMapping(token, call.Length + _plainConversion.Length);
+                            writer.WriteLine($"{call}{_plainConversion}{variable}, global::System.Globalization.CultureInfo.InvariantCulture){end}");
+                            WriteDefaultLineMapping();
+                            break;
+                        }
+
+                        // Check for null before converting so every null value reaches NullVariable, not only strings.
+                        // The pattern variable evaluates the expression once, unwraps nullable value types, and needs
+                        // a per-token suffix because expression variables share the enclosing block's scope.
+                        var valueName = $"__anglePlatesValue{i}";
+                        var conversion = $"is {{ }} {valueName} ? global::System.Convert.ToString({valueName}, global::System.Globalization.CultureInfo.InvariantCulture) : null{end}";
+                        WriteLineMapping(token, call.Length + 1);
+                        writer.WriteLine($"{call}({variable})");
+
+                        // Errors in the pattern and conversion, such as a ref struct value that can't be converted or can't be
+                        // a local in RenderAsync, point at the whole C# variable because the mapping's column is past the end of this line
+                        writer.Indent++;
+                        WriteLineMapping(token, conversion.Length);
+                        writer.WriteLine(conversion);
+                        writer.Indent--;
+                        WriteDefaultLineMapping();
+                        break;
+
+                    case TokenType.Code:
+                        if (length == 0)
+                        {
+                            continue;
+                        }
+
+                        // Indent around braces as a best-effort guess; it only affects readability
+                        var code = text.Slice(offset, length).ToString();
+                        WriteBlankLine();
+                        if (code.IndexOf('}') >= 0)
+                        {
+                            writer.Indent--;
+                        }
+
+                        WriteLineMapping(token, 0);
+                        writer.WriteLine(code);
+                        WriteDefaultLineMapping();
+                        if (code.IndexOf('{') >= 0)
+                        {
+                            writer.Indent++;
+                        }
+
+                        afterCode = true;
+                        break;
+                }
+            }
+
+            // Brace guesses can leave the indent anywhere, so finish the method where it started
+            writer.Indent = indent + 1;
+            if (isAsync)
+            {
+                WriteBlankLine();
+                writer.WriteLine("await FlushAsync(writer, cancellationToken).ConfigureAwait(false);");
+            }
+
+            writer.Indent = indent;
+            writer.WriteLine("}");
+        }
     }
 
     // A line break would end the /// comment, so each one becomes an XML character reference
