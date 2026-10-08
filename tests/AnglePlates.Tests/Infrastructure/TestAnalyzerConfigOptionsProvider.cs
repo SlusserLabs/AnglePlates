@@ -8,6 +8,8 @@ namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 
 internal sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsProvider
 {
+    private const string _anglePlateKey = "build_metadata.AdditionalFiles.AnglePlate";
+
     private readonly TestAnalyzerConfigOptions _empty = new();
     private readonly ImmutableDictionary<string, TestAnalyzerConfigOptions> _fileOptions;
 
@@ -28,7 +30,15 @@ internal sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsP
 
     public override AnalyzerConfigOptions GetOptions(AdditionalText textFile)
     {
-        return GetOptions(textFile.Path);
+        if (_fileOptions.TryGetValue(textFile.Path, out var options))
+        {
+            return options;
+        }
+
+        // Without per-file options, an additional file is tagged the way the targets file tags a default template
+        var anglePlate = textFile is TemplateAdditionalText template ? template.AnglePlate : TemplateAdditionalText.Discovered;
+
+        return anglePlate is null ? _empty : new TestAnalyzerConfigOptions([new KeyValuePair<string, string>(_anglePlateKey, anglePlate)]);
     }
 
     private AnalyzerConfigOptions GetOptions(string path)

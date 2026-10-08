@@ -158,10 +158,13 @@ public sealed class TemplateParserTests
     [Arguments("#")]
     [Arguments("#   ")]
     [Arguments("#\r\n#\t\r\n")]
-    public async Task Parse_EmptyDirectives_ReportsRequiredFieldsWithoutThrowing(string template)
+    public async Task Parse_EmptyDirectives_AreNotDirectivesAndDoNotThrow(string template)
     {
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
+        // A bare # isn't a known directive, so a discovered file is skipped and an explicit one has no directives
+        var discovered = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
+        var explicitFile = GeneratorTestHelper.Run(new TemplateAdditionalText(template, anglePlate: TemplateAdditionalText.Explicit));
 
-        await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
+        await Assert.That(discovered.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(string.Join(",", explicitFile.RunResult.Diagnostics.Select(d => d.Id))).IsEqualTo("SLAP008");
     }
 }

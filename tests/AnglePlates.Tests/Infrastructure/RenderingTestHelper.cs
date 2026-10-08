@@ -7,9 +7,10 @@ namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 
 internal static class RenderingTestHelper
 {
-    public static TemplateAdditionalText Template(string body, string type = "Example", string ns = "Consumer", string path = "Templates/example.html")
+    public static TemplateAdditionalText Template(
+        string body, string type = "Example", string ns = "Consumer", string path = "Templates/example.html", string? anglePlate = TemplateAdditionalText.Discovered)
     {
-        return new TemplateAdditionalText($"#type {type}\r\n#model string\r\n#namespace {ns}\r\n#using System\r\n{body}", path);
+        return new TemplateAdditionalText($"#type {type}\r\n#model string\r\n#namespace {ns}\r\n#using System\r\n{body}", path, anglePlate);
     }
 
     public static (string text, byte[] bytes) Render(Compilation compilation, string? model = "<value>", string type = "Consumer.Example", string? nullVariable = null)

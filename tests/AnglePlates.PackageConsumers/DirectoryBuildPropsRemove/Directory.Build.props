@@ -1,0 +1,8 @@
+<Project>
+  <!-- Directory.Build.props is imported before the package props, so this Remove runs before the default item exists and has no effect -->
+  <ItemGroup>
+    <!-- Drop the default Templates folder. Remove only affects items defined above it, so it goes first. -->
+    <AnglePlate Remove="Templates\**\*" />
+    <AnglePlate Include="Emails\**\*.html" />
+  </ItemGroup>
+</Project>

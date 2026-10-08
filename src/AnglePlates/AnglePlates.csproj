@@ -6,6 +6,7 @@
     <PackageId>SlusserLabs.AnglePlates</PackageId>
     <RootNamespace>SlusserLabs.AnglePlates</RootNamespace>
     <IsPackable>true</IsPackable>
+    <DevelopmentDependency>true</DevelopmentDependency>
     <IncludeBuildOutput>true</IncludeBuildOutput>
     <BuildOutputTargetFolder>analyzers/dotnet/cs</BuildOutputTargetFolder>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>

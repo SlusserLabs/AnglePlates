@@ -15,7 +15,8 @@ internal sealed class TemplateTranspilerOptions
     private const string _expectedTypeName = "a C# type name";
     private const string _expectedNamespace = "a namespace name such as 'MyApp.Templates'";
     private const string _expectedImport = "a namespace name such as 'System.Linq'";
-    private const string _expectedAccessModifier = "'public' or 'internal'";
+    // Shared with the AnglePlateBaseAccessModifier property so SLAP007 and SLAP009 use the same wording
+    public const string ExpectedAccessModifier = "'public' or 'internal'";
     private const string _expectedGenerationTarget = "'Text' or 'Utf8'";
 
     private TemplateTranspilerOptions(ReadOnlyMemory<char> whitespace)
@@ -148,7 +149,7 @@ internal sealed class TemplateTranspilerOptions
                     }
                     else
                     {
-                        directiveErrors.Add(InvalidValue(name, value, valueSpan, _expectedAccessModifier));
+                        directiveErrors.Add(InvalidValue(name, value, valueSpan, ExpectedAccessModifier));
                     }
                     break;
 

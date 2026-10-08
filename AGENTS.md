@@ -33,7 +33,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - AnglePlates is a compile-time template engine prototype using a Roslyn incremental source generator
 - `AnglePlates.slnx` contains the generator in `src/AnglePlates`, the console sample in `samples/HelloWorld`, and `tests/AnglePlates.Tests`
 - `TemplateParser.cs` and `SpanReader.cs` tokenize templates; `TemplateTranspilerOptions.cs` reads and validates directives; `TemplateTranspiler.cs` emits the text and UTF-8 rendering classes
-- `TemplateGenerator.cs` coordinates generation and reports diagnostics from `DiagnosticDescriptors.cs`; `Boilerplate.cs` supplies generated runtime support types; `buildTransitive` contains template discovery assets
+- `TemplateGenerator.cs` coordinates generation and reports diagnostics from `DiagnosticDescriptors.cs`; `GeneratorSetting.cs` reads generator settings and `TemplatePath.cs` computes project-relative template names; `Boilerplate.cs` supplies generated runtime support types; `buildTransitive` contains template discovery assets
 - Use `samples/HelloWorld/Templates/hello-world.html` as the current example
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
 - Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target and Roslyn 4.14.0 unless a host-compatibility change is deliberate and tested
@@ -66,8 +66,9 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - Preserve exact template bytes, including intentional newline fixtures, and both text and UTF-8 rendering contracts; execute generated renderers to verify exact characters and bytes when changing parsing, trimming, encoding, or output
 - Templates contain trusted C#; preserve default C# variable encoding and explicit raw-output behavior
 - Preserve direct streaming; do not add whole-output buffering without a requirement
-- Preserve the analyzer-only package contract unless compatibility testing justifies a deliberate change: generated support types, no runtime assets or dependencies, and analyzer/XML assets under `analyzers/dotnet/cs/netstandard2.0`
-- Keep `buildTransitive` discovery working for default, custom, excluded, and explicit `AnglePlate` items
+- Preserve the analyzer-only package contract unless compatibility testing justifies a deliberate change: a development dependency with generated support types, no runtime assets or dependencies, and analyzer/XML assets under `analyzers/dotnet/cs/netstandard2.0`
+- Keep `buildTransitive` discovery working: the props file defines the default `AnglePlate` item for `Templates\**\*`, projects change it with `Include` and `Remove`, and the targets file adds each item to `AdditionalFiles` once with `AnglePlate` metadata of `Discovered` or `Explicit`; the generator reads only tagged files
+- Follow the MSBuild option conventions in [plans/msbuild-options.md](plans/msbuild-options.md#conventions) for new options, and report invalid generator settings through `SLAP009`
 
 ## Testing Conventions
 
@@ -75,7 +76,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - Review every changed source and diagnostic snapshot manually; never enable automatic acceptance or feed generated output back as generator input
 - Cover valid inputs, boundaries, malformed templates, failures, diagnostics, and both rendering paths
 - Target 100% line and branch coverage separately for generator sources and emitted runtime code; report measured coverage separately from this target
-- Keep `tests/AnglePlates.PackageTests` outside the solution, without source-tree imports or analyzer project references; run it through `eng/validate-package.ps1` after freshly packing a unique version
+- Keep `tests/AnglePlates.PackageTests` and the consumers under `tests/AnglePlates.PackageConsumers` outside the solution, without source-tree imports or analyzer project references; each consumer checks its own results and exits nonzero on failure. Run them through `eng/validate-package.ps1` after freshly packing a unique version, and register new consumers in that script
 - Treat `artifacts/` as ignored local build output. Pack only to `artifacts/package` using `0.1.0-alpha.local.<yyyyMMdd>.<n>` versions; do not create sibling output directories or task-named versions. Before packing, remove older package pairs so the folder holds only the version under validation
 - The sample uses the generator and discovery assets from source, so a successful sample build or pack does not prove the package works; the isolated package consumer must verify analyzer loading, build assets, and rendering
 

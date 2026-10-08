@@ -11,6 +11,8 @@ internal static class DiagnosticDescriptors
     public const string InvalidGenerationTargetId = "SLAP005";
     public const string DuplicateDirectiveId = "SLAP006";
     public const string InvalidDirectiveValueId = "SLAP007";
+    public const string NoDirectivesId = "SLAP008";
+    public const string InvalidMSBuildPropertyId = "SLAP009";
 
     private const string _category = "SlusserLabs.AnglePlates";
 
@@ -66,6 +68,22 @@ internal static class DiagnosticDescriptors
         InvalidDirectiveValueId,
         "Invalid directive value",
         "Directive '#{0}' has invalid value '{1}'; expected {2}",
+        _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor NoDirectives = new(
+        NoDirectivesId,
+        "Template has no directives",
+        "Template file '{0}' has no directives; a file added with an AnglePlate Include must start with a directive such as '#type MyTemplate'",
+        _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor InvalidMSBuildProperty = new(
+        InvalidMSBuildPropertyId,
+        "Invalid AnglePlates MSBuild property",
+        "MSBuild property '{0}' has invalid value '{1}'; expected {2}",
         _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

@@ -66,6 +66,7 @@ internal static class PackageValidator
         RequireValue(metadata, "license", "MIT");
         RequireValue(metadata, "readme", "README.md");
         RequireValue(metadata, "icon", "icon.png");
+        RequireValue(metadata, "developmentDependency", "true");
         Require(!metadata.Descendants().Any(element => element.Name.LocalName == "dependency"), "The analyzer-only package must not declare consumer dependencies.");
 
         var repository = metadata.Descendants().Single(element => element.Name.LocalName == "repository");

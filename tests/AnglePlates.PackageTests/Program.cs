@@ -17,6 +17,8 @@ internal static class Program
             PackageValidator.Validate(arguments[1], arguments[2], arguments[3]);
         }
 
+        EditorConfigValidator.Validate();
+
         const string model = "<AnglePlates>";
         const string expected = "Hello &lt;AnglePlates&gt;!";
         using var text = new StringWriter(CultureInfo.InvariantCulture);
@@ -39,6 +41,6 @@ internal static class Program
             throw new InvalidOperationException("The package renderers did not produce the expected text and UTF-8 bytes.");
         }
 
-        Console.WriteLine("Package archive, symbols, text, and UTF-8 rendering passed.");
+        Console.WriteLine("Package archive, symbols, template metadata, text, and UTF-8 rendering passed.");
     }
 }

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 
 namespace SlusserLabs.AnglePlates;
@@ -18,7 +18,8 @@ public class TemplateGenerator : IIncrementalGenerator
 {
     private const string _defaultAccessModifier = "public";
     private const string _projectDirKey = "build_property.ProjectDir";
-    private const string _baseAccessModifierKey = "build_property.AnglePlateBaseAccessModifier";
+    private const string _baseAccessModifierProperty = "AnglePlateBaseAccessModifier";
+    private const string _anglePlateMetadataKey = "build_metadata.AdditionalFiles.AnglePlate";
     private static readonly GenerationTarget[] _generationTargets = [GenerationTarget.Text, GenerationTarget.Utf8];
 
     /// <inheritdoc />
@@ -26,41 +27,47 @@ public class TemplateGenerator : IIncrementalGenerator
     {
         // 1. Read MSBuild properties from the global options
         var baseAccessModifier = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
-            options.GlobalOptions.TryGetValue(_baseAccessModifierKey, out var value) ? value : _defaultAccessModifier);
+            GeneratorSetting.ReadChoice(
+                options.GlobalOptions, _baseAccessModifierProperty, _defaultAccessModifier, TemplateTranspilerOptions.ExpectedAccessModifier, "public", "internal"));
 
         var projectDir = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
             options.GlobalOptions.TryGetValue(_projectDirKey, out var value) ? value : string.Empty);
 
-        // 2. Read templates, which are additional files whose text starts with a directive marker.
-        // Paths under the project directory become relative with '/' separators for stable class docs and hint names.
-        var templateFiles = context.AdditionalTextsProvider
+        // 2. Keep only the additional files AnglePlates added, before reading any text, so other tools' files are never read
+        var anglePlateFiles = context.AdditionalTextsProvider
+            .Combine(context.AnalyzerConfigOptionsProvider)
+            .Select(static (tuple, cancellationToken) => (Text: tuple.Left, Origin: GetOrigin(tuple.Right.GetOptions(tuple.Left))))
+            .Where(static file => file.Origin != TemplateOrigin.None)
+            .WithTrackingName("AnglePlateFiles");
+
+        // 3. Read each file; paths become relative to the project folder for stable class docs and hint names
+        var templateFiles = anglePlateFiles
             .Combine(projectDir)
             .Select(static (tuple, cancellationToken) =>
             {
-                var (additionalText, projDir) = tuple;
-                var relativePath = additionalText.Path.Replace('\\', '/');
-                var normalizedProjectDir = projDir.Replace('\\', '/').TrimEnd('/') + "/";
-                if (!string.IsNullOrEmpty(projDir) && relativePath.StartsWith(normalizedProjectDir, StringComparison.Ordinal))
-                {
-                    relativePath = relativePath.Substring(normalizedProjectDir.Length);
-                }
-
+                var ((additionalText, origin), projDir) = tuple;
                 var content = additionalText.GetText(cancellationToken)?.ToString() ?? string.Empty;
 
-                return new TemplateFile(additionalText.Path, relativePath, content);
+                return new TemplateFile(additionalText.Path, TemplatePath.GetRelativePath(additionalText.Path, projDir), content, origin);
             })
-            .Where(static file => file.Content.StartsWith("#", StringComparison.Ordinal))
+            .WithTrackingName("TemplateFiles")
             .Collect();
 
-        // 3. Generate the support types once, then one class per template and generation target
+        // 4. Generate the support types once, then one class per template and generation target
         context.RegisterSourceOutput(templateFiles.Combine(baseAccessModifier), static (ctx, data) =>
         {
             var (templates, accessModifier) = data;
-            Debug.Assert(!string.IsNullOrEmpty(accessModifier));
 
-            ctx.AddSource("TemplateOptions.g.cs", Boilerplate.TemplateOptions(accessModifier));
-            ctx.AddSource("TextTemplate.g.cs", Boilerplate.TextTemplate(accessModifier));
-            ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier));
+            // A class with the wrong accessibility isn't a safe fallback, so an invalid setting generates nothing
+            if (!accessModifier.IsValid)
+            {
+                ctx.ReportDiagnostic(accessModifier.CreateDiagnostic());
+                return;
+            }
+
+            ctx.AddSource("TemplateOptions.g.cs", Boilerplate.TemplateOptions(accessModifier.Value));
+            ctx.AddSource("TextTemplate.g.cs", Boilerplate.TextTemplate(accessModifier.Value));
+            ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier.Value));
 
             var parserOptions = TemplateParserOptions.Default;
             var parser = new TemplateParser(parserOptions);
@@ -72,11 +79,26 @@ public class TemplateGenerator : IIncrementalGenerator
                 ctx.CancellationToken.ThrowIfCancellationRequested();
 
                 var parseResult = parser.Parse(template.Content.AsSpan());
-                var directiveTokens = parseResult.Tokens.Where(token => token.Type == TokenType.Directive);
+                var directiveTokens = parseResult.Tokens.Where(token => token.Type == TokenType.Directive).ToList();
+                var lines = SourceText.From(template.Content, Encoding.UTF8).Lines;
+
+                // A file is a template when it starts with a known directive. The default folder picks up notes and other
+                // files, so those are skipped quietly, but a file the project added explicitly was meant to be a template.
+                if (directiveTokens.Count == 0)
+                {
+                    if (template.Origin == TemplateOrigin.Explicit)
+                    {
+                        var firstLine = lines[0].Span;
+                        var location = Location.Create(template.Path, firstLine, lines.GetLinePositionSpan(firstLine));
+                        ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.NoDirectives, location, template.Path));
+                    }
+
+                    continue;
+                }
+
                 var transpilerOptions = TemplateTranspilerOptions.Create(
                     template.Path, template.Content.AsSpan(), directiveTokens, parseResult.DirectiveSectionEnd, parserOptions.Whitespace);
 
-                var lines = SourceText.From(template.Content, Encoding.UTF8).Lines;
                 if (transpilerOptions.Errors.Count > 0 || parseResult.Errors.Count > 0)
                 {
                     ReportErrors(ctx, template, lines, transpilerOptions.Errors, parseResult.Errors);
@@ -94,6 +116,22 @@ public class TemplateGenerator : IIncrementalGenerator
                 }
             }
         });
+    }
+
+    // Reads the AnglePlate metadata the targets file puts on each additional file it adds; any other file isn't a template
+    private static TemplateOrigin GetOrigin(AnalyzerConfigOptions options)
+    {
+        if (!options.TryGetValue(_anglePlateMetadataKey, out var value))
+        {
+            return TemplateOrigin.None;
+        }
+
+        if (string.Equals(value, nameof(TemplateOrigin.Discovered), StringComparison.OrdinalIgnoreCase))
+        {
+            return TemplateOrigin.Discovered;
+        }
+
+        return string.Equals(value, nameof(TemplateOrigin.Explicit), StringComparison.OrdinalIgnoreCase) ? TemplateOrigin.Explicit : TemplateOrigin.None;
     }
 
     // Reports directive and parse errors; the caller then skips only this template
@@ -142,11 +180,12 @@ public class TemplateGenerator : IIncrementalGenerator
 
     private sealed record TemplateFile
     {
-        public TemplateFile(string path, string relativePath, string content)
+        public TemplateFile(string path, string relativePath, string content, TemplateOrigin origin)
         {
             Path = path;
             RelativePath = relativePath;
             Content = content;
+            Origin = origin;
         }
 
         public string Path { get; }
@@ -154,5 +193,7 @@ public class TemplateGenerator : IIncrementalGenerator
         public string RelativePath { get; }
 
         public string Content { get; }
+
+        public TemplateOrigin Origin { get; }
     }
 }

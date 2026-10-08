@@ -8,16 +8,46 @@
     <IsPackable>false</IsPackable>
     <LangVersion>11.0</LangVersion>
     <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
+
+    <!-- Make TemplateOptions and the base classes internal. Templates also need #access internal. -->
     <AnglePlateBaseAccessModifier>internal</AnglePlateBaseAccessModifier>
-    <AnglePlateViews>$(ProjectDir)CustomViews</AnglePlateViews>
-    <AnglePlateExclude>$(ProjectDir)Templates\excluded.html</AnglePlateExclude>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" />
+    <!-- PrivateAssets keeps the generator and discovery files from flowing to projects that reference this one. -->
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Every file an Include matches has to be a template, so match only .html. -->
+    <AnglePlate Include="CustomViews\**\*.html" />
     <AnglePlate Include="Explicit\explicit.html" />
-    <AnglePlate Include="Templates\package.html" />
+
+    <!-- The same file as a default item, spelled as a full path. It generates one class and counts as explicit. -->
+    <AnglePlate Include="$(MSBuildProjectDirectory)\Templates\package.html" />
+
+    <!-- Leave out a deliberately invalid template. This Remove comes after the default item it trims. -->
+    <AnglePlate Remove="Templates\excluded.html" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Other tools' additional files start with # but aren't templates, so they must leave the build clean. -->
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="README.md" />
+  </ItemGroup>
+
+  <!-- Tells the program where the build wrote the generated editorconfig so it can check the AnglePlate metadata. -->
+  <Target Name="AddGeneratedEditorConfigPath" BeforeTargets="GetAssemblyAttributes">
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>GeneratedEditorConfig</_Parameter1>
+        <_Parameter2>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(GeneratedMSBuildEditorConfigFile)'))</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ProjectDirectory</_Parameter1>
+        <_Parameter2>$(MSBuildProjectDirectory)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
 </Project>

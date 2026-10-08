@@ -3,6 +3,12 @@
 ; Breaking: repeated directives report SLAP006 instead of keeping the last value, and #using takes one namespace per line
 ; Breaking: a # line right after the directive section is body text unless it starts with a directive name
 ; SLAP001 to SLAP003 and SLAP005 now report template locations instead of Location.None
+; Breaking: the AnglePlateTemplates property is removed; the default AnglePlate item covers Templates, and <AnglePlate Remove="Templates\**\*" /> with an Include picks another folder
+; Breaking: the AnglePlateViews property and the default Views folder are removed; use <AnglePlate Include="Views\**\*.html" />
+; Breaking: the AnglePlateExclude property is removed; use <AnglePlate Remove="..." />
+; Breaking: only AdditionalFiles added through AnglePlate items are templates; other AdditionalFiles are ignored even when they start with #
+; Breaking: a file is a template only when it starts with a known directive; other files from the default Templates folder are skipped, and explicit AnglePlate items report SLAP008
+; Breaking: AnglePlateBaseAccessModifier accepts only public or internal, case-insensitively, and reports SLAP009 otherwise
 
 ### New Rules
 
@@ -15,3 +21,5 @@ SLAP004 | SlusserLabs.AnglePlates | Error | Unclosed template block
 SLAP005 | SlusserLabs.AnglePlates | Error | Invalid generation target
 SLAP006 | SlusserLabs.AnglePlates | Error | Duplicate directive
 SLAP007 | SlusserLabs.AnglePlates | Error | Invalid directive value
+SLAP008 | SlusserLabs.AnglePlates | Error | Template has no directives
+SLAP009 | SlusserLabs.AnglePlates | Error | Invalid AnglePlates MSBuild property

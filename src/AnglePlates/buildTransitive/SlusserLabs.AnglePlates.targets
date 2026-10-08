@@ -1,15 +1,24 @@
 <Project>
 
-  <Target Name="CollectAnglePlateTemplates" BeforeTargets="GenerateMSBuildEditorConfigFile">
+  <!-- Adds each AnglePlate item to AdditionalFiles once, tagged so the generator can tell it from other tools' files.
+       It runs before GenerateMSBuildEditorConfigFileShouldRun because GenerateMSBuildEditorConfigFile writes the
+       editorconfig in its dependencies, before any BeforeTargets hook on the target itself. -->
+  <Target Name="CollectAnglePlateTemplates" BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun">
+    <!-- Full paths make different spellings of one file match; a file that's also listed explicitly counts as explicit -->
     <ItemGroup>
-      <AnglePlate Include="$(AnglePlateTemplates)\**\*" Exclude="$(AnglePlateExclude)" Condition="Exists('$(AnglePlateTemplates)')" />
-      <AnglePlate Include="$(AnglePlateViews)\**\*" Exclude="$(AnglePlateExclude)" Condition="Exists('$(AnglePlateViews)')" />
+      <_AnglePlateExplicit Include="@(AnglePlate->'%(FullPath)')" Condition="'%(AnglePlate._AnglePlateSource)' != 'Discovered'" />
+      <_AnglePlateDiscovered Include="@(AnglePlate->'%(FullPath)')" Condition="'%(AnglePlate._AnglePlateSource)' == 'Discovered'" />
+      <_AnglePlateDiscovered Remove="@(_AnglePlateExplicit)" />
     </ItemGroup>
-    <RemoveDuplicates Inputs="@(AnglePlate)">
-      <Output TaskParameter="Filtered" ItemName="_DistinctAnglePlate" />
+    <RemoveDuplicates Inputs="@(_AnglePlateExplicit)">
+      <Output TaskParameter="Filtered" ItemName="_AnglePlateExplicitDistinct" />
+    </RemoveDuplicates>
+    <RemoveDuplicates Inputs="@(_AnglePlateDiscovered)">
+      <Output TaskParameter="Filtered" ItemName="_AnglePlateDiscoveredDistinct" />
     </RemoveDuplicates>
     <ItemGroup>
-      <AdditionalFiles Include="@(_DistinctAnglePlate)" />
+      <AdditionalFiles Include="@(_AnglePlateExplicitDistinct)" AnglePlate="Explicit" />
+      <AdditionalFiles Include="@(_AnglePlateDiscoveredDistinct)" AnglePlate="Discovered" />
     </ItemGroup>
   </Target>
 

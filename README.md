@@ -13,6 +13,17 @@ dotnet package add SlusserLabs.AnglePlates
 
 The source generator runs when you compile your application. The compiled templates become part of your application, so you do not need to deploy the AnglePlates package with it.
 
+AnglePlates is a development dependency, so `dotnet package add` marks the reference private for you. If you write the `PackageReference` by hand, add the `PrivateAssets` and `IncludeAssets` lines yourself:
+
+```xml
+<PackageReference Include="SlusserLabs.AnglePlates" Version="0.1.0-alpha">
+  <PrivateAssets>all</PrivateAssets>
+  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+</PackageReference>
+```
+
+Without them, a project that references yours picks up the template discovery files but not the generator, and the files in its `Templates` folder become inputs that nothing reads.
+
 > Generated classes depend on `System.IO.Pipelines`. Add the package if your project does not already reference it.
 
 AnglePlates has been tested with .NET 10 and C# 11. UTF-8 compiled templates require C# 11 or later because they use UTF-8 string literals.
@@ -49,7 +60,7 @@ public sealed class GreetingModel
 
 ### Directives
 
-Directives occupy consecutive lines at the very beginning of the file. The first character of a template must be `#`, and each directive gets its own line with exactly one value. A line counts as a directive only when it starts with one of the names below, spelled exactly (names are case-sensitive), followed by a space, a tab, or the end of the line.
+Directives occupy consecutive lines at the very beginning of the file, so a template starts with a known directive. A file whose first line isn't a directive isn't a template (see [Which files are templates](#which-files-are-templates)). Each directive gets its own line with exactly one value. A line counts as a directive only when it starts with one of the names below, spelled exactly (names are case-sensitive), followed by a space, a tab, or the end of the line.
 
 The first line that isn't a directive starts the template body. That includes a blank line, an indented line, `# Heading`, `#!`, a CSS rule like `#header { ... }`, and, yes, a misspelled directive. Directive lines and their line breaks never reach the output, so if your markup starts on the line right after the last directive, the output starts with your markup. Want a leading newline? Add a blank line.
 
@@ -183,43 +194,87 @@ AnglePlates writes literal text unchanged and encodes C# variables with `HtmlEnc
 
 Generated support types are `public` by default. Set the `AnglePlateBaseAccessModifier` project property to `internal` to change their accessibility. When you do, also add `#access internal` to your templates so their generated classes do not expose less accessible base types.
 
+The property takes `public` or `internal`, in any case and with or without surrounding spaces. Anything else reports `SLAP009`, and AnglePlates generates nothing for the project until you fix it. I'd rather fail the build than guess at the accessibility of your base classes.
+
 ## How templates are discovered
 
-By default, AnglePlates finds every file under your project's `Templates` and `Views` folders, including files in subfolders. The file extension does not matter, although these examples use `.html`.
+Put your templates in a `Templates` folder in your project and you're done. Every file in it, including files in subfolders, is a possible template. The extension doesn't matter, although these examples use `.html`.
 
-AnglePlates passes these files to the compiler as `AdditionalFiles`. The generator only processes files that contain text and start with `#`, so it skips a file that begins with a space or newline. It applies the same check to `AdditionalFiles` supplied from other locations.
+Behind the scenes, the package adds an `AnglePlate` item for `Templates\**\*`. If you want templates somewhere else, you change that list with plain MSBuild `Include` and `Remove`. That's the whole set of options:
 
-| Override | Default | Purpose |
-| --- | --- | --- |
-| `AnglePlateTemplates` | `$(ProjectDir)Templates` | Change the template discovery folder. |
-| `AnglePlateViews` | `$(ProjectDir)Views` | Change the second discovery folder. |
-| `AnglePlateExclude` | Empty | Exclude files from both automatic searches using MSBuild patterns. |
-| `AnglePlate` items | Files found in the two folders | Explicitly include templates from other locations. |
+| Name | Kind | Default | Purpose |
+| --- | --- | --- | --- |
+| `AnglePlate` | Item | `Templates\**\*` | The templates. Add more with `Include`; drop some or all of the default with `Remove`. |
+| `AnglePlateBaseAccessModifier` | Property | `public` | Accessibility of the generated support types, `public` or `internal`. See [Encoding and options](#encoding-and-options). |
 
-You can configure discovery in your project file:
+Here's a project that keeps its email templates in `Emails`, has report templates elsewhere, and wants internal support types:
 
 ```xml
-<PropertyGroup>
-  <AnglePlateTemplates>$(ProjectDir)EmailTemplates</AnglePlateTemplates>
-  <AnglePlateViews>$(ProjectDir)PageTemplates</AnglePlateViews>
-  <AnglePlateExclude>$(ProjectDir)EmailTemplates\Drafts\**\*</AnglePlateExclude>
-</PropertyGroup>
-<ItemGroup>
-  <AnglePlate Include="Shared\receipt.html" />
-</ItemGroup>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+
+    <!-- Make TemplateOptions and the base classes internal. Templates also need #access internal. -->
+    <AnglePlateBaseAccessModifier>internal</AnglePlateBaseAccessModifier>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PrivateAssets keeps the generator and discovery files from flowing to projects that reference this one. -->
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="0.1.0-alpha">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Drop the default Templates folder. Remove only affects items defined above it, so it goes first. -->
+    <AnglePlate Remove="Templates\**\*" />
+
+    <!-- Every file an Include matches has to be a template, so match only .html. -->
+    <AnglePlate Include="Emails\**\*.html" />
+    <AnglePlate Include="Reports\**\*.html" />
+    <AnglePlate Include="..\Shared\receipt.html" />
+
+    <!-- Leave out drafts. This Remove comes after the Include it trims. -->
+    <AnglePlate Remove="Emails\Drafts\**" />
+  </ItemGroup>
+
+</Project>
 ```
 
-If the same `AnglePlate` item appears more than once, AnglePlates adds it to `AdditionalFiles` only once. `AnglePlateExclude` applies to files found automatically, but it does not exclude items you add explicitly.
+### Which files are templates
+
+1. Every file under the project's `Templates` folder, including subfolders, starts out as an `AnglePlate` item, whatever its extension.
+2. Your own `Include` and `Remove` operations change that list. `<AnglePlate Remove="Templates\**\*" />` turns the default off.
+3. AnglePlates adds each `AnglePlate` item to the compiler's `AdditionalFiles` once, even if you list the same file twice or spell its path two ways.
+4. The generator only looks at the `AdditionalFiles` entries AnglePlates added. Files other tools add, like `PublicAPI.Shipped.txt`, are ignored, even when they start with `#`.
+5. A file is a template when it starts with a known directive. A file from the default folder that doesn't, such as a `README.md`, a `.gitkeep`, or an empty file, is skipped quietly. A file you added with an `Include` reports `SLAP008` instead, because you asked for it.
+
+The default folder is going to collect notes and partials sooner or later, and an error for each one would make the folder convention a pain. A file you named in your project file is one you meant to be a template, even through a wildcard. If a wildcard catches extra files, narrow it (`Emails\**\*.html`) or `Remove` them. The catch is that a template in `Templates` with a misspelled first directive gets skipped instead of reported. If a class you expected doesn't exist, check the first line of its template. AnglePlates never looks at file names, only content.
+
+Templates outside the project folder are named by their path relative to it, such as `../Shared/receipt.html`, in the generated class documentation. That keeps the generated source the same on every machine. Compiler errors still point at the full path.
+
+### Where `Include` and `Remove` go
+
+Item order matters in MSBuild:
+
+- The project file works anywhere, because the package's default item is imported before the project body.
+- `Directory.Build.targets` works for settings shared by several projects.
+- `Directory.Build.props` can add templates, but it can't remove the default, because it's imported before the package defines the default item.
+- A `Remove` only affects items defined above it. Put it first to drop the default and add your own folder; put it after an `Include` to trim that `Include`.
+
+Write paths relative to the project folder. Skip `$(ProjectDir)`, because MSBuild hasn't defined it yet when it reads your project file, so `$(ProjectDir)Emails` quietly becomes `Emails` anyway. Use `$(MSBuildProjectDirectory)` when you need an absolute path.
 
 ## Good to know
 
-- Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling.
-- Any `AdditionalFiles` input that starts with `#` is a template as far as AnglePlates is concerned. A file like `PublicAPI.Shipped.txt`, which starts with `#nullable enable`, fails the build with `SLAP001` through `SLAP003`.
+- Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling after the first line.
+- A misspelled first line leaves the file with no directives at all. In the `Templates` folder, that file is skipped without an error, just like a `README.md` would be. A file you added with an `Include` reports `SLAP008` instead.
 - A closing delimiter ends its block even inside a C# string or comment, so keep `]]` out of C# variables and `%]` out of C# blocks.
 - Compiler errors in C# variables and C# blocks point at the template's path, line, and column, because the generated code maps them back with `#line`. An error in the code AnglePlates wraps around a C# variable, such as a `Span<char>` value it can't convert to a string, points at the whole C# variable.
 - The generated render method already declares `model`, `Model`, `writer`, and a `__anglePlatesValue<N>` variable for each C# variable, so don't reuse those names for locals in your C# blocks.
 - Two templates that generate the same class name in the same namespace cause C# compiler errors, the same as two hand-written classes would.
-- Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, or `#using`. Each error stops that template from generating, but your other templates still generate. See [diagnostics](docs/diagnostics.md).
+- Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, or `#using`. An explicit file with no directives reports `SLAP008`. Each error stops that template from generating, but your other templates still generate. An invalid `AnglePlateBaseAccessModifier` is the exception: it reports `SLAP009` and stops everything. See [diagnostics](docs/diagnostics.md).
 
 For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
 
@@ -243,7 +298,7 @@ dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -
 ./eng/validate-package.ps1 -Version 0.1.0-alpha.local.20261007.1
 ```
 
-The [package validation project](tests/AnglePlates.PackageTests/README.md) installs and tests the package without referencing the source project.
+The [package validation project](tests/AnglePlates.PackageTests/README.md) installs and tests the package without referencing the source project. The script also runs the small consumers in `tests/AnglePlates.PackageConsumers`, which check `Remove` placement and that discovery stops at the project that references AnglePlates.
 
 ## AI disclosure
 

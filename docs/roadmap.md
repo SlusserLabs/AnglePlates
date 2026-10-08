@@ -21,16 +21,17 @@ Recent work fixed the bugs found in the first inspection:
 - Directives match exact names, report repeated directives and invalid values, and `#using` emits imports.
 - A backslash before `[[`, `[%`, or `[*` writes the opener as literal text.
 - Compiler errors in C# variables and C# blocks point at the template through `#line` mapping.
+- MSBuild options follow one set of conventions: a default `AnglePlate` item for `Templates` replaces the discovery properties, only tagged `AdditionalFiles` are read, and invalid generator settings report `SLAP009`.
 
 It isn't release-ready yet. Consumer compatibility has only been checked on .NET 10 with C# 11, the regression suite is focused rather than complete, and there's no CI or publishing workflow.
 
 ## How it works today
 
-1. MSBuild discovery collects every file under `Templates` and `Views`, plus any explicit `AnglePlate` items. It removes duplicate item specs and adds the results to the compiler's `AdditionalFiles`.
-2. The generator reads every `AdditionalFiles` input, not only the discovered ones, and keeps nonempty files whose first character is `#`.
+1. The package props file defines a default `AnglePlate` item for `Templates\**\*`, so projects can `Include` and `Remove` templates with ordinary item operations. Before the compiler's editorconfig is generated, the targets file converts every `AnglePlate` item to a full path, lets an explicit item win over the default item for the same file, removes duplicates, and adds each file to `AdditionalFiles` once with `AnglePlate` metadata of `Discovered` or `Explicit`.
+2. The generator filters `AdditionalFiles` on that metadata before reading any text, so other tools' files are never read. It names each template by its path relative to `ProjectDir`, including `../` paths for files outside the project folder, and keeps the full path for `#line`.
 3. The parser reads the directive lines at the top, matching each line against the known `#name` prefixes followed by whitespace. The first line that doesn't match starts the body. It then splits the body into literal text, C# variables, C# blocks, and comments, storing offsets and trim flags instead of copies. An escaped opener splits the literal text around the backslashes it drops, so every token is still a slice of the template.
-4. `TemplateTranspilerOptions` validates the directives. The generator reports `SLAP001` to `SLAP007` for a template that's missing required directives, has an unclosed block, repeats a directive, or has an invalid directive value, and skips only that template.
-5. The generator always adds `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` to the consumer assembly, even when no template qualifies.
+4. A file is a template when its directive section contains at least one known directive. A discovered file without one is skipped, and an explicit file without one reports `SLAP008`. `TemplateTranspilerOptions` validates the directives. The generator reports `SLAP001` to `SLAP007` for a template that's missing required directives, has an unclosed block, repeats a directive, or has an invalid directive value, and skips only that template.
+5. The generator always adds `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` to the consumer assembly, even when no template qualifies. The only exception is an invalid generator setting, which reports `SLAP009` and generates nothing.
 6. Each template becomes a partial `<Type>TextTemplate` class, a partial `<Type>Utf8Template` class, or both. The `Render` method writes literals, runs C# blocks inline, and writes each C# variable through `Convert.ToString(value, CultureInfo.InvariantCulture)` and the base class's `Write` method. A null check runs first, so a null value of any type reaches `Write` as `null` and gets the `NullVariable` substitute. Text that doesn't parse as one C# expression, such as a stray `[[1, 2]]`, skips the null check and keeps the plain call so it still fails to compile. Adjacent literal tokens are written as one literal. A `#line` span directive before each C# variable and C# block maps compiler errors back to the template path, line, and column; errors in the generated code around a C# variable map to the whole C# variable.
 
 All template changes funnel into one generation callback, so editing one template regenerates everything. Per-template incremental caching is still planned.
@@ -56,9 +57,9 @@ Nothing has been benchmarked, so there are no numbers to compare against Razor, 
 | Area | Problem | Plan |
 | --- | --- | --- |
 | Directives | A misspelled directive ends the directive section and becomes literal output. Required directives after it report `SLAP001` to `SLAP003` at the typo, but a misspelled optional directive with no required directive after it isn't reported. | By design; the README documents it |
-| Unrelated additional files | Any `AdditionalFiles` input that starts with `#` is treated as a template. `PublicAPI.Shipped.txt` (`#nullable enable`) or a Markdown file would fail the build with `SLAP001` to `SLAP003`. | [msbuild-options.md](../plans/msbuild-options.md) |
+| Skipped discovered files | A file in the default `Templates` folder that doesn't start with a known directive is skipped without a diagnostic, so a misspelled first directive leaves the template out silently. | By design; the README documents it |
 | Closing delimiters | Inside a block, a closing delimiter in a C# string or comment ends the block, so `[[ "]]" ]]` ends early. | Not planned yet |
-| Discovery defaults | `$(ProjectDir)` is empty when the props file is evaluated, so the defaults are really the relative paths `Templates` and `Views`. Duplicate removal compares item specs, not full paths. | [msbuild-options.md](../plans/msbuild-options.md) |
+| Discovery on Linux | Duplicate removal and template names were verified on Windows, where full paths compare case-insensitively. MSBuild path comparison on Linux hasn't been checked. | Release plan, step 2 |
 | Consumer dependencies | Both renderer base classes are always emitted, so even text-only consumers need `System.IO.Pipelines`. Repository projects get it from `Microsoft.AspNetCore.App`. | Release plan, step 1 |
 | Multiple assemblies | Each assembly gets its own public `SlusserLabs.AnglePlates.TemplateOptions` and base classes. A project that references two assemblies with templates sees two definitions of each support type and gets ambiguity errors. | Release plan, step 2 |
 | Generated names | The render method declares `model`, `Model`, and `writer`, plus a `__anglePlatesValue<N>` pattern variable for each C# variable. Template code can collide with them. Indentation of C# blocks is a brace-counting guess. | Not planned yet |
@@ -74,7 +75,7 @@ Each step builds on the one before it. Unchecked items are open work; checked it
 - [x] `#generate` accepts exactly `Text` or `Utf8` and generates only that renderer.
 - [x] C# variables format with the invariant culture.
 - [x] Settle the directive contract: exact names, unknown and repeated directives, value validation, `#using`, and `#access` checks.
-- [ ] Stop treating unrelated `AdditionalFiles` as templates.
+- [x] Stop treating unrelated `AdditionalFiles` as templates.
 - [x] Add a delimiter escape for openers in literal text.
 - [x] Map compiler errors in template C# back to the template with `#line`.
 - [x] Make `NullVariable` apply to every null C# variable.
@@ -86,14 +87,14 @@ Each step builds on the one before it. Unchecked items are open work; checked it
 
 ### 2. Broaden package-consumer validation
 
-The isolated consumer already restores only the freshly packed package from `artifacts/package` into an empty package folder, compiles default, custom, excluded, and explicit templates, and checks exact text and UTF-8 output. It also renders a null `int?` model with `NullVariable` set. `PackageValidator` checks the archive, nuspec metadata, Source Link, reproducibility records, and symbols.
+The isolated consumer already restores only the freshly packed package from `artifacts/package` into an empty package folder, compiles discovered, removed, and explicit templates (including an explicit full path to a discovered file), ignores unrelated `AdditionalFiles` and non-template files in `Templates`, checks the `AnglePlate` metadata in the generated editorconfig, and checks exact text and UTF-8 output. It also renders a null `int?` model with `NullVariable` set. `PackageValidator` checks the archive, nuspec metadata (including the development-dependency flag), Source Link, reproducibility records, and symbols. Small consumers under `tests/AnglePlates.PackageConsumers` check removing the default item from the project file, `Directory.Build.props`, and `Directory.Build.targets`, and that discovery doesn't reach an app that references a library using AnglePlates.
 
 - [ ] Render with a custom encoder, raw output, null values of other types, child templates, text-only generation, and flush behavior through the installed package.
 - [ ] Inspect `project.assets.json`, output assemblies, references, and `.deps.json` for the expected analyzer, compile, and runtime split.
 - [ ] Test a console app, a class library, and an ASP.NET app, with implicit usings on and off, in both text-only and UTF-8 modes, across every framework and compiler version the README will advertise.
 - [ ] Run on Windows and Linux to catch path-separator, case-sensitivity, and line-ending differences.
 - [ ] Build two assemblies with templates, one referencing the other, and settle how the support types are shared.
-- [ ] Validate adding, changing, removing, renaming, and moving templates through real MSBuild builds. Cover direct and transitive package references and projects with unrelated `AdditionalFiles`.
+- [ ] Validate adding, changing, removing, renaming, and moving templates through real MSBuild builds. Direct references, a library chain, and unrelated `AdditionalFiles` are covered; transitive package references (a package that depends on AnglePlates) aren't.
 
 ### 3. Add the build and publishing workflow
 
@@ -153,6 +154,7 @@ Production must publish the same validated artifact from the intended tag. After
 - Repository layout and conventions: `AnglePlates.slnx`, `src/AnglePlates`, `tests/AnglePlates.Tests`, and `tests/AnglePlates.PackageTests`, with `SlusserLabs.AnglePlates` kept as the assembly name, package ID, and root namespace. The conventions came from SlusserLabs/AssemblyInfo, and the agent instructions are in `AGENTS.md`.
 - Test infrastructure: a .NET 10 TUnit executable on Microsoft.Testing.Platform, with Verify snapshots, `GeneratorTestHelper`, and in-memory generated-assembly loading.
 - Correctness fixes with focused regressions: false bracket starts, empty and unclosed blocks, invalid-template isolation, stable hint names, pooled-buffer ownership, `#generate` selection, invariant-culture formatting, `NullVariable` for null C# variables of every type, escaped openers, and `#line` mapping for C# variables and C# blocks.
-- Stable diagnostics `SLAP001` to `SLAP007` in `DiagnosticDescriptors.cs`, tracked in the analyzer release files.
-- Package contract: an analyzer-only package with generated support types, no runtime assets or dependencies, `buildTransitive` discovery, XML documentation, and portable symbols in a `.snupkg`.
-- Isolated package-consumer validation through `eng/validate-package.ps1`.
+- Stable diagnostics `SLAP001` to `SLAP009` in `DiagnosticDescriptors.cs`, tracked in the analyzer release files.
+- Package contract: an analyzer-only development-dependency package with generated support types, no runtime assets or dependencies, `buildTransitive` discovery, XML documentation, and portable symbols in a `.snupkg`.
+- Isolated package-consumer validation through `eng/validate-package.ps1`, including the consumers under `tests/AnglePlates.PackageConsumers`.
+- MSBuild options standardized per [msbuild-options.md](../plans/msbuild-options.md): the default `AnglePlate` item, explicit-over-discovered deduplication by full path, tagged `AdditionalFiles`, directive-based template recognition, project-relative template names, and `SLAP008` and `SLAP009`.

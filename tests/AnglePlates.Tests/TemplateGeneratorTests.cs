@@ -101,15 +101,44 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    [Arguments("Templates/invalid.html")]
-    [Arguments("AnalyzerReleases.Shipped.md")]
-    [Arguments("AnalyzerReleases.Unshipped.md")]
-    public async Task Initialize_InvalidTemplateRegardlessOfFileName_ReportsDiagnostics(string path)
+    [Arguments("## Release 1.0\r\n### New Rules", "Templates/invalid.html", 14)]
+    [Arguments("## Release 1.0\r\n### New Rules", "AnalyzerReleases.Shipped.md", 14)]
+    [Arguments("#tyep Example\n#model string", "Templates/typo.html", 13)]
+    [Arguments("<p>Hello</p>", "Emails/welcome.html", 12)]
+    [Arguments("\r\n#type Example", "Templates/blank.html", 0)]
+    [Arguments("", "Templates/empty.html", 0)]
+    public async Task Initialize_ExplicitFileWithoutDirectives_ReportsNoDirectives(string content, string path, int firstLineLength)
     {
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText("## Release 1.0\r\n### New Rules", path)).RunResult;
+        // The check looks only at content, so the file name doesn't matter
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(content, path, TemplateAdditionalText.Explicit)).RunResult;
 
-        await Assert.That(string.Join(",", result.Diagnostics.Select(diagnostic => diagnostic.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
+        await Assert.That(result.Diagnostics.Length).IsEqualTo(1);
+        var diagnostic = result.Diagnostics[0];
+        await Assert.That(diagnostic.Id).IsEqualTo("SLAP008");
+        await Assert.That(diagnostic.Descriptor.Title.ToString()).IsEqualTo("Template has no directives");
+        await Assert.That(diagnostic.Descriptor.Category).IsEqualTo("SlusserLabs.AnglePlates");
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo(
+            $"Template file '{path}' has no directives; a file added with an AnglePlate Include must start with a directive such as '#type MyTemplate'");
+        await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(path, new LinePosition(0, 0), new LinePosition(0, firstLineLength)));
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
+    }
+
+    [Test]
+    [Arguments("## Release 1.0\r\n### New Rules")]
+    [Arguments("#tyep Example\r\n#model string\r\n#namespace Consumer\r\nHello")]
+    [Arguments("\r\n#type Example\r\n#model string\r\n#namespace Consumer\r\nHello")]
+    [Arguments("<p>Hello</p>")]
+    [Arguments("# Notes")]
+    [Arguments("")]
+    public async Task Initialize_DiscoveredFileWithoutDirectives_IsSkipped(string content)
+    {
+        var result = GeneratorTestHelper.Run(
+            new TemplateAdditionalText(content, "Templates/README.md"), RenderingTestHelper.Template("valid", path: "Templates/valid.html"));
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        await Assert.That(RenderingTestHelper.Render(result.Compilation).text).IsEqualTo("valid");
     }
 
     private static string CreateConflictingTypes()

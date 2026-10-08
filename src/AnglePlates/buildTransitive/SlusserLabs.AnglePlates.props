@@ -1,17 +1,20 @@
 <Project>
 
   <PropertyGroup>
-    <!-- Access modifier of base classes -->
+    <!-- Access modifier of the generated support types: public or internal -->
     <AnglePlateBaseAccessModifier Condition="'$(AnglePlateBaseAccessModifier)' == ''">public</AnglePlateBaseAccessModifier>
-
-    <!-- Default folder(s) -->
-    <AnglePlateTemplates Condition="'$(AnglePlateTemplates)' == ''">$(ProjectDir)Templates</AnglePlateTemplates>
-    <AnglePlateViews Condition="'$(AnglePlateViews)' == ''">$(ProjectDir)Views</AnglePlateViews>
-    <AnglePlateExclude Condition="'$(AnglePlateExclude)' == ''"></AnglePlateExclude>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Every file under Templates is a template by default; remove it with <AnglePlate Remove="Templates\**\*" /> -->
+    <AnglePlate Include="Templates\**\*">
+      <_AnglePlateSource>Discovered</_AnglePlateSource>
+    </AnglePlate>
+  </ItemGroup>
+
+  <ItemGroup>
     <CompilerVisibleProperty Include="AnglePlateBaseAccessModifier" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="AnglePlate" />
   </ItemGroup>
 
 </Project>
