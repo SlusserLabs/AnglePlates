@@ -164,15 +164,17 @@ When prose talks about the item type rather than the product, write it in code f
 
 ## Assumptions to confirm first
 
-Some of this plan rests on documentation or scratch experiments rather than on the real package. Check each one before building on it, and adjust the plan if it's wrong.
+Some of this plan rests on documentation or scratch experiments rather than on the real package. The [steps](#steps) say when to check each one. Adjust the plan and tell the user if any turns out wrong.
 
-| Assumption | Source so far | How to confirm | If it's wrong |
-| --- | --- | --- | --- |
-| A `DevelopmentDependency` package keeps its build files from flowing to projects further down the chain. NuGet documents that the flag marks the package as development-only and excludes compile-time assets, but not whether it changes a hand-written `PackageReference` or only the `PrivateAssets` and `IncludeAssets` that `dotnet package add` writes. | NuGet `.nuspec` reference | Pack a test version. Add it to a library once with `dotnet package add` and once by hand, then reference each library from an app. Compare the library project files and the app's `project.assets.json` and `obj/*.nuget.g.props`. | Keep the flag for the install-time behavior, document the `PrivateAssets` lines as required in the README's Installation section, and add them to the package-test project files. |
-| Without the flag, `buildTransitive` reaches indirect consumers. | NuGet documentation of the default `PrivateAssets` | The same library-to-app chain, packed without the flag. | Drop the "may flow" problem from the README and roadmap; keep the flag only if the first check shows a benefit. |
-| `CompilerVisibleItemMetadata` exposes `AnglePlate` on `AdditionalFiles` added by a target that runs before `GenerateMSBuildEditorConfigFile`, as `build_metadata.AdditionalFiles.AnglePlate`. | Roslyn source generator cookbook, from memory | Look up the key format with Context7, then build the package consumer and read the `[path]` sections of its `GeneratedMSBuildEditorConfig.editorconfig`. | Move the target to whatever point the editorconfig step reads, or adjust the key the generator reads. |
-| The default item, `Include`, and `Remove` behave with the real package the way they did with a hand-imported props file, including `Directory.Build.props` and `Directory.Build.targets`. | Scratch projects, SDK 10.0.401 | The package-test cases below. | Fix the README's "Where to put `Include` and `Remove`" guidance. |
-| `Remove` and `RemoveDuplicates` in the targets file match full paths case-insensitively, so different spellings of one file collapse. | Scratch project on Windows | The package tests on Windows, and the roadmap's Linux run. | On Linux, if two files that differ only by case collapse into one, note it in the README as a limitation. |
+One-off checks run in a temporary folder outside the repository and aren't committed, as `AGENTS.md` requires for agent-only verification. Permanent checks become package tests.
+
+| Assumption | Source so far | How to confirm | Kind | If it's wrong |
+| --- | --- | --- | --- | --- |
+| `CompilerVisibleItemMetadata` exposes `AnglePlate` on `AdditionalFiles` added by a target that runs before `GenerateMSBuildEditorConfigFile`, as `build_metadata.AdditionalFiles.AnglePlate`. | Roslyn source generator cookbook, from memory | Look up the key format with Context7 in step 1. In step 3, build the package consumer and read the `[path]` sections of its `obj/**/*.GeneratedMSBuildEditorConfig.editorconfig`. | One-off, then permanent through the editorconfig package test | Move the target to whatever point the editorconfig step reads, or adjust the key the generator reads. |
+| Without the flag, `buildTransitive` reaches indirect consumers. | NuGet documentation of the default `PrivateAssets` | In step 3, pack a version without `DevelopmentDependency`. Reference it by hand from a library, reference the library from an app that has a `Templates` folder, and check whether the app's `obj/*.nuget.g.props` imports `SlusserLabs.AnglePlates.props`. | One-off | Drop the "may flow" problem from the README and roadmap, and keep the flag only if the next check shows a benefit. |
+| A `DevelopmentDependency` package keeps its build files from flowing to projects further down the chain. NuGet documents that the flag marks the package as development-only and excludes compile-time assets, but not whether it changes a hand-written `PackageReference` or only the `PrivateAssets` and `IncludeAssets` that `dotnet package add` writes. | NuGet `.nuspec` reference | In step 3, pack a version with the flag. Add it to one library with `dotnet package add` and to another by hand, reference each library from an app, and compare the library project files and each app's `obj/*.nuget.g.props`. | One-off; the `LibraryChain` package test keeps the result | Keep the flag for the install-time behavior. The README's Installation section shows the `PrivateAssets` lines as required for hand-written references, and the package-test project files include them. |
+| The default item, `Include`, and `Remove` behave with the real package the way they did with a hand-imported props file, including `Directory.Build.props` and `Directory.Build.targets`. | Scratch projects, SDK 10.0.401 | The `RemoveDefault`, `DirectoryBuildPropsRemove`, and `DirectoryBuildTargetsRemove` package tests. | Permanent | Fix the README's "Where to put `Include` and `Remove`" guidance. |
+| `Remove` and `RemoveDuplicates` in the targets file match full paths case-insensitively, so different spellings of one file collapse. | Scratch project on Windows | The duplicate-spelling package test on Windows, and the roadmap's Linux run. | Permanent | On Linux, if two files that differ only by case collapse into one, note it in the README as a limitation. |
 
 ## Implementation
 
@@ -234,7 +236,7 @@ In [HelloWorld.csproj](../samples/HelloWorld/HelloWorld.csproj), move the `Sluss
 
 ### Package metadata
 
-Set `<DevelopmentDependency>true</DevelopmentDependency>` in [AnglePlates.csproj](../src/AnglePlates/AnglePlates.csproj), so the package is marked as development-only and its build files don't reach projects further down the chain. The [first assumption](#assumptions-to-confirm-first) decides whether that holds for every reference or only for references added with `dotnet package add`, and what the README's Installation section has to say. Keep the `buildTransitive` folder, which also serves direct references.
+Set `<DevelopmentDependency>true</DevelopmentDependency>` in [AnglePlates.csproj](../src/AnglePlates/AnglePlates.csproj), so the package is marked as development-only and its build files don't reach projects further down the chain. The `DevelopmentDependency` row in [Assumptions to confirm first](#assumptions-to-confirm-first) decides whether that holds for every reference or only for references added with `dotnet package add`, and what the README's Installation section has to say. Keep the `buildTransitive` folder, which also serves direct references.
 
 ### Generator
 
@@ -242,9 +244,15 @@ In [TemplateGenerator.cs](../src/AnglePlates/TemplateGenerator.cs):
 
 1. Add one helper that reads a `build_property` value, trims it, treats missing or empty as the default, and matches allowed values case-insensitively. `AnglePlateBaseAccessModifier` is the only generator setting today; any later one uses the same helper.
 2. When a value is invalid, report `SLAP009` with `Location.None` and add no sources, not even the support types. A generated class with the wrong accessibility isn't a safe fallback.
-3. Combine `AdditionalTextsProvider` with `AnalyzerConfigOptionsProvider` and read `build_metadata.AdditionalFiles.AnglePlate` for each file. Keep files whose value is `Discovered` or `Explicit`, and ignore missing or other values. Project to a small value-equatable record holding the path and kind before calling `GetText`, so other files are never read and changing one doesn't rerun template steps.
+3. Combine `AdditionalTextsProvider` with `AnalyzerConfigOptionsProvider` and read `build_metadata.AdditionalFiles.AnglePlate` for each file. Match `Discovered` and `Explicit` case-insensitively, and ignore missing or other values. Project to a small value-equatable record holding the path and kind before calling `GetText`, so other files are never read and changing one doesn't rerun template steps. Name the steps with `WithTrackingName`: `AnglePlateFiles` for the filtered records and `AnglePlateTemplates` for the collected templates, so tests can check reuse. The generator has no tracking names today.
 4. Replace the `StartsWith("#")` check with the parser's answer: a file is a template when its directive section contains at least one known directive (`DirectiveSectionEnd > 0`). Thread the kind through `TemplateFile`.
-5. Make every path relative to `ProjectDir`, including paths outside it, so `C:\repo\Shared\receipt.html` with a project in `C:\repo\App\` becomes `../Shared/receipt.html`. The generator targets `netstandard2.0`, which has no `Path.GetRelativePath`, so write a small helper that compares path segments ordinally and keeps `/` separators. Keep the absolute path when there's no relative form, such as a different drive on Windows, or when `ProjectDir` is missing. The relative path feeds the class documentation and hint names; `#line` directives keep the full path so compiler errors still open the right file.
+5. Make every path relative to `ProjectDir`, including paths outside it, so `C:\repo\Shared\receipt.html` with a project in `C:\repo\App\` becomes `../Shared/receipt.html`. The generator targets `netstandard2.0`, which has no `Path.GetRelativePath`, so write a small helper:
+   - Normalize both paths to `/` separators and split them into segments.
+   - Compare segments case-insensitively when `ProjectDir` is a Windows path, meaning it starts with a drive letter and a colon or with `\\`, and ordinally otherwise. The generator doesn't run on the consumer's file system, so the path's shape decides, not the host OS.
+   - Keep the file path's own casing in the result. `Templates/A.html` and `Templates/a.html` still produce different names, as `Initialize_PathIdentity_NormalizesSeparatorsAndPreservesCase` expects.
+   - Keep the absolute path when there's no relative form, such as a different drive or UNC share on Windows, or when `ProjectDir` is missing.
+
+   The relative path feeds the class documentation and hint names; `#line` directives keep the full path so compiler errors still open the right file. Paths under the project folder produce the same names as today, so the existing snapshots don't change.
 
 | Kind | Starts with a known directive | Result |
 | --- | --- | --- |
@@ -259,42 +267,60 @@ Keep reading the SDK's `build_property.ProjectDir`. It's in the SDK's default co
 
 ### Diagnostics
 
-| ID | Title | Location |
-| --- | --- | --- |
-| `SLAP008` | Template has no directives | First line of the explicit item; zero-length at the start of an empty file |
-| `SLAP009` | Invalid AnglePlates MSBuild property | `Location.None`; the message names the property, the value, and the allowed values |
+| ID | Descriptor name | Title | Message | Location |
+| --- | --- | --- | --- | --- |
+| `SLAP008` | `MissingDirectives` | Template has no directives | `Template file '{0}' has no directives; a file added with an AnglePlate Include must start with a directive such as '#type MyTemplate'` | First line of the explicit item; zero-length at the start of an empty file |
+| `SLAP009` | `InvalidMSBuildProperty` | Invalid AnglePlates MSBuild property | `MSBuild property '{0}' has invalid value '{1}'; expected {2}` | `Location.None` |
 
-`SLAP009` covers every AnglePlates MSBuild property, so a later generator setting reuses it. Add both to `DiagnosticDescriptors.cs`, `AnalyzerReleases.Unshipped.md`, and `docs/diagnostics.md`. `docs/diagnostics.md` says every diagnostic points into a template, so `SLAP009` needs an exception there.
+`{0}` in `SLAP008` is the template's full path, like `SLAP001` to `SLAP003`. For `AnglePlateBaseAccessModifier`, `SLAP009` uses `'public' or 'internal'` as `{2}`, the same text `#access` uses for `SLAP007`, and the trimmed value as `{1}`. Both are errors in category `SlusserLabs.AnglePlates`, enabled by default, like the existing rules. `SLAP009` covers every AnglePlates MSBuild property, so a later generator setting reuses it. Add both to `DiagnosticDescriptors.cs`, `AnalyzerReleases.Unshipped.md`, and `docs/diagnostics.md`. `docs/diagnostics.md` says every diagnostic points into a template, so `SLAP009` needs an exception there.
 
 ## Tests
 
-Unit tests in `tests/AnglePlates.Tests`:
+### Unit tests
 
-- Make `TemplateAdditionalText` tagged as discovered by default through `TestAnalyzerConfigOptionsProvider`, with a way to create untagged and explicit files, so existing tests don't change.
+In `tests/AnglePlates.Tests`, first change the helpers so existing tests keep passing unchanged:
+
+- `TestAnalyzerConfigOptionsProvider` returns `build_metadata.AdditionalFiles.AnglePlate = Discovered` for any additional file that has no per-file entry. That fallback applies even when a test passes only global options, as `Initialize_PathIdentity_NormalizesSeparatorsAndPreservesCase` does with `build_property.ProjectDir`; otherwise those tests would silently stop generating.
+- A per-file entry replaces the fallback. Add a convenient way to mark a file explicit (`AnglePlate = Explicit`) or untagged (an entry without the key).
+- Add a way to count `GetText` calls on an additional text, such as a counter on `TemplateAdditionalText`.
+
+Then add these tests:
+
 - Untagged files, and files with an unrecognized `AnglePlate` value, starting with `#nullable enable`, `# Title`, and `#!/bin/bash`: no diagnostics, no templates, and no `GetText` calls.
+- `AnglePlate` values `discovered` and `EXPLICIT` behave like `Discovered` and `Explicit`.
 - Discovered files without directives (`# Title`, `#typ Greeting`, a blank first line, plain HTML, an empty file): skipped.
-- Explicit file without directives: `SLAP008` at the first line, regardless of file name. This replaces `Initialize_InvalidTemplateRegardlessOfFileName_ReportsDiagnostics`.
+- Explicit file without directives: `SLAP008` at the first line with the message from [Diagnostics](#diagnostics), regardless of file name. This replaces `Initialize_InvalidTemplateRegardlessOfFileName_ReportsDiagnostics`.
 - Explicit empty file: `SLAP008` with a zero-length location at the start.
-- `AnglePlateBaseAccessModifier`: missing, empty, `public`, `internal`, `Internal`, and ` internal ` generate with the canonical spelling; `private` and `protected` report `SLAP009` and add no sources.
-- Paths: a template outside the project folder gets the same hint name and class documentation for two different absolute project locations. Extend `Initialize_PathIdentity_NormalizesSeparatorsAndPreservesCase` with `../` paths, a different Windows drive, and a missing `ProjectDir`.
-- Incremental: changing an untagged additional file doesn't rerun template steps.
+- `AnglePlateBaseAccessModifier`: missing, empty, `public`, `internal`, `Internal`, and ` internal ` generate with the canonical spelling; `private` and `protected` report `SLAP009` with the message from [Diagnostics](#diagnostics) and add no sources.
+- Paths: extend `Initialize_PathIdentity_NormalizesSeparatorsAndPreservesCase`. A template outside the project folder gets the same hint name and class documentation for two different absolute project locations, on both Windows-shaped and `/`-rooted paths. Windows paths whose drive letter or folder names differ only by case from `ProjectDir` still become relative. A different drive, a different UNC share, and a missing `ProjectDir` keep the absolute path. The existing case-preservation assertions still hold.
+- Incremental: run the driver, replace an untagged additional file's text through the driver, and run again. Every output of the `AnglePlateTemplates` tracking step reports `Cached` or `Unchanged`, the generated sources are the same, and the replaced file's `GetText` isn't called.
 
-Package tests in `tests/AnglePlates.PackageTests`, run through `eng/validate-package.ps1` with a fresh version:
+### Package tests
 
-- Rewrite the project file in the style of the [consumer example](#consumer-example), with relative paths. Keep the default `Templates` item, add an `Include` for `CustomViews`, and `Remove` the excluded file, replacing `AnglePlateViews` and `AnglePlateExclude`.
+`tests/AnglePlates.PackageTests` stays the main consumer. Changes there:
+
+- Rewrite the project file in the style of the [consumer example](#consumer-example), with relative paths. Keep the default `Templates` item, add an `Include` for `CustomViews`, and `Remove` the excluded file, replacing `AnglePlateViews` and `AnglePlateExclude`. Include the `PrivateAssets` and `IncludeAssets` lines if the `DevelopmentDependency` check shows they're needed.
 - `PackageValidator` checks that the nuspec has `<developmentDependency>true</developmentDependency>`.
 - An absolute explicit item and the default item for the same file: one generated class, treated as explicit.
 - `PublicAPI.Shipped.txt` (`#nullable enable`) and a `README.md` (`# Title`) as plain `AdditionalFiles`, and a `README.md` and an empty file inside `Templates`: the build stays clean.
-- The generated `.editorconfig` has an `AnglePlate` value for each template and none for the plain `AdditionalFiles`.
-- A second small consumer with `<AnglePlate Remove="Templates\**\*" />` and one explicit item: only that template generates, even though its `Templates` folder holds a valid template. `eng/validate-package.ps1` builds and runs both consumers.
-- In the second consumer, the same `Remove` in a `Directory.Build.targets` works, and in a `Directory.Build.props` it has no effect.
-- A library that references the package and an app that references the library, set up as the [first assumption](#assumptions-to-confirm-first) describes.
+- A project-file target that runs after `GenerateMSBuildEditorConfigFile` reads `$(GeneratedMSBuildEditorConfigFile)` and fails the build unless each template has an `AnglePlate` value and the plain `AdditionalFiles` have none.
+
+Some cases need a different project file, so add small consumers under a new `tests/AnglePlates.PackageConsumers` folder. Each one is a .NET 10 executable outside the solution with the same rules as the main consumer: a `PackageReference` to `SlusserLabs.AnglePlates` at `$(AnglePlatesPackageVersion)`, the `Microsoft.AspNetCore.App` framework reference, no source-tree imports, and no analyzer project references. Each `Program` checks its own results, prints what failed, and returns a nonzero exit code on failure. To check that a class wasn't generated, look it up by name with `typeof(Program).Assembly.GetType(...)`, since code that names a missing class wouldn't compile.
+
+| Consumer | Setup | Passes when |
+| --- | --- | --- |
+| `RemoveDefault` | `<AnglePlate Remove="Templates\**\*" />` and one explicit `Include` in the project file. `Templates` holds a valid template. | The explicit template renders, and the `Templates` class doesn't exist. |
+| `DirectoryBuildPropsRemove` | The same `Remove` in a `Directory.Build.props` next to the project, nothing in the project file. | The `Templates` class exists and renders, because the `Remove` ran too early. |
+| `DirectoryBuildTargetsRemove` | The same `Remove` in a `Directory.Build.targets` next to the project, nothing in the project file. | The `Templates` class doesn't exist. |
+| `LibraryChain` | `Library/Library.csproj` references the package and has one template. `App/App.csproj` references the library with a `ProjectReference` and has its own `Templates` folder with a valid template. App's project file has a target before `Build` that fails if `@(AnglePlate)` isn't empty. | App builds, renders the library's template, and has no class from its own `Templates` folder. |
+
+Update [eng/validate-package.ps1](../eng/validate-package.ps1) to run a list of consumers, each written as a folder and the project to run in it: the main consumer, then the four above, with `App/App.csproj` as the project for `LibraryChain`. For each one, copy its folder into its own subfolder of the validation root, then restore and run it with the existing NuGet config and empty package cache. Only the main consumer gets the package and symbol paths as arguments. Stop at the first failure and name the consumer.
 
 Run the sample too; it imports the props and targets from source.
 
 ## Docs
 
-- README "Installation": show the `PackageReference` with `PrivateAssets` and `IncludeAssets`, and say whether `dotnet package add` writes them for you, based on the [first assumption](#assumptions-to-confirm-first).
+- README "Installation": show the `PackageReference` with `PrivateAssets` and `IncludeAssets`, and say whether `dotnet package add` writes them for you, based on the `DevelopmentDependency` check.
 - README "How templates are discovered": replace the property table and example with the [option set](#the-option-set), the [consumer example](#consumer-example), [How discovery works](#how-discovery-works), and [Where to put `Include` and `Remove`](#where-to-put-include-and-remove). Remove "It applies the same check to `AdditionalFiles` supplied from other locations".
 - README "Directives": "the first character of a template must be `#`" becomes "a template starts with a known directive".
 - README "Encoding and options": say `AnglePlateBaseAccessModifier` accepts `public` or `internal` and reports `SLAP009` otherwise.
@@ -304,18 +330,23 @@ Run the sample too; it imports the props and targets from source.
 - `docs/testing.md`: `TemplateAdditionalText` is tagged as discovered by default, and how to create untagged and explicit files; list the new focused regressions.
 - `docs/roadmap.md`: "How it works today" steps 1 and 2, the "Unrelated additional files" and "Discovery defaults" rows, the step 1 checkbox, and the "Package contract" line, which gains the development dependency.
 - `src/AnglePlates/AnalyzerReleases.Unshipped.md`: `SLAP008` and `SLAP009` rows, plus "; Breaking:" lines saying that only `AdditionalFiles` added through `AnglePlate` items are templates and that the discovery properties were removed.
-- `AGENTS.md`: add the development dependency to the analyzer-only package rule. Change the discovery rule from "default, custom, excluded, and explicit `AnglePlate` items" to the default `Templates` item plus `Include` and `Remove`.
-- `tests/AnglePlates.PackageTests/README.md`: the new discovery cases.
-- Release notes: list the removed properties and the `Include` or `Remove` that replaces each one, since the roadmap asks for MSBuild property changes to be recorded.
+- `AGENTS.md`: add the development dependency to the analyzer-only package rule. Change the discovery rule from "default, custom, excluded, and explicit `AnglePlate` items" to the default `Templates` item plus `Include` and `Remove`. Extend the package-test rule to cover `tests/AnglePlates.PackageConsumers`.
+- `tests/AnglePlates.PackageTests/README.md`: the new discovery cases, the consumers under `tests/AnglePlates.PackageConsumers`, and how `eng/validate-package.ps1` runs them.
+
+The repository has no changelog or release notes yet. The "; Breaking:" lines in `AnalyzerReleases.Unshipped.md` record the removed properties until the release process the roadmap describes exists; name each removed property and the `Include` or `Remove` that replaces it.
 
 ## Steps
 
-1. Confirm the [assumptions](#assumptions-to-confirm-first) that need the real package, starting with `DevelopmentDependency` and the editorconfig key. Adjust the plan if any is wrong.
-2. Rewrite the props and targets files, move the sample's props import, and update the package-test project files.
-3. Set `DevelopmentDependency` in the package project.
-4. In the generator, add the option helper and `SLAP009`, filter on the `AnglePlate` metadata, switch to directive-based recognition, add `SLAP008`, and make paths relative to the project folder.
-5. Add the unit tests, then pack a fresh version and extend the package tests.
-6. Update the docs.
+Pack and validate the way `AGENTS.md` describes: only into `artifacts/package`, with a fresh `0.1.0-alpha.local.<yyyyMMdd>.<n>` version each time, removing older package pairs first.
+
+1. Look up the `build_metadata.AdditionalFiles.<name>` key format with Context7.
+2. Rewrite the props and targets files, move the sample's props import, and update the main package-test project file. Build the solution and run the sample.
+3. Pack without `DevelopmentDependency`. Build the main package consumer and inspect its editorconfig, then run the no-flag library-to-app check. Both are one-off checks from [Assumptions to confirm first](#assumptions-to-confirm-first).
+4. Set `DevelopmentDependency`, pack again, and run the `dotnet package add` versus hand-written check. Record the outcome in this plan's Installation item under [Docs](#docs) and in the package-test project files. Stop and tell the user if any assumption from steps 1 to 4 was wrong.
+5. In the generator, add the option helper and `SLAP009`, filter on the `AnglePlate` metadata with tracking names, switch to directive-based recognition, add `SLAP008`, and make paths relative to the project folder.
+6. Update the test helpers, add the unit tests, and review any snapshot changes.
+7. Add the package consumers, update `eng/validate-package.ps1`, pack a fresh version, and run the full validation.
+8. Update the docs.
 
 ## Out of scope
 

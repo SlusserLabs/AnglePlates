@@ -2,7 +2,7 @@
 
 > **Status: under consideration for version 2; not approved.** T4-style syntax isn't a goal for the first release. Don't implement any part of this plan, and don't add options, diagnostics, or extension points for it in version 1 work. If it's approved later, check the details below against the code as it stands then.
 
-This plan adds a second template syntax that uses T4 delimiters for the AnglePlates features that have a T4 equivalent. It's meant to make the move easier for people coming from T4 and for anyone who prefers its look. It doesn't add T4 features AnglePlates lacks. [syntax-comparison.md](../docs/syntax-comparison.md) has the background.
+This plan adds a second template syntax that uses T4 delimiters for the AnglePlates features that have a T4 equivalent. It's meant to make the move easier for people coming from T4 and for anyone who prefers its look. It doesn't add T4 features AnglePlates lacks.
 
 A project setting selects the syntax, and each syntax gets its own parser. The delimiters stay hard-coded in each parser; this plan doesn't make delimiters configurable.
 
@@ -170,7 +170,6 @@ The isolated package consumer has to prove that `AnglePlateSyntax` flows through
 ## Documentation
 
 - README: a "T4-style syntax" section with the property, the mapping table, the encoding difference, and the unsupported list. Mention that templates can keep their output extension, such as `.html`, and that editors can still be pointed at T4 highlighting through settings like VS Code's `files.associations`.
-- `docs/syntax-comparison.md`: update the feasibility section to describe what shipped. It recommends a directive and a Jinja-style preset; note that the project chose a project-wide property and T4 only.
 - `docs/diagnostics.md` and `AnalyzerReleases.Unshipped.md`: the new rules.
 - `docs/lexicon.md`: add "template syntax" for the `AnglePlates` or `T4` choice, so prose doesn't mix "mode", "dialect", and "preset".
 - `docs/roadmap.md`: track the work and any follow-ups.
