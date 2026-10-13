@@ -22,6 +22,7 @@
     <Project Path="benchmarks/AnglePlates.Benchmarks/AnglePlates.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/AnglePlates.Runtime.Tests/AnglePlates.Runtime.Tests.csproj" />
     <Project Path="tests/AnglePlates.Tests/AnglePlates.Tests.csproj" />
   </Folder>
 </Solution>

@@ -1,0 +1,6 @@
+#type AsyncLoop
+#model string
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+#generate Utf8
+#using System
+a[% for (var i = 0; i < 3; i++) { %]x[[ i ]]y[% } %]z

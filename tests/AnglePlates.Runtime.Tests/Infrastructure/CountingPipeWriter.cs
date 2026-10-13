@@ -1,13 +1,15 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
+namespace SlusserLabs.AnglePlates.Runtime.Tests.Infrastructure;
 
 // Records each flush and the bytes written before it; OnFlush can cancel a token or return a completed or canceled result
+[ExcludeFromCodeCoverage]
 internal sealed class CountingPipeWriter : PipeWriter
 {
     private readonly ArrayBufferWriter<byte> _buffer = new();

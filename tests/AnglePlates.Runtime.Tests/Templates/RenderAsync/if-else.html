@@ -1,0 +1,6 @@
+#type AsyncIfElse
+#model string
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+#generate Utf8
+#using System
+[% if (model.Length > 0) %]a[% else %]b[% if (model.Length == 0) %][[ model ]][% else %]c

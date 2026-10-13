@@ -114,6 +114,19 @@ public sealed class LineMappingTests
     }
 
     [Test]
+    public async Task FlushingLiteral_OnlyLineBreaks_MapsOneColumnAfterStart()
+    {
+        // In RenderAsync the literal after a C# block flushes, so it gets a mapping even though it holds only line breaks
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Utf8\r\n[% _ = model.Length; %]\n\n"));
+        var source = result.TemplateSources.Single();
+        using var generated = GeneratedAssembly.Load(result.Compilation);
+        var streamed = RenderingTestHelper.RenderToPipe(generated, "Consumer.ExampleUtf8Template", "<value>");
+
+        await Assert.That(source).Contains("#line (6, 24) - (6, 24) ");
+        await Assert.That(Convert.ToHexString(streamed)).IsEqualTo("0A0A");
+    }
+
+    [Test]
     [Arguments("Templates/a\"b.html", "Templates/a&quot;b.html")]
     [Arguments("Templates/a\nb.html", "Templates/a&#10;b.html")]
     [Arguments("Templates/a\r\nb.html", "Templates/a&#13;&#10;b.html")]

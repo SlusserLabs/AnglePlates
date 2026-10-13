@@ -1,0 +1,6 @@
+#type AsyncBackpressure
+#model string
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+#generate Utf8
+#using System
+[% for (var i = 0; i < 100; i++) { %][[ model ]][% } %]

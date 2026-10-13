@@ -13,7 +13,7 @@
 ## Skill Routing
 
 - `/csharp`: Use for all C# source changes, including consumer code emitted from strings in `Emit/SupportTypes.cs` and `Emit/TemplateClassWriter.cs`.
-- `/dotnet-tunit`: Use for tests in `tests/AnglePlates.Tests`.
+- `/dotnet-tunit`: Use for tests in `tests/AnglePlates.Tests` and `tests/AnglePlates.Runtime.Tests`.
 - `/docs`: Use for project documentation under `docs/`.
 - `/humanizer`: Use for human-facing prose and code comments. Do not apply it to code, plans, chat messages, or agent instructions such as `AGENTS.md`.
 - `/test-delegation`: Use only for one-off, agent-driven test runs the user requests.

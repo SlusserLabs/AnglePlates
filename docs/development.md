@@ -8,11 +8,12 @@ This guide is for engineers who want to change AnglePlates. It follows one templ
 
 Use a stable .NET 10 SDK. [global.json](../global.json) sets a 10.0.100 minimum, allows later installed .NET 10 feature bands, and selects Microsoft.Testing.Platform as the test runner.
 
-`AnglePlates.slnx` holds four projects:
+`AnglePlates.slnx` holds five projects:
 
 - `src/AnglePlates`, the generator. It targets `netstandard2.0` and Roslyn 4.14.0 so that it loads in the .NET 10 SDK's compiler, which is the oldest host a supported consumer can use. Its assembly name, package ID, and root namespace are all `SlusserLabs.AnglePlates`.
 - `samples/HelloWorld`, a console app that uses the generator from source and checks that `Render` on both renderers and `RenderAsync` produce the same output.
-- `tests/AnglePlates.Tests`, the TUnit test project.
+- `tests/AnglePlates.Tests`, the TUnit project that tests the generator with in-memory compilations.
+- `tests/AnglePlates.Runtime.Tests`, a TUnit project that loads the generator the same way the sample does, compiles the real templates in its `Templates` folder, and tests the emitted classes as ordinary typed C#.
 - `benchmarks/AnglePlates.Benchmarks`, a BenchmarkDotNet app that uses the generator from source. It's in the solution so changes to emitted code keep it compiling, but nothing runs it automatically. [Performance](performance.md) explains how to run it and holds the recorded baseline.
 
 Consumers need .NET 10 and C# 11 or later. Generated code uses .NET 10 APIs and C# 11 syntax freely, without `#if` branches for anything older.
@@ -173,13 +174,14 @@ A new MSBuild option needs the same pieces: a default in the props file, a `Comp
 [docs/testing.md](testing.md) explains `GeneratorTestHelper`, `RenderingTestHelper`, snapshot review, and incremental reruns in detail. A few habits matter for almost every change:
 
 - Run the real generator through the helpers and compile the result. A change to parsing, trimming, encoding, or output should also run the generated renderers and assert the exact characters and bytes from both the text and UTF-8 paths.
+- Test how the emitted classes behave at run time in `tests/AnglePlates.Runtime.Tests`: add a template under its `Templates` folder and call the generated class directly. Its `ConversionTests` pin how every common C# variable type turns into text, so a change to the support types has to keep them passing.
 - Review every changed snapshot in `tests/AnglePlates.Tests/Snapshots` by hand. Never turn on automatic acceptance.
 - When a change affects caching, add an incremental test that reruns the driver and checks which steps were reused.
 - When a change affects emitted names, add a compilation test with a consumer type that collides with them.
 
 ## Validating the package
 
-The sample and the test project load the generator from source and import the discovery files directly, so a passing build doesn't prove the package works. The package has to be packed and installed somewhere that can't see the source tree.
+The sample and both test projects load the generator from source, and the sample and `AnglePlates.Runtime.Tests` import the discovery files directly, so a passing build doesn't prove the package works. The package has to be packed and installed somewhere that can't see the source tree.
 
 Pack a fresh version to `artifacts/package` for each run, using the local format from the [version table](releasing.md#versions): `1.0.0-local.<yyyyMMdd>.<n>`, where `<n>` goes up with each pack that day. Delete older packages from that folder first, so it only holds the version you're validating. Pass `-p:Version`, not `-p:PackageVersion`; the second one changes the package version but leaves the assembly versions behind.
 

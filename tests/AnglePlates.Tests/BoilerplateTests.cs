@@ -13,6 +13,8 @@ using TUnit.Core;
 
 namespace SlusserLabs.AnglePlates.Tests;
 
+// BufferPool rental counting needs options built through reflection with CountingCharPool, so these cases stay with the
+// in-memory compilations; the rest of the emitted-runtime behavior is tested in AnglePlates.Runtime.Tests
 public sealed class BoilerplateTests
 {
     [Test]
@@ -153,25 +155,6 @@ public sealed class BoilerplateTests
         await Assert.That(exception!.InnerException!.Message).IsEqualTo("Rent failed");
         await Assert.That(pool.Rents).IsEqualTo(0);
         await Assert.That(pool.Returns).IsEqualTo(0);
-    }
-
-    [Test]
-    [Arguments("Consumer.ExampleTextTemplate")]
-    [Arguments("Consumer.ExampleUtf8Template")]
-    public async Task Options_ConstructorArgument_ReturnsSameInstanceOrDefault(string typeName)
-    {
-        using var generated = CreateRenderer();
-        var options = CreateOptions(generated, new CountingCharPool(), HtmlEncoder.Default);
-        var type = generated.Assembly.GetType(typeName, throwOnError: true)!;
-        var property = type.GetProperty("Options")!;
-
-        var withOptions = property.GetValue(Activator.CreateInstance(type, options));
-        var withoutOptions = property.GetValue(Activator.CreateInstance(type, [null]));
-
-        await Assert.That(ReferenceEquals(withOptions, options)).IsTrue();
-        await Assert.That(withoutOptions).IsNotNull();
-        await Assert.That(ReferenceEquals(withoutOptions, options)).IsFalse();
-        await Assert.That(withoutOptions!.GetType()).IsEqualTo(options.GetType());
     }
 
     private static GeneratedAssembly CreateRenderer()
