@@ -98,6 +98,7 @@ $consumers = @(
     @{ Name = 'LibraryChain'; Source = 'tests/AnglePlates.PackageConsumers/LibraryChain'; Project = 'App/App.csproj'; Arguments = @() },
     @{ Name = 'SharedTemplates'; Source = 'tests/AnglePlates.PackageConsumers/SharedTemplates'; Project = 'App/App.csproj'; Arguments = @() },
     @{ Name = 'PackagedLibrary'; Source = 'tests/AnglePlates.PackageConsumers/PackagedLibrary'; Project = 'App/App.csproj'; Pack = 'Library/Library.csproj'; PackageId = 'PackagedLibrary.Library'; Arguments = @() },
+    @{ Name = 'ScannerParity'; Source = 'tests/AnglePlates.PackageConsumers/ScannerParity'; Project = 'ScannerParity.csproj'; Arguments = @() },
     @{ Name = 'AspNetCore'; Source = 'tests/AnglePlates.PackageConsumers/AspNetCore'; Project = 'AspNetCore.csproj'; Arguments = @() },
     @{ Name = 'NativeAot'; Source = 'tests/AnglePlates.PackageConsumers/NativeAot'; Project = 'NativeAot.csproj'; NativeAot = $true; Arguments = @('JIT') }
 )

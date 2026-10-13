@@ -74,6 +74,43 @@ public sealed class BlockSyntaxTests
     }
 
     [Test]
+    // Brackets in a C# variable balance before "]]" closes it
+    [Arguments("[% var grid = new[] { 7 }; var row = new[] { 0 }; %][[ grid[row[0]] ]]", "7")]
+    [Arguments("[[ model[0..1]]]", "&lt;")]
+    // Closers inside strings, character literals, and /* */ comments don't end the block
+    [Arguments("[% var s = \"%]\"; %][[ s ]]", "%]")]
+    [Arguments("[[ \"]]\" ]]", "]]")]
+    [Arguments("[[ ']' ]]", "]")]
+    [Arguments("[% var c = '%'; %][[ c ]]", "%")]
+    [Arguments("[[ @\"]]\" ]][[ \"\"\"%]\"\"\" ]]", "]]%]")]
+    [Arguments("[% var n = \"%]\"u8.Length; %][[ n ]]", "2")]
+    [Arguments("[% var s = $\"{model[0..1]}%]\"; %][[ s ]]", "&lt;%]")]
+    [Arguments("[% var s = $$\"\"\"{{model.Length}}]]\"\"\"; %][[ s ]]", "7]]")]
+    [Arguments("[% var s = \"\"\"\r\n    a %]\r\n    \"\"\"; %][[ s ]]", "a %]")]
+    [Arguments("[[ /* ]] */ model.Length ]]", "7")]
+    [Arguments("[% /* %] */ %]x", "x")]
+    // Braces inside strings don't change the generated indentation, which is cosmetic anyway
+    [Arguments("[% if (model.Length > 0) { var s = \"}\"; %][[ s ]][% } %]", "}")]
+    // A // comment or # directive line ends at its first closer
+    [Arguments("[% // note %]tail", "tail")]
+    [Arguments("a[% #if DEBUG %]b[% #endif %]c", "ac")]
+    [Arguments("a[% #if !DEBUG %]b[% #endif %]c", "abc")]
+    [Arguments("a[% #if DEBUG\r\n var s = \"%]\"; %]b[% #endif %]c", "ac")]
+    // A C# variable that ends in a // comment still gets its closing parenthesis
+    [Arguments("[[ model // note ]]", "&lt;value&gt;")]
+    [Arguments("[[ model.Length // note\r\n]]", "7")]
+    [Arguments("a[[ model // ]]b", "a&lt;value&gt;b")]
+    public async Task CSharpScanner_ClosersInsideCSharp_RenderLikeCSharp(string body, string expected)
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+        var output = RenderingTestHelper.Render(result.Compilation);
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
     [MethodDataSource(nameof(EmptyBlockCases))]
     public async Task EmptyBlock_WithTrimFlags_RendersNothingButTrims(string body, string expected)
     {

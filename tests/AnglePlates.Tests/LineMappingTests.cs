@@ -19,6 +19,16 @@ public sealed class LineMappingTests
     [Arguments("[[ default ]]", "CS8716", "There is no target type for the default literal.", 5, 3, 7)]
     [Arguments("[[ 1, 2 ]]", "CS1501", "No overload for method 'ToString' takes 3 arguments", 5, 3, 4)]
     [Arguments("<p>[% var count = 1;\r\n  count += missing; %]</p>", "CS0103", "The name 'missing' does not exist in the current context", 6, 11, 7)]
+    // Closers that the scanner skips inside C# don't move the template lines after them
+    [Arguments("[[ \"]]\" +\r\n  missing ]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
+    [Arguments("[[ model[\r\n  missing[0]] ]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
+    [Arguments("[% var s = \"%]\";\r\n  s += missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 6, 7, 7)]
+    [Arguments("[% /* %] */ var s = $\"{\r\n  missing}%]\"; %]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
+    // A C# variable that ends in a // comment closes its call on the next generated line. An error at the start of the
+    // variable maps to all of it, the same as any other variable.
+    [Arguments("[[ missing // note ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 3, 15)]
+    [Arguments("[[ model +\r\n  missing // note\r\n]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
+    [Arguments("[[ 1, 2 // note ]]", "CS1501", "No overload for method 'ToString' takes 3 arguments", 5, 3, 12)]
     public async Task InvalidCSharp_InVariableOrBlock_ReportsCompilerErrorAtTemplate(
         string body, string id, string message, int templateLine, int templateColumn, int templateLength)
     {
@@ -32,6 +42,25 @@ public sealed class LineMappingTests
             var template = RenderingTestHelper.Template($"#generate {target}\r\n{body}");
             var error = ExpectedCompilerDiagnostic.Mapped(id, message, TemplateText.Path, mapped, $"Consumer.Example{target}Template.g.cs");
             var expected = target == "Text" ? new[] { error } : new[] { error, error };
+
+            var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
+
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+        }
+    }
+
+    [Test]
+    public async Task BrokenCSharp_UnterminatedString_EndsAtFirstCloserAndReportsAtTemplate()
+    {
+        // The string runs to the end of its line, so the block ends at the first closer instead of pulling the HTML after it
+        // into C#, and the compiler reports the typo at the template line. A UTF-8 class reports both errors again from RenderAsync.
+        foreach (var target in new[] { "Text", "Utf8" })
+        {
+            var template = RenderingTestHelper.Template($"#generate {target}\r\n<p>[% var count = 1;\r\n  var s = \"abc %]</p>\r\n[[ model ]]");
+            var file = $"Consumer.Example{target}Template.g.cs";
+            var newline = ExpectedCompilerDiagnostic.Mapped("CS1010", "Newline in constant", TemplateText.Path, new LinePositionSpan(new LinePosition(6, 10), new LinePosition(6, 10)), file);
+            var semicolon = ExpectedCompilerDiagnostic.Mapped("CS1002", "; expected", TemplateText.Path, new LinePositionSpan(new LinePosition(6, 14), new LinePosition(6, 14)), file);
+            var expected = target == "Text" ? new[] { newline, semicolon } : new[] { newline, semicolon, newline, semicolon };
 
             var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
 

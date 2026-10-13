@@ -8,7 +8,7 @@ If something here doesn't match the code, trust the code and fix the roadmap.
 
 ### Template syntax cleanup
 
-Close the remaining rough edges in the language before calling the syntax stable: closing delimiters inside C# strings and comments end a block early, generated locals like `model` and `writer` can collide with template code, and C# block indentation is a brace-counting guess. The README lists the first two under "Good to know". Decide which ones to fix and which stay documented limitations.
+Close the remaining rough edge in the language before calling the syntax stable: generated locals like `model` and `writer` can collide with template code. The README lists it under "Good to know". Decide whether to fix it or keep it as a documented limitation.
 
 ### CI and publishing
 

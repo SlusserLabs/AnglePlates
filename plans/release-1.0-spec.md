@@ -699,7 +699,9 @@ The audit checked these against Microsoft.CodeAnalysis.CSharp 4.14.0. The implem
 When `FindCloser` returns -1:
 
 - If a plain text search finds no closer at all, report SLAP004 at the opener and consume the rest, as today.
-- Otherwise end the block at the plain-search position, with no new diagnostic (S15). After rule 6, the only way to get here is an unmatched `[` in a C# variable, which the compiler already reports through `#line`.
+- Otherwise end the block at the plain-search position, with no new diagnostic (S15). After rule 6, the only ways to get here are an unmatched `[` in a C# variable, which the compiler already reports through `#line`, and the window limit below.
+
+Phase 3 review found that broken C# made the full-text lex quadratic: an unterminated verbatim string, `/*` comment, or unmatched `[` lexed to the end of the template for every block, and an unclosed `$"{` hole nested Roslyn's interpolation scanner one level per later block until the stack overflowed. The scanner therefore lexes a substring window that ends after the first plain-search closer, doubles the number of closers in the window whenever a token or comment reaches its end, and returns -1 after the window with 16 closers. Valid C# that hides more than 15 closers in literals, comments, or brackets falls back to the plain search too, and the compiler reports the cut-off block.
 
 ### 7.5 Parity and release note
 
@@ -847,7 +849,8 @@ Consumers, existing and new:
 | NoPrivateAssets (new) | A library with a plain one-line reference, and an app that reaches it through a `ProjectReference` and has its own `Templates` folder. Asserts the app has no `AnglePlate` items and no generated classes. | Add |
 | CentralPackageManagement (new) | `ManagePackageVersionsCentrally` with `GlobalPackageReference`. | Add |
 | UnsupportedFramework (new) | `net8.0`; pins SLAP012 or the documented behavior. | Add |
-| DefaultNames (new) | Templates with no `#type` or `#namespace`, in nested folders, plus `#encode none`, `RenderToString`, and the scanner parity template (`[[ grid[row[0]] ]]`, `[% var close = "%]"; %]`). | Add |
+| DefaultNames (new) | Templates with no `#type` or `#namespace`, in nested folders, plus `#encode none` and `RenderToString`. | Add |
+| ScannerParity (new) | The scanner parity template (`[[ grid[row[0]] ]]`, `[% var close = "%]"; %]`, and other closers inside C# literals, comments, and directives) rendered through the packed analyzer. Phase 3 added it because [7.6](#76-host-compiler) needs parity templates before `DefaultNames` exists; Phase 4 leaves the parity cases here. | Added in Phase 3 |
 | PackageTests | Layout, metadata, consumer assets, discovery tags, fixtures, and a UTF-8 BOM template with non-ASCII text. | Edit |
 
 Most consumers use the one-line form `<PackageReference Include="SlusserLabs.AnglePlates" Version="…" PrivateAssets="all" />`, which is the shortest correct reference. AspNetCore keeps the CLI's multi-line form, so both are covered, and NoPrivateAssets is the deliberate exception. `tests/AnglePlates.PackageTests/README.md` holds the one consumer table, and other docs link to it.

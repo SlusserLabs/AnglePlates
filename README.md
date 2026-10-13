@@ -127,7 +127,9 @@ Only the backslashes right in front of an opener count, and they work in pairs, 
 
 Every other backslash is plain text, so `C:\temp\file` comes out unchanged. Watch for a path that ends right before a C# variable, though: `C:\out\[[ model.Name ]]` writes `C:\out[[ model.Name ]]`. Write `C:\out\\[[ model.Name ]]` instead. AnglePlates doesn't warn about this one, because a TOML table looks just like a C# variable to the parser.
 
-Escapes only apply to literal text. Inside a block, C# has its own escapes, and a closing delimiter inside a C# string or comment still ends the block.
+Writing Markdown? `[*Important*](https://example.com)` looks like a link to you, but `[*` opens a comment, so the link text quietly disappears. Write `\[*Important*](https://example.com)` instead.
+
+Escapes only apply to literal text. Inside a block, C# has its own escapes, and you don't need any of ours. AnglePlates reads C# variables and C# blocks with the C# lexer, so a `]]` or `%]` inside a C# string, character literal, or `/* */` comment doesn't end the block. `[% var s = "%]"; %]` works, and so do `[[ grid[row[0]] ]]` and `[[ model[0..1]]]`, because a C# variable only ends once its brackets balance. A `//` comment or `#` line still ends at the first closer on that line, so `[% // note %]` and `[% #if DEBUG %]` do what they look like. Comments (`[* *]`) aren't C#, so they end at the first `*]`.
 
 ### Whitespace trimming
 
@@ -138,6 +140,8 @@ Place a `-` immediately after an opening delimiter or before a closing delimiter
 | Before the block | `[[- model.Title ]]` | Removes preceding literal whitespace. |
 | After the block | `[[ model.Title -]]` | Removes following literal whitespace. |
 | Both sides | `[[- model.Title -]]` | Removes literal whitespace on both sides. |
+
+A `-` right before the closer is always a trim marker, even when it belongs to your C#. `[[ count--]]` trims and leaves `count-`, which doesn't compile. Put a space in there: `[[ count-- ]]`.
 
 A `-` right after an opener is always a trim marker, even when you meant a minus sign. `[[-1]]` trims the whitespace in front of it and writes `1`. To write `-1`, put a space after the opener with `[[ -1 ]]` or wrap the value in parentheses with `[[(-1)]]`.
 
@@ -333,7 +337,8 @@ Two things are up to you:
 - Templates are trusted C# code. Everything in a C# variable or C# block compiles into your application and runs with the same permissions as the rest of your code. HTML encoding protects the values a template writes, not your application from the template, so only compile templates you'd trust as source files.
 - Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling after the first line.
 - A misspelled first line leaves the file with no directives at all. In the `Templates` folder, that file is skipped without an error, just like a `README.md` would be. A file you added with an `Include` reports `SLAP008` instead.
-- A closing delimiter ends its block even inside a C# string or comment, so keep `]]` out of C# variables and `%]` out of C# blocks.
+- If the C# in a block is broken, say a string is missing its closing quote, the block ends at the first closer, and the compiler points at the typo in the template. It won't swallow the HTML that follows.
+- A C# variable can end in a `//` comment. `[[ model.Name // display name ]]` works, because the generated code starts a new line after the comment.
 - Compiler errors in C# variables and C# blocks point at the template's path, line, and column, because the generated code maps them back with `#line`. An error in the code AnglePlates wraps around a C# variable, such as a `Span<char>` value it can't convert to a string, points at the whole C# variable. A UTF-8 template compiles your C# twice, once in `Render` and once in `RenderAsync`, so you may see the same error twice at the same spot.
 - The generated render methods already declare `model`, `Model`, `writer`, and a `__anglePlatesValue<N>` variable for each C# variable, and `RenderAsync` adds `cancellationToken`, so don't reuse those names for locals in your C# blocks.
 - `RenderAsync` is an async method, and your C# blocks go into it, so UTF-8 templates pick up the usual async rules. With C# 11 or 12, a ref struct local such as a `Span<char>` in a C# block reports `CS9058`. From C# 13, it's fine unless the local is still in use after a flush check, which reports `CS4007`. A `lock` or `unsafe` block that contains a write right after a C# block reports `CS1996` or `CS4004`, because that write awaits. Text templates have none of these rules, so if you need one of these constructs, use `#generate Text`.

@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace SlusserLabs.AnglePlates;
 
-// Splits template text into directives and body tokens; it knows the delimiters but not C#
+// Splits template text into directives and body tokens; CSharpBlockScanner finds where C# variables and C# blocks end
 internal static class TemplateParser
 {
     // Every opener starts with the same character, so the text scan looks for that one first
@@ -36,7 +36,7 @@ internal static class TemplateParser
                 continue;
             }
 
-            if (!TryParseBlock(ref reader, errors, out var token))
+            if (!TryParseBlock(text, ref reader, errors, out var token))
             {
                 break;
             }
@@ -59,7 +59,7 @@ internal static class TemplateParser
         return prefixes;
     }
 
-    private static bool TryParseBlock(ref TemplateReader reader, List<TemplateError> errors, out Token token)
+    private static bool TryParseBlock(string text, ref TemplateReader reader, List<TemplateError> errors, out Token token)
     {
         token = default;
         int openingStart = reader.Position;
@@ -89,9 +89,15 @@ internal static class TemplateParser
         int openingLength = reader.Position - openingStart;
         bool trimPrevious = reader.IsNext(TemplateSyntax.TrimMarker, advancePast: true);
 
-        // An unclosed block reports the opener and consumes the rest of the text
+        // C# variables and C# blocks skip closers inside C# strings and comments. Comments, and C# where the scanner finds
+        // no closer, use the plain search; an unclosed block reports the opener and consumes the rest.
         int start = reader.Position;
-        if (!reader.TryAdvanceTo(closer))
+        int closerStart = type == TokenType.Comment ? -1 : CSharpBlockScanner.FindCloser(text, start, type);
+        if (closerStart >= 0)
+        {
+            reader.Advance(closerStart - start);
+        }
+        else if (!reader.TryAdvanceTo(closer))
         {
             errors.Add(new TemplateError(DiagnosticDescriptors.UnclosedBlock, new TextSpan(openingStart, openingLength), closer));
             reader.AdvanceToEnd();

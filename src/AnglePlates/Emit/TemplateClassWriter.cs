@@ -194,7 +194,7 @@ internal sealed class TemplateClassWriter
             }
         }
 
-        // Brace guesses can leave the indent anywhere, so finish the method where it started
+        // Unbalanced braces in C# blocks can leave the indent anywhere, so finish the method where it started
         _writer.Indent = indent + 1;
         if (isAsync)
         {
@@ -265,14 +265,30 @@ internal sealed class TemplateClassWriter
     {
         var variable = Slice(token.Span).ToString();
         var (call, end) = checkFlush ? (_flushingWrite, _flushingWriteEnd) : (_write, _writeEnd);
+
+        // A // comment at the end of the variable would comment out the rest of its line, so the generated code after
+        // the variable starts on the next line
+        bool endsWithLineComment = CSharpBlockScanner.EndsWithLineComment(variable);
         WriteBlankLine();
 
         // Text that isn't one complete expression, such as a stray "[[1, 2]]", keeps the plain call so the compiler
         // still rejects it; the parentheses below would turn it into a tuple that renders
         if (SyntaxFactory.ParseExpression(variable).ContainsDiagnostics)
         {
+            var plainEnd = $", global::System.Globalization.CultureInfo.InvariantCulture){end}";
             WriteLineMapping(token.Span, call.Length + _plainConversion.Length);
-            _writer.WriteLine($"{call}{_plainConversion}{variable}, global::System.Globalization.CultureInfo.InvariantCulture){end}");
+            if (endsWithLineComment)
+            {
+                // Errors on the closing line point at the whole C# variable because the mapping's column is past its end
+                _writer.WriteLine($"{call}{_plainConversion}{variable}");
+                WriteLineMapping(token.Span, plainEnd.Length);
+                _writer.WriteLine(plainEnd);
+            }
+            else
+            {
+                _writer.WriteLine($"{call}{_plainConversion}{variable}{plainEnd}");
+            }
+
             WriteDefaultLineMapping();
             return;
         }
@@ -282,9 +298,10 @@ internal sealed class TemplateClassWriter
         // expression variables share the enclosing block's scope. The suffix counts the directives too, as every token
         // in the template file does.
         var valueName = $"__anglePlatesValue{_template.Directives.Count + index}";
-        var conversion = $"is {{ }} {valueName} ? global::System.Convert.ToString({valueName}, global::System.Globalization.CultureInfo.InvariantCulture) : null{end}";
+        var (variableEnd, conversionStart) = endsWithLineComment ? (string.Empty, ") ") : (")", string.Empty);
+        var conversion = $"{conversionStart}is {{ }} {valueName} ? global::System.Convert.ToString({valueName}, global::System.Globalization.CultureInfo.InvariantCulture) : null{end}";
         WriteLineMapping(token.Span, call.Length + 1);
-        _writer.WriteLine($"{call}({variable})");
+        _writer.WriteLine($"{call}({variable}{variableEnd}");
 
         // Errors in the pattern and conversion, such as a ref struct value that can't be converted or can't be a local
         // in RenderAsync, point at the whole C# variable because the mapping's column is past the end of this line
@@ -295,23 +312,18 @@ internal sealed class TemplateClassWriter
         WriteDefaultLineMapping();
     }
 
-    // Copies a C# block as it is. Indenting around braces is a best-effort guess that only affects readability.
+    // Copies a C# block as it is. Indenting around braces only affects readability: a block moves out for each brace it
+    // closes from an earlier block, and the code after it moves in for each brace it leaves open.
     private void WriteCodeBlock(Token token)
     {
         var code = Slice(token.Span).ToString();
+        var (closed, opened) = CSharpBlockScanner.CountBraces(code);
         WriteBlankLine();
-        if (code.IndexOf('}') >= 0)
-        {
-            _writer.Indent--;
-        }
-
+        _writer.Indent -= closed;
         WriteLineMapping(token.Span, 0);
         _writer.WriteLine(code);
         WriteDefaultLineMapping();
-        if (code.IndexOf('{') >= 0)
-        {
-            _writer.Indent++;
-        }
+        _writer.Indent += opened;
     }
 
     // Maps the next generated line, from the column after its indentation and prefix, to a span in the template, so

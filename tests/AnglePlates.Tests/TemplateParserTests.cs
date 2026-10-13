@@ -19,6 +19,13 @@ public sealed class TemplateParserTests
     [Arguments("#type X\nbody", "Directive 6-7, Literal 8-12")]
     [Arguments("plain", "Literal 0-5")]
     [Arguments("", "")]
+    // C# strings and comments hide closers, and an unmatched "[" falls back to the plain search
+    [Arguments("[[ \"]]\" ]]", "Variable 3-7")]
+    [Arguments("[% var s = \"%]\"; %]x", "Code 3-16, Literal 19-20")]
+    [Arguments("[% // note %]tail", "Code 3-10, Literal 13-17")]
+    [Arguments("x[[ a[ ]]y", "Literal 0-1, Variable 4-6, Literal 9-10")]
+    [Arguments("[% /* %] */ x", "Code 3-5, Literal 8-13")]
+    [Arguments("[[ a-- -]]", "Variable 3-6 trim-next")]
     public async Task Parse_Text_ReturnsTokens(string text, string expected)
     {
         var result = TemplateParser.Parse(text, CancellationToken.None);
@@ -32,6 +39,8 @@ public sealed class TemplateParserTests
     [Arguments("[% x", 0, "%]")]
     [Arguments("ab [* note", 3, "*]")]
     [Arguments("ab [[", 3, "]]")]
+    [Arguments("[% \"abc", 0, "%]")]
+    [Arguments("[[ a[0", 0, "]]")]
     public async Task Parse_UnclosedBlock_ReportsOpenerSpanAndCloser(string text, int start, string closingDelimiter)
     {
         var result = TemplateParser.Parse(text, CancellationToken.None);
@@ -65,6 +74,24 @@ public sealed class TemplateParserTests
 
         await Assert.That(string.Join(", ", directives)).IsEqualTo(expected);
         await Assert.That(result.Tokens).IsEmpty();
+    }
+
+    // Each broken block ends at its own closer. An unclosed interpolation hole that read on through every later block
+    // used to overflow the stack, and the others took seconds.
+    [Test]
+    [Arguments("[[ a[0 ]]")]
+    [Arguments("[% var s = $\"{ x %]")]
+    [Arguments("[% var s = @\"x %]")]
+    [Arguments("[% /* x %]")]
+    public async Task Parse_ManyBrokenBlocks_EndsEachAtItsFirstCloser(string block)
+    {
+        const int count = 3000;
+        var text = string.Concat(Enumerable.Repeat(block + "<p class=\"row\">It's #1 { </p>\n", count));
+
+        var result = TemplateParser.Parse(text, CancellationToken.None);
+
+        await Assert.That(result.Tokens.Count(token => token.Type != TokenType.Literal)).IsEqualTo(count);
+        await Assert.That(result.Errors).IsEmpty();
     }
 
     [Test]
