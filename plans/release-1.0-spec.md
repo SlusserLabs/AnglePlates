@@ -452,7 +452,7 @@ A generated-code test renders a parent with `TemplateOptions.Unencoded` and chec
 Template sources get the hint name `{Namespace}.{Type}{Target}Template.g.cs`, for example `MyApp.Templates.GreetingTextTemplate.g.cs`. Support types become `SlusserLabs.AnglePlates.TemplateOptions.g.cs`, `SlusserLabs.AnglePlates.TextTemplate.g.cs`, `SlusserLabs.AnglePlates.Utf8Template.g.cs`, and `SlusserLabs.AnglePlates.TemplateExtensions.g.cs`.
 
 - Roslyn compares hint names case-insensitively, and `AddSource` throws on a repeat, which crashes the generator. So the existing numbering step stays, but groups names with `StringComparer.OrdinalIgnoreCase` and sorts by ordinal path. The second file of a clash becomes `MyApp.Templates.GreetingTextTemplate.2.g.cs`.
-- Two templates that declare the same class get duplicate-member errors (CS0111, CS0102, CS0121) from the compiler, as today (S21). The classes are , so the two declarations merge instead of producing CS0101. Classes that differ only by case (`App.Page` and `app.page`) are legal C#; they just get numbered file names. A test covers each case.
+- Two templates that declare the same class get duplicate-member errors (CS0111, CS0102, CS0121) from the compiler, as today (S21). The classes are `partial`, so the two declarations merge instead of producing CS0101. Classes that differ only by case (`App.Page` and `app.page`) are legal C#; they just get numbered file names. A test covers each case.
 - The SHA-256 identity code, its length-prefix scheme, and the `System.Security.Cryptography` dependency go away.
 
 ### 4.10 Generated header
