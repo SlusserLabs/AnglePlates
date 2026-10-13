@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>AnglePlates</title>
+  <!--
+    AnglePlates icon: the "[ ]" block delimiters drawn as two steel angle-plate brackets.
+
+    How the drawing works:
+    - Each bracket is a bent plate seen from the front, with its depth receding up and to the right
+      at 30 degrees (the same frontal 3D view as the original A-shaped icon).
+    - Every face is a plain polygon with one flat color. Colors live in the style block below,
+      so you can recolor a bracket without touching any coordinates.
+    - Faces are listed back to front, so later faces cover earlier ones.
+    - Each bolt hole is a circle drawn in its face's own flat coordinates; the matrix transform
+      tilts it onto that face. The darker circle inside is the shadowed bore.
+  -->
+  <style>
+    /* Every face is one flat color. A matching hairline stroke hides anti-aliasing seams between faces. */
+    polygon { stroke-width: 0.6; stroke-linejoin: round; }
+    /* Left bracket: blue */
+    .blue .front { fill: #0678DC; stroke: #0678DC; }
+    .blue .top { fill: #3EDCFF; stroke: #3EDCFF; }
+    .blue .right { fill: #10A0F0; stroke: #10A0F0; }
+    .blue .wall { fill: #45BDF8; }
+    .blue .hole { fill: #04224A; }
+    /* Right bracket: silver */
+    .silver .front { fill: #68768A; stroke: #68768A; }
+    .silver .top { fill: #E6EAF0; stroke: #E6EAF0; }
+    .silver .right { fill: #AAB4C2; stroke: #AAB4C2; }
+    .silver .wall { fill: #C3CBD6; }
+    .silver .hole { fill: #283244; }
+  </style>
+  <defs>
+    <!-- Soft blue glow: blur the shape's alpha, tint it, and draw the shape on top -->
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
+      <feFlood flood-color="#1E9BFF" flood-opacity="0.7"/>
+      <feComposite in2="blur" operator="in" result="tint"/>
+      <feMerge>
+        <feMergeNode in="tint"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Both brackets share one glow so it reads as a single mark -->
+  <g filter="url(#glow)">
+    <!-- Left bracket [ (blue) -->
+    <g id="left-bracket" class="blue">
+      <!-- bottom flange, top face -->
+      <polygon class="top" points="92.8,203.5 116.6,189.8 72.4,189.8 48.6,203.5"/>
+      <!-- bolt hole -->
+      <g transform="matrix(-1.164 0.000 0.625 -0.361 82.6 196.7)">
+        <clipPath id="hole1"><circle r="7"/></clipPath>
+        <circle class="wall" r="7"/>
+        <circle cx="-1.4" cy="-2.6" r="7" class="hole" clip-path="url(#hole1)"/>
+      </g>
+      <!-- bottom flange, end -->
+      <polygon class="right" points="92.8,222.1 116.6,208.4 116.6,189.8 92.8,203.5"/>
+      <!-- web, inner face -->
+      <polygon class="right" points="48.6,203.5 72.4,189.8 72.4,52.5 48.6,66.2"/>
+      <!-- bolt hole -->
+      <g transform="matrix(0.000 -1.164 0.625 -0.361 60.5 95.0)">
+        <clipPath id="hole2"><circle r="7"/></clipPath>
+        <circle class="wall" r="7"/>
+        <circle cx="0.9" cy="-2.8" r="7" class="hole" clip-path="url(#hole2)"/>
+      </g>
+      <!-- bolt hole -->
+      <g transform="matrix(0.000 -1.164 0.625 -0.361 60.5 161.0)">
+        <clipPath id="hole3"><circle r="7"/></clipPath>
+        <circle class="wall" r="7"/>
+        <circle cx="0.9" cy="-2.8" r="7" class="hole" clip-path="url(#hole3)"/>
+      </g>
+      <!-- front edge (the bracket glyph) -->
+      <polygon class="front" points="30.0,222.1 92.8,222.1 92.8,203.5 48.6,203.5 48.6,66.2 92.8,66.2 92.8,47.6 30.0,47.6"/>
+      <!-- top flange, top face -->
+      <polygon class="top" points="92.8,47.6 116.6,33.9 53.7,33.9 30.0,47.6"/>
+      <!-- bolt hole -->
+      <g transform="matrix(-1.164 0.000 0.625 -0.361 82.6 40.7)">
+        <clipPath id="hole4"><circle r="7"/></clipPath>
+        <circle class="wall" r="7"/>
+        <circle cx="-1.4" cy="-2.6" r="7" class="hole" clip-path="url(#hole4)"/>
+      </g>
+      <!-- top flange, end -->
+      <polygon class="right" points="92.8,66.2 116.6,52.5 116.6,33.9 92.8,47.6"/>
+    </g>
+    <!-- Right bracket ] (silver) -->
+    <g id="right-bracket" class="silver">
+      <!-- bottom flange, top face -->
+      <polygon class="top" points="183.6,203.5 207.4,189.8 163.2,189.8 139.4,203.5"/>
+      <!-- bolt hole -->
+      <g transform="matrix(-1.164 0.000 0.625 -0.361 166.9 196.7)">
+        <clipPath id="hole5"><circle r="7"/></clipPath>
+        <circle class="wall" r="7"/>
+        <circle cx="-1.4" cy="-2.6" r="7" class="hole" clip-path="url(#hole5)"/>
+      </g>
+      <!-- web, outer face -->
+      <polygon class="right" points="202.3,222.1 226.0,208.4 226.0,33.9 202.3,47.6"/>
+      <!-- bolt hole -->
+      <g transform="matrix(0.000 -1.164 0.625 -0.361 214.1 95.0)">
+        <clipPath id="hole6"><circle r="7"/></clipPath>
+        <circle class="wall" r="7"/>
+        <circle cx="0.9" cy="-2.8" r="7" class="hole" clip-path="url(#hole6)"/>
+      </g>
+      <!-- bolt hole -->
+      <g transform="matrix(0.000 -1.164 0.625 -0.361 214.1 161.0)">
+        <clipPath id="hole7"><circle r="7"/></clipPath>
+        <circle class="wall" r="7"/>
+        <circle cx="0.9" cy="-2.8" r="7" class="hole" clip-path="url(#hole7)"/>
+      </g>
+      <!-- front edge (the bracket glyph) -->
+      <polygon class="front" points="202.3,47.6 139.4,47.6 139.4,66.2 183.6,66.2 183.6,203.5 139.4,203.5 139.4,222.1 202.3,222.1"/>
+      <!-- top flange, top face -->
+      <polygon class="top" points="202.3,47.6 226.0,33.9 163.2,33.9 139.4,47.6"/>
+      <!-- bolt hole -->
+      <g transform="matrix(-1.164 0.000 0.625 -0.361 173.4 40.7)">
+        <clipPath id="hole8"><circle r="7"/></clipPath>
+        <circle class="wall" r="7"/>
+        <circle cx="-1.4" cy="-2.6" r="7" class="hole" clip-path="url(#hole8)"/>
+      </g>
+    </g>
+  </g>
+</svg>
