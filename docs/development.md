@@ -28,6 +28,21 @@ dotnet run --project samples/HelloWorld --no-build --no-launch-profile
 
 The sample sets `EmitCompilerGeneratedFiles`, so after a build you can read the generated classes under `samples/HelloWorld/obj/GeneratedFiles`. That's the quickest way to see what a change does to emitted code. Don't edit those files; they're overwritten by the next build.
 
+## Where the generator code lives
+
+`src/AnglePlates` keeps `TemplateGenerator.cs`, the incremental pipeline, at its root, and groups everything else by the job it does:
+
+| Folder | What's in it |
+| --- | --- |
+| `Pipeline` | The values passed between pipeline steps, such as `TemplateFile`, `TemplateContext`, `TemplateResult`, and `GeneratorSettings`, plus helpers like `TemplatePath` and `EquatableArray`. |
+| `Parsing` | `TemplateParser`, `TemplateReader`, `TemplateSyntax`, and what the parser returns: `ParsedTemplate`, `Token`, and `DirectiveToken`. |
+| `Directives` | `DirectiveReader`, the `TemplateDirectives` it produces, and the `DirectiveKind` and `GenerationTarget` enums. |
+| `Emit` | `TemplateClassWriter`, which writes template classes, and `SupportTypes`, which holds the support types' source. |
+| `Diagnostics` | `DiagnosticDescriptors`, `TemplateError`, `TemplateDiagnostic`, and `UnexpectedValue`, the one helper that throws for an enum value a switch doesn't handle. |
+| `buildTransitive` | The MSBuild files described in [How MSBuild hands over templates](#how-msbuild-hands-over-templates). |
+
+Each file holds one type. Every type is in the `SlusserLabs.AnglePlates` namespace, whatever its folder, which is a deliberate exception to the usual rule that folders mirror namespaces. The folders are there to help you find things. In a project this small, sub-namespaces would only add `using` lines to almost every file.
+
 ## From one template to one class
 
 The smallest useful thing AnglePlates does is turn the text of one template into C# source for one generation target. Three steps do that work, and none of them knows about Roslyn's incremental pipeline or MSBuild.
@@ -36,19 +51,19 @@ The smallest useful thing AnglePlates does is turn the text of one template into
 > This sketch leaves out diagnostics, the check for files without directives, and hint names. `TemplateGenerator.ProcessTemplate` has the full version.
 
 ```csharp
-// 1. Split the text into directive, literal, C# variable, C# block, and comment tokens
-var parseResult = new TemplateParser(TemplateParserOptions.Default).Parse(content.AsSpan());
+// 1. Split the text into directives and body tokens: literals, C# variables, C# blocks, and comments
+var parsed = TemplateParser.Parse(content, cancellationToken);
 
 // 2. Read and validate the directives (#type, #model, #namespace, #generate, #access, #using)
-var directiveTokens = parseResult.Tokens.Where(token => token.Type == TokenType.Directive).ToList();
-var options = TemplateTranspilerOptions.Create(path, content.AsSpan(), directiveTokens, parseResult.DirectiveSectionEnd, TemplateParserOptions.Default.Whitespace);
+var errors = new List<TemplateError>();
+var directives = DirectiveReader.Read(parsed, path, errors);
 
-// 3. Emit one class for each generation target the directives allow
+// 3. Write one class for each generation target the directives allow
 foreach (var target in new[] { GenerationTarget.Text, GenerationTarget.Utf8 })
 {
-    if ((options.GenerationTarget & target) != 0)
+    if ((directives!.GenerationTarget & target) != 0)
     {
-        var source = TemplateTranspiler.Transpile(relativePath, path, lines, options, target, content.AsSpan(), parseResult.Tokens);
+        var source = TemplateClassWriter.Write(relativePath, path, lines, parsed, directives, target);
         // Add the source to the compilation
     }
 }
@@ -56,21 +71,23 @@ foreach (var target in new[] { GenerationTarget.Text, GenerationTarget.Utf8 })
 
 ### Parsing
 
-`TemplateParser` reads the template with `SpanReader` and produces a flat list of `Token` values, each tagged with a `TokenType`. Directive lines come first and end at the first line that isn't a known directive. After that, the parser finds the `[[ ]]`, `[% %]`, and `[* *]` delimiters, applies trim markers, and handles escaped openers. A block that never closes becomes a parse error instead of an exception.
+`TemplateParser.Parse` walks the text with `TemplateReader` and returns a `ParsedTemplate`. Directive lines come first and end at the first line that isn't a known directive; each one becomes a `DirectiveToken` with the span of its name and its trimmed value. After that, the parser finds the `[[ ]]`, `[% %]`, and `[* *]` delimiters, applies trim markers, and handles escaped openers. Each piece of the body becomes a `Token`, tagged with a `TokenType`, whose span covers the block's trimmed content. A block that never closes becomes a `TemplateError` instead of an exception. The parser checks for cancellation once per block.
+
+The delimiters, the trim marker, and the whitespace set are constants in `TemplateSyntax`. They aren't configurable. Besides the parser, only the class writer (for trimming) and the directive reader (to find the end of the directive section's last line) use them.
 
 The parser doesn't understand C#. A closing delimiter inside a C# string still ends the block, which the README documents as a limitation.
 
 ### Directives
 
-`TemplateTranspilerOptions.Create` turns directive tokens into the class name, model type, namespace, generation target, accessibility, and `#using` list. It also collects errors for missing, repeated, and invalid directives. When a template has any parse or directive errors, the generator reports them and skips that template, so one broken template doesn't stop the rest of the project from building.
+`DirectiveReader.Read` turns the directive tokens into an immutable `TemplateDirectives` with the class name, model type, namespace, generation target, accessibility, and `#using` list. Each directive kind has its own private method in the reader. Missing, repeated, and invalid directives become `TemplateError` values, and then `Read` returns `null`. The generator converts directive errors and parse errors in one loop. When a template has any errors, the generator reports them and skips that template, so one broken template doesn't stop the rest of the project from building.
 
 ### Emitting C#
 
-`TemplateTranspiler.Transpile` writes one class for one target. Text classes derive from `TextTemplate<TModel>` and write to a `TextWriter`. UTF-8 classes derive from `Utf8Template<TModel>` and write UTF-8 string literals to an `IBufferWriter<byte>`. Literal text becomes literal writes, C# variables become encoded writes, and C# blocks are copied into the render method as they are.
+`TemplateClassWriter.Write` writes one class for one target. It creates a writer instance that holds what every step needs (the indented writer, the template's lines and text, its directives, and its absolute path), and each part of the class has its own method: the file header, the class declaration, the constructor and `Default`, the render methods, and inside those, literal runs, C# variables, C# blocks, and `#line` mappings. Text classes derive from `TextTemplate<TModel>` and write to a `TextWriter`. UTF-8 classes derive from `Utf8Template<TModel>` and write UTF-8 string literals to an `IBufferWriter<byte>`. Literal text becomes literal writes, C# variables become encoded writes, and C# blocks are copied into the render method as they are.
 
 ### Two render methods from one walk
 
-A UTF-8 class gets two methods: `Render`, which writes to an `IBufferWriter<byte>`, and `RenderAsync`, which writes to a `PipeWriter` and flushes it while it renders. Both come from the same local function in `Transpile`, which walks the tokens once per method. An `isAsync` switch changes three things and nothing else: the signature, one unconditional `FlushAsync` at the end, and how a flush check is spelled.
+A UTF-8 class gets two methods: `Render`, which writes to an `IBufferWriter<byte>`, and `RenderAsync`, which writes to a `PipeWriter` and flushes it while it renders. Both come from `TemplateClassWriter.WriteRenderMethod`, which walks the body tokens once per method. An `isAsync` switch changes three things and nothing else: the signature, one unconditional `FlushAsync` at the end, and how a flush check is spelled.
 
 A flush check is fused into the first write after each C# block. The walk only remembers whether the previous token it emitted was a C# block, so there's no lookahead. Here's the end of a `RenderAsync` for `[% foreach (var row in model.Rows) { %]<li>[[ row ]]</li>[% } %]</ul>`:
 
@@ -105,30 +122,35 @@ Emitted code follows a few rules that keep it safe to drop into any consumer pro
 - C# variables, C# blocks, and the literal writes that carry a flush check are wrapped in `#line` directives, so a compiler error in template code points at the template's path, line, and column. An error in either render method maps to the same template location, so a UTF-8 class can report the same error twice. If you change how statements are laid out, check that those mappings still land in the right place.
 - Output streams straight to the writer. Nothing buffers the whole render.
 
-The base classes and `TemplateOptions` come from string templates in `Boilerplate.cs`. They follow the same rules as transpiled code because they're emitted into the consumer's project too.
+The base classes and `TemplateOptions` come from raw string literals in `Emit/SupportTypes.cs`, one method per type. They follow the same rules as template classes because they're emitted into the consumer's project too. Their snapshot in `SupportTypesSnapshotTests` is the contract, so any change to those strings shows up there for review.
 
 ## Coordinating many templates
 
-`TemplateGenerator` wires the per-template work into Roslyn's incremental pipeline. Each step is a pure transformation of values that Roslyn can compare between runs, so it can skip work when nothing changed.
+`TemplateGenerator` wires the per-template work into Roslyn's incremental pipeline. Each step is a pure transformation of values that Roslyn can compare between runs, so it can skip work when nothing changed. That only works if every value passed between steps compares by value: a string, an enum, a record of those, or an `EquatableArray`. Nothing in the pipeline may hold a `Compilation`, `SyntaxTree`, or `SourceText`, because those never compare equal between runs and would rerun every step after them. `Initialize` states this rule at the top and lays the pipeline out as numbered steps.
 
 ```mermaid
 flowchart TD
     A[AdditionalFiles] -->|keep files tagged AnglePlate| B[AnglePlateFiles]
-    B -->|read text, compute relative path| C[TemplateFiles]
-    C -->|parse, validate, transpile| D[TemplateResults]
+    B -->|read text| C[TemplateFiles]
+    C -->|parse, validate, write| D[TemplateResults]
+    P[TemplateContext: project folder] --> D
     D --> E[Template sources and diagnostics]
     D -->|collect| G[DuplicateTemplates]
-    S[Settings: base access modifier, C# version] --> H[Support types]
+    G --> N[Numbered sources]
+    S[GeneratorSettings: base access modifier, C# version] --> H[Support types]
     S --> E
+    S --> N
 ```
 
-The generator starts from every additional file in the compilation but keeps only the ones the AnglePlates targets file tagged, before it reads any text. Files from other tools, like `PublicAPI.Shipped.txt`, are never opened. It then reads each tagged file and computes its path relative to the project folder with `TemplatePath`, which keeps the generated class documentation and the `<auto-generated>` header the same on every machine. The header names that relative path and no version number, so a package update doesn't touch every generated file.
+The generator starts from every additional file in the compilation but keeps only the ones the AnglePlates targets file tagged, before it reads any text. Files from other tools, like `PublicAPI.Shipped.txt`, are never opened. It then reads each tagged file into a `TemplateFile`.
 
-`TemplateResults` runs the three steps from the previous section for each template on its own. Editing one template reruns only that template, and the rest stay cached. A future setting that changes how every template parses would have to become an input to this step.
+`TemplateResults` runs the three steps from the previous section for each template on its own, with the `TemplateFile` and a `TemplateContext` as its input. Editing one template reruns only that template, and the rest stay cached. `TemplateContext` holds the project values that every template needs, which today is just the project folder. `TemplatePath` uses it to turn the template's full path into a path relative to the project folder, which keeps the generated class documentation and the `<auto-generated>` header the same on every machine. The header names that relative path and no version number, so a package update doesn't touch every generated file. Changing the project folder reruns every template but leaves the file reads and the support types cached. A future setting that changes how every template parses belongs in `TemplateContext` too.
+
+Three output methods turn the results into sources. `AddSupportTypes` adds the support types, `AddTemplateSources` reports each template's diagnostics and adds its sources, and `AddNumberedSources` adds the sources whose hint names collide.
 
 Each generated file is named after the class it declares, so a text template for `MyApp.Templates.Greeting` becomes `MyApp.Templates.GreetingTextTemplate.g.cs`, and the support types become `SlusserLabs.AnglePlates.TemplateOptions.g.cs` and so on. Roslyn compares these hint names without case and throws on a repeat, so one small collected step looks across all templates. `DuplicateTemplates` finds sources whose names match when case is ignored, sorts them by template path, and numbers the second and later ones `.2`, `.3`, and so on, as in `MyApp.Templates.GreetingTextTemplate.2.g.cs`. Two templates that declare the same class still compile into conflicting members, so the compiler reports those errors; classes that differ only by case, like `App.Page` and `app.page`, are legal and only get numbered names. The step rarely changes, so ordinary template edits leave it cached.
 
-Every project gets all three support types, whatever its templates generate. .NET 10 includes `System.IO.Pipelines` in the base framework, so `Utf8Template` costs a text-only project nothing it has to reference, and trimming removes the types an app doesn't use. The support types depend only on the settings: the `AnglePlateBaseAccessModifier` property, which `GeneratorSetting` reads and validates, and the C# version from the parse options. An invalid property value reports `SLAP009` and a C# version below 11 reports `SLAP010`. Either one stops the generator from emitting anything at all, because a base class with the wrong accessibility isn't a safe fallback and code for an older C# version would only produce errors inside generated files. Diagnostic IDs are defined in `DiagnosticDescriptors.cs` and documented in [diagnostics](diagnostics.md).
+Every project gets all three support types, whatever its templates generate. .NET 10 includes `System.IO.Pipelines` in the base framework, so `Utf8Template` costs a text-only project nothing it has to reference, and trimming removes the types an app doesn't use. The support types depend only on `GeneratorSettings`: the `AnglePlateBaseAccessModifier` property, which `GeneratorSetting` reads and validates, and the C# version from the parse options. An invalid property value reports `SLAP009` and a C# version below 11 reports `SLAP010`. Either one stops the generator from emitting anything at all, because a base class with the wrong accessibility isn't a safe fallback and code for an older C# version would only produce errors inside generated files. Diagnostic IDs are defined in `Diagnostics/DiagnosticDescriptors.cs` and documented in [diagnostics](diagnostics.md).
 
 ## How MSBuild hands over templates
 

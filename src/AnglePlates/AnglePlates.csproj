@@ -1,15 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Identity: the assembly name, package ID, and root namespace stay SlusserLabs.AnglePlates whatever the folder is called -->
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>SlusserLabs.AnglePlates</AssemblyName>
     <PackageId>SlusserLabs.AnglePlates</PackageId>
     <RootNamespace>SlusserLabs.AnglePlates</RootNamespace>
-    <IsPackable>true</IsPackable>
-    <DevelopmentDependency>true</DevelopmentDependency>
-    <IncludeBuildOutput>true</IncludeBuildOutput>
-    <BuildOutputTargetFolder>analyzers/dotnet/cs</BuildOutputTargetFolder>
-    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+
+  <!-- Package metadata shown on nuget.org -->
+  <PropertyGroup>
     <Title>AnglePlates</Title>
     <Description>Compile-time templates with generated text and UTF-8 renderers.</Description>
     <Authors>Jacob Slusser</Authors>
@@ -21,10 +20,27 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- Analyzer packaging: a development dependency with the generator under analyzers/ and no runtime assets or dependencies -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <BuildOutputTargetFolder>analyzers/dotnet/cs</BuildOutputTargetFolder>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+
+  <!-- Build: netstandard2.0 and Roslyn 4.14.0 are the oldest compiler host a supported consumer can use. The .NET
+       analyzers aren't on by default for netstandard2.0, so they're turned on here. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,31 +49,20 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
     <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
+    <None Update="buildTransitive\SlusserLabs.AnglePlates.props" Pack="true" PackagePath="buildTransitive\SlusserLabs.AnglePlates.props" />
+    <None Update="buildTransitive\SlusserLabs.AnglePlates.targets" Pack="true" PackagePath="buildTransitive\SlusserLabs.AnglePlates.targets" />
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="AnglePlates.Tests" />
-  </ItemGroup>
-
-  <PropertyGroup>
-    <IsRoslynComponent>true</IsRoslynComponent>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <Content Include="buildTransitive\SlusserLabs.AnglePlates.props" Pack="true" PackagePath="buildTransitive\" />
-    <Content Include="buildTransitive\SlusserLabs.AnglePlates.targets" Pack="true" PackagePath="buildTransitive\" />
   </ItemGroup>
 
 </Project>

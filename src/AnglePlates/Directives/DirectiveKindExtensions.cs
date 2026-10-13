@@ -1,7 +1,6 @@
-using System;
-
 namespace SlusserLabs.AnglePlates;
 
+// Lists the directives in the order the parser tries them and spells each one's name
 internal static class DirectiveKindExtensions
 {
     public static readonly DirectiveKind[] All =
@@ -24,7 +23,7 @@ internal static class DirectiveKindExtensions
             DirectiveKind.Generate => "generate",
             DirectiveKind.Access => "access",
             DirectiveKind.Using => "using",
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+            _ => throw UnexpectedValue.Exception(kind, nameof(kind))
         };
     }
 }

@@ -131,6 +131,26 @@ public sealed class IncrementalTests
     }
 
     [Test]
+    public async Task Rerun_ProjectDirChanged_RewritesTemplatesWithoutRereadingThem()
+    {
+        var template = RenderingTestHelper.Template("folder", path: "C:/src/App/Templates/example.html");
+        var compilation = GeneratorTestHelper.CreateCompilation();
+        var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([template], TestAnalyzerConfigOptionsProvider.WithProjectDir("C:/src/App")));
+
+        var after = GeneratorTestHelper.Run(compilation, before.Driver.WithUpdatedAnalyzerConfigOptions(TestAnalyzerConfigOptionsProvider.WithProjectDir("C:/src")));
+
+        // The project folder only changes the relative path in each template's comments, so the support types stay cached
+        await Assert.That(after.StepReasons(TemplateGenerator.TemplateFilesStep)).IsEquivalentTo(new[] { IncrementalStepRunReason.Cached });
+        await Assert.That(after.StepReasons(TemplateGenerator.TemplateResultsStep)).IsEquivalentTo(new[] { IncrementalStepRunReason.Modified });
+        await Assert.That(template.GetTextCount).IsEqualTo(1);
+        await Assert.That(after.GeneratedSource("Consumer.ExampleTextTemplate.g.cs").SourceText.ToString()).Contains("from App/Templates/example.html.");
+        foreach (var hintName in GeneratedSources.SupportHintNames)
+        {
+            await Assert.That(ReferenceEquals(after.GeneratedSource(hintName).SourceText, before.GeneratedSource(hintName).SourceText)).IsTrue();
+        }
+    }
+
+    [Test]
     public async Task Rerun_LanguageVersionRaisedToFloor_GeneratesFromCachedTemplates()
     {
         var template = RenderingTestHelper.Template("version");

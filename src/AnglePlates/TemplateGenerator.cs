@@ -16,8 +16,8 @@ namespace SlusserLabs.AnglePlates;
 /// <summary>
 /// Generates rendering classes from template additional files.
 /// </summary>
-[Generator]
-public class TemplateGenerator : IIncrementalGenerator
+[Generator(LanguageNames.CSharp)]
+public sealed class TemplateGenerator : IIncrementalGenerator
 {
     // Step names for WithTrackingName; the incremental tests read the same constants
     internal const string AnglePlateFilesStep = "AnglePlateFiles";
@@ -34,123 +34,121 @@ public class TemplateGenerator : IIncrementalGenerator
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // 1. Read MSBuild properties from the global options
-        var baseAccessModifier = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
+        // Caching rule: every value passed between steps must compare by value, so it's a string, an enum, a record of
+        // those, or an EquatableArray. Nothing may hold a Compilation, SyntaxTree, or SourceText, because those never
+        // compare equal between runs and would re-run every step after them.
+
+        // 1. Read the project-wide settings, which decide whether anything is generated
+        var accessModifier = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
             GeneratorSetting.ReadChoice(
-                options.GlobalOptions, _baseAccessModifierProperty, _defaultAccessModifier, TemplateTranspilerOptions.ExpectedAccessModifier, "public", "internal"));
-
-        // Below C# 11, generated code would fail with a wall of errors inside generated files, so SLAP010 replaces them
+                options.GlobalOptions, _baseAccessModifierProperty, _defaultAccessModifier, DirectiveReader.ExpectedAccessModifier, "public", "internal"));
         var languageVersion = context.ParseOptionsProvider.Select(static (options, cancellationToken) => ((CSharpParseOptions)options).LanguageVersion);
-        var settings = baseAccessModifier.Combine(languageVersion);
+        var settings = accessModifier.Combine(languageVersion).Select(static (pair, cancellationToken) => new GeneratorSettings(pair.Left, pair.Right));
 
-        var projectDir = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
-            options.GlobalOptions.TryGetValue(_projectDirKey, out var value) ? value : string.Empty);
+        // 2. Read the project values every template needs
+        var templateContext = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
+            new TemplateContext(options.GlobalOptions.TryGetValue(_projectDirKey, out var value) ? value : string.Empty));
 
-        // 2. Keep only the additional files AnglePlates added, before reading any text, so other tools' files are never read
+        // 3. Keep only the additional files AnglePlates added, before reading any text, so other tools' files are never read
         var anglePlateFiles = context.AdditionalTextsProvider
             .Combine(context.AnalyzerConfigOptionsProvider)
-            .Select(static (tuple, cancellationToken) => (Text: tuple.Left, Origin: GetOrigin(tuple.Right.GetOptions(tuple.Left))))
+            .Select(static (pair, cancellationToken) => (Text: pair.Left, Origin: GetOrigin(pair.Right.GetOptions(pair.Left))))
             .Where(static file => file.Origin != TemplateOrigin.None)
             .WithTrackingName(AnglePlateFilesStep);
 
-        // 3. Read each file; paths become relative to the project folder so class docs and file headers match on every machine
+        // 4. Read each file's text
         var templateFiles = anglePlateFiles
-            .Combine(projectDir)
-            .Select(static (tuple, cancellationToken) =>
-            {
-                var ((additionalText, origin), projDir) = tuple;
-                var content = additionalText.GetText(cancellationToken)?.ToString() ?? string.Empty;
-
-                return new TemplateFile(additionalText.Path, TemplatePath.GetRelativePath(additionalText.Path, projDir), content, origin);
-            })
+            .Select(static (file, cancellationToken) =>
+                new TemplateFile(file.Text.Path, file.Text.GetText(cancellationToken)?.ToString() ?? string.Empty, file.Origin))
             .WithTrackingName(TemplateFilesStep);
 
-        // 4. Parse and transpile each template on its own, so editing one leaves the others cached. A future setting that
-        // changes how every template parses belongs in this step's input.
+        // 5. Parse and write each template on its own, so editing one leaves the others cached. A future setting that
+        // changes how every template parses belongs in TemplateContext.
         var templateResults = templateFiles
-            .Select(static (template, cancellationToken) => ProcessTemplate(template, cancellationToken))
+            .Combine(templateContext)
+            .Select(static (pair, cancellationToken) => ProcessTemplate(pair.Left, pair.Right, cancellationToken))
             .WithTrackingName(TemplateResultsStep);
-        var allResults = templateResults.Collect();
 
-        // Templates that declare the same class, ignoring case, share a hint name, so they're numbered together below. This
-        // is empty in almost every project and stays cached, so the per-template output can skip the shared names without
-        // depending on the others.
-        var duplicates = allResults
+        // 6. Find the templates that declare the same class, ignoring case, because they share a hint name and are numbered
+        // together. This is empty in almost every project and stays cached, so the per-template output can skip the shared
+        // names without depending on the other templates.
+        var duplicates = templateResults
+            .Collect()
             .Select(static (results, cancellationToken) => FindDuplicates(results))
             .WithTrackingName(DuplicateTemplatesStep);
         var duplicatePrefixes = duplicates.Select(static (duplicate, cancellationToken) => duplicate.Prefixes);
 
-        // 5. Generate the support types. Trimming removes the ones an app doesn't use. A class with the wrong accessibility
-        // isn't a safe fallback, and code for an older C# version can't compile, so either problem generates nothing at all.
-        context.RegisterSourceOutput(settings, static (ctx, data) =>
-        {
-            var (accessModifier, langVersion) = data;
-            if (langVersion < LanguageVersion.CSharp11)
-            {
-                ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedLanguageVersion, Location.None, langVersion.ToDisplayString()));
-            }
-
-            if (!accessModifier.IsValid)
-            {
-                ctx.ReportDiagnostic(accessModifier.CreateDiagnostic());
-            }
-
-            if (!CanGenerate(data))
-            {
-                return;
-            }
-
-            ctx.AddSource("SlusserLabs.AnglePlates.TemplateOptions.g.cs", Boilerplate.TemplateOptions(accessModifier.Value));
-            ctx.AddSource("SlusserLabs.AnglePlates.TextTemplate.g.cs", Boilerplate.TextTemplate(accessModifier.Value));
-            ctx.AddSource("SlusserLabs.AnglePlates.Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier.Value));
-        });
-
-        // 6. Report each template's diagnostics and add its sources on their own, so the driver keeps the generated trees
-        // of templates that didn't change
-        context.RegisterSourceOutput(templateResults.Combine(duplicatePrefixes).Combine(settings), static (ctx, data) =>
-        {
-            var ((result, sharedPrefixes), generatorSettings) = data;
-            if (!CanGenerate(generatorSettings))
-            {
-                return;
-            }
-
-            foreach (var diagnostic in result.Diagnostics)
-            {
-                ctx.ReportDiagnostic(diagnostic.ToDiagnostic());
-            }
-
-            foreach (var source in result.Sources)
-            {
-                if (!sharedPrefixes.Contains(source.HintPrefix, StringComparer.OrdinalIgnoreCase))
-                {
-                    ctx.AddSource($"{source.HintPrefix}.g.cs", source.Source);
-                }
-            }
-        });
-
-        // 7. Number the sources that share a hint name, which are already sorted so the numbers don't depend on file order
-        context.RegisterSourceOutput(duplicates.Combine(settings), static (ctx, data) =>
-        {
-            var (duplicate, generatorSettings) = data;
-            if (!CanGenerate(generatorSettings))
-            {
-                return;
-            }
-
-            // Roslyn compares hint names ignoring case, so names that differ only by case are numbered too
-            var hintNameCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (var source in duplicate.Sources)
-            {
-                ctx.AddSource(CreateHintName(source.HintPrefix, hintNameCounts), source.Source);
-            }
-        });
+        // 7. Add the outputs
+        context.RegisterSourceOutput(settings, AddSupportTypes);
+        context.RegisterSourceOutput(templateResults.Combine(duplicatePrefixes).Combine(settings), AddTemplateSources);
+        context.RegisterSourceOutput(duplicates.Combine(settings), AddNumberedSources);
     }
 
-    // The support types report why generation stopped; the template outputs only skip their sources
-    private static bool CanGenerate((GeneratorSetting AccessModifier, LanguageVersion LanguageVersion) settings)
+    // Every project gets all three support types, and trimming removes the ones an app doesn't use. A class with the wrong
+    // accessibility isn't a safe fallback, and code for an older C# version can't compile, so either problem generates
+    // nothing at all.
+    private static void AddSupportTypes(SourceProductionContext context, GeneratorSettings settings)
     {
-        return settings.AccessModifier.IsValid && settings.LanguageVersion >= LanguageVersion.CSharp11;
+        if (!settings.IsLanguageVersionSupported)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedLanguageVersion, Location.None, settings.LanguageVersion.ToDisplayString()));
+        }
+
+        if (!settings.AccessModifier.IsValid)
+        {
+            context.ReportDiagnostic(settings.AccessModifier.CreateDiagnostic());
+        }
+
+        if (!settings.CanGenerate)
+        {
+            return;
+        }
+
+        var accessModifier = settings.AccessModifier.Value;
+        context.AddSource("SlusserLabs.AnglePlates.TemplateOptions.g.cs", SupportTypes.TemplateOptions(accessModifier));
+        context.AddSource("SlusserLabs.AnglePlates.TextTemplate.g.cs", SupportTypes.TextTemplate(accessModifier));
+        context.AddSource("SlusserLabs.AnglePlates.Utf8Template.g.cs", SupportTypes.Utf8Template(accessModifier));
+    }
+
+    // Reports one template's diagnostics and adds its sources on their own, so the driver keeps the generated trees of
+    // templates that didn't change. Sources with a shared hint name are left to AddNumberedSources.
+    private static void AddTemplateSources(SourceProductionContext context, ((TemplateResult Result, EquatableArray<string> SharedPrefixes) Template, GeneratorSettings Settings) data)
+    {
+        var ((result, sharedPrefixes), settings) = data;
+        if (!settings.CanGenerate)
+        {
+            return;
+        }
+
+        foreach (var diagnostic in result.Diagnostics)
+        {
+            context.ReportDiagnostic(diagnostic.ToDiagnostic());
+        }
+
+        foreach (var source in result.Sources)
+        {
+            if (!sharedPrefixes.Contains(source.HintPrefix, StringComparer.OrdinalIgnoreCase))
+            {
+                context.AddSource($"{source.HintPrefix}.g.cs", source.Source);
+            }
+        }
+    }
+
+    // Numbers the sources that share a hint name. FindDuplicates already sorted them, so the numbers don't depend on file order.
+    private static void AddNumberedSources(SourceProductionContext context, (DuplicateTemplates Duplicates, GeneratorSettings Settings) data)
+    {
+        var (duplicates, settings) = data;
+        if (!settings.CanGenerate)
+        {
+            return;
+        }
+
+        // Roslyn compares hint names ignoring case, so names that differ only by case are numbered too
+        var hintNameCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var source in duplicates.Sources)
+        {
+            context.AddSource(CreateHintName(source.HintPrefix, hintNameCounts), source.Source);
+        }
     }
 
     // Finds the sources whose hint names collide, in the order that numbers them
@@ -192,21 +190,17 @@ public class TemplateGenerator : IIncrementalGenerator
         return string.Equals(value, nameof(TemplateOrigin.Explicit), StringComparison.OrdinalIgnoreCase) ? TemplateOrigin.Explicit : TemplateOrigin.None;
     }
 
-    // Parses, validates, and transpiles one template into plain values the driver can compare with the previous run
-    private static TemplateResult ProcessTemplate(TemplateFile template, CancellationToken cancellationToken)
+    // Parses, validates, and writes one template into plain values the driver can compare with the previous run
+    private static TemplateResult ProcessTemplate(TemplateFile template, TemplateContext templateContext, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var parserOptions = TemplateParserOptions.Default;
-        var parseResult = new TemplateParser(parserOptions).Parse(template.Content.AsSpan());
-        var directiveTokens = parseResult.Tokens.Where(token => token.Type == TokenType.Directive).ToList();
+        var parsed = TemplateParser.Parse(template.Content, cancellationToken);
         var lines = SourceText.From(template.Content, Encoding.UTF8).Lines;
         var diagnostics = new List<TemplateDiagnostic>();
         var sources = new List<GeneratedTemplate>();
 
         // A file is a template when it starts with a known directive. The default folder picks up notes and other
         // files, so those are skipped quietly, but a file the project added explicitly was meant to be a template.
-        if (directiveTokens.Count == 0)
+        if (parsed.Directives.Count == 0)
         {
             if (template.Origin == TemplateOrigin.Explicit)
             {
@@ -216,33 +210,29 @@ public class TemplateGenerator : IIncrementalGenerator
             return new TemplateResult(template, diagnostics, sources);
         }
 
-        var transpilerOptions = TemplateTranspilerOptions.Create(
-            template.Path, template.Content.AsSpan(), directiveTokens, parseResult.DirectiveSectionEnd, parserOptions.Whitespace);
-
         // Errors skip only this template
-        if (transpilerOptions.Errors.Count > 0 || parseResult.Errors.Count > 0)
+        var errors = new List<TemplateError>();
+        var directives = DirectiveReader.Read(parsed, template.Path, errors);
+        errors.AddRange(parsed.Errors);
+        if (directives is null || errors.Count > 0)
         {
-            foreach (var error in transpilerOptions.Errors)
+            foreach (var error in errors)
             {
                 diagnostics.Add(CreateDiagnostic(error.Descriptor, template.Path, lines, error.Span, error.Arguments));
-            }
-
-            foreach (var error in parseResult.Errors)
-            {
-                var span = new TextSpan(error.Start, error.Length);
-                diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.UnclosedBlock, template.Path, lines, span, error.ClosingDelimiter));
             }
 
             return new TemplateResult(template, diagnostics, sources);
         }
 
+        // Paths relative to the project folder keep class docs and file headers the same on every machine
+        var relativePath = TemplatePath.GetRelativePath(template.Path, templateContext.ProjectDirectory);
         foreach (var target in _generationTargets)
         {
-            if ((transpilerOptions.GenerationTarget & target) != 0)
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((directives.GenerationTarget & target) != 0)
             {
-                var source = TemplateTranspiler.Transpile(
-                    template.RelativePath, template.Path, lines, transpilerOptions, target, template.Content.AsSpan(), parseResult.Tokens);
-                sources.Add(new GeneratedTemplate(CreateHintPrefix(transpilerOptions, target), source));
+                var source = TemplateClassWriter.Write(relativePath, template.Path, lines, parsed, directives, target);
+                sources.Add(new GeneratedTemplate(CreateHintPrefix(directives, target), source));
             }
         }
 
@@ -257,86 +247,21 @@ public class TemplateGenerator : IIncrementalGenerator
 
     // Names the source after the class it declares, such as MyApp.Templates.GreetingTextTemplate. The namespace uses each
     // identifier's value, so a verbatim '@' or a Unicode escape never reaches the file name.
-    private static string CreateHintPrefix(TemplateTranspilerOptions options, GenerationTarget generationTarget)
+    private static string CreateHintPrefix(TemplateDirectives directives, GenerationTarget target)
     {
-        var identifiers = SyntaxFactory.ParseName(options.Namespace!).DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
+        var identifiers = SyntaxFactory.ParseName(directives.Namespace).DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
             .Select(identifier => identifier.Identifier.ValueText);
 
-        return $"{string.Join(".", identifiers)}.{options.Type}{generationTarget}Template";
+        return $"{string.Join(".", identifiers)}.{directives.Type}{target}Template";
     }
 
+    // The second file with a name gets .2, the third .3, and so on, so AddSource doesn't throw on a repeated name
     private static string CreateHintName(string prefix, Dictionary<string, int> counts)
     {
-        // The second file with a name gets .2, the third .3, and so on, so AddSource doesn't throw on a repeated name
         counts.TryGetValue(prefix, out int count);
         counts[prefix] = count + 1;
         var suffix = count == 0 ? string.Empty : $".{(count + 1).ToString(CultureInfo.InvariantCulture)}";
 
         return $"{prefix}{suffix}.g.cs";
-    }
-
-    private sealed record TemplateFile
-    {
-        public TemplateFile(string path, string relativePath, string content, TemplateOrigin origin)
-        {
-            Path = path;
-            RelativePath = relativePath;
-            Content = content;
-            Origin = origin;
-        }
-
-        public string Path { get; }
-
-        public string RelativePath { get; }
-
-        public string Content { get; }
-
-        public TemplateOrigin Origin { get; }
-    }
-
-    // One template's diagnostics and sources; Path and Content are kept as the sort keys for numbering shared hint names
-    private sealed record TemplateResult
-    {
-        public TemplateResult(TemplateFile template, List<TemplateDiagnostic> diagnostics, List<GeneratedTemplate> sources)
-        {
-            Path = template.Path;
-            Content = template.Content;
-            Diagnostics = new EquatableArray<TemplateDiagnostic>([.. diagnostics]);
-            Sources = new EquatableArray<GeneratedTemplate>([.. sources]);
-        }
-
-        public string Path { get; }
-
-        public string Content { get; }
-
-        public EquatableArray<TemplateDiagnostic> Diagnostics { get; }
-
-        public EquatableArray<GeneratedTemplate> Sources { get; }
-    }
-
-    private sealed record DuplicateTemplates
-    {
-        public DuplicateTemplates(string[] prefixes, GeneratedTemplate[] sources)
-        {
-            Prefixes = new EquatableArray<string>(prefixes);
-            Sources = new EquatableArray<GeneratedTemplate>(sources);
-        }
-
-        public EquatableArray<string> Prefixes { get; }
-
-        public EquatableArray<GeneratedTemplate> Sources { get; }
-    }
-
-    private sealed record GeneratedTemplate
-    {
-        public GeneratedTemplate(string hintPrefix, string source)
-        {
-            HintPrefix = hintPrefix;
-            Source = source;
-        }
-
-        public string HintPrefix { get; }
-
-        public string Source { get; }
     }
 }

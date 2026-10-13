@@ -3,6 +3,7 @@ using System.Text;
 
 namespace SlusserLabs.AnglePlates;
 
+// Turns a template's full path into the stable name that generated comments use
 internal static class TemplatePath
 {
     // Names a template by its path relative to the project folder, with '/' separators, so the class documentation and

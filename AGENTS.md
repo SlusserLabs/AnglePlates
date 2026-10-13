@@ -12,7 +12,7 @@
 
 ## Skill Routing
 
-- `/csharp`: Use for all C# source changes, including consumer code emitted from strings in `Boilerplate.cs` and the transpilers.
+- `/csharp`: Use for all C# source changes, including consumer code emitted from strings in `Emit/SupportTypes.cs` and `Emit/TemplateClassWriter.cs`.
 - `/dotnet-tunit`: Use for tests in `tests/AnglePlates.Tests`.
 - `/docs`: Use for project documentation under `docs/`.
 - `/humanizer`: Use for human-facing prose and code comments. Do not apply it to code, plans, chat messages, or agent instructions such as `AGENTS.md`.
@@ -70,7 +70,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - Treat the generator host's framework, compiler API version, and generated consumer framework/language requirements as separate compatibility constraints
 - Keep emitted sources self-contained, including support types. Reference every type and static member with a `global::`-qualified name instead of `using` directives or aliases (emitted `using` lines come only from template `#using` directives), and call extension methods as static methods; this overrides the `/csharp` import preference for emitted code. Cover consumer-name collisions with compilation tests
 - Keep `#line` mappings for C# variables and C# blocks accurate when changing emitted statement layout, and cover the mapped template locations with compiler-error tests
-- Edit generator/transpiler sources rather than generated files under `obj`
+- Edit generator sources rather than generated files under `obj`
 - Preserve exact template bytes, including intentional newline fixtures, and both text and UTF-8 rendering contracts; execute generated renderers to verify exact characters and bytes when changing parsing, trimming, encoding, or output
 - Templates contain trusted C#; preserve default C# variable encoding and explicit raw-output behavior
 - Preserve direct streaming; do not add whole-output buffering without a requirement

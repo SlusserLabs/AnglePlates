@@ -3,9 +3,10 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace SlusserLabs.AnglePlates;
 
-internal sealed class DirectiveError
+// A problem the parser or the directive reader found, located by its span in the template text
+internal sealed class TemplateError
 {
-    public DirectiveError(DiagnosticDescriptor descriptor, TextSpan span, params string[] arguments)
+    public TemplateError(DiagnosticDescriptor descriptor, TextSpan span, params string[] arguments)
     {
         Descriptor = descriptor;
         Span = span;

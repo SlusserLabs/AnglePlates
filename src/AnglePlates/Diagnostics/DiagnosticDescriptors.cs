@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 
 namespace SlusserLabs.AnglePlates;
 
+// Every diagnostic the generator reports; docs/diagnostics.md documents each ID
 internal static class DiagnosticDescriptors
 {
     public const string MissingTypeId = "SLAP001";

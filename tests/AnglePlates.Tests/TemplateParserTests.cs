@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
@@ -7,7 +8,7 @@ using TUnit.Core;
 
 namespace SlusserLabs.AnglePlates.Tests;
 
-// Token-level parser results: types, spans of the trimmed content, trim flags, and unclosed-block errors
+// Parser results: directive and body token spans of the trimmed content, trim flags, and unclosed-block errors
 public sealed class TemplateParserTests
 {
     [Test]
@@ -20,9 +21,9 @@ public sealed class TemplateParserTests
     [Arguments("", "")]
     public async Task Parse_Text_ReturnsTokens(string text, string expected)
     {
-        var result = new TemplateParser(TemplateParserOptions.Default).Parse(text.AsSpan());
+        var result = TemplateParser.Parse(text, CancellationToken.None);
 
-        await Assert.That(string.Join(", ", result.Tokens.Select(Describe))).IsEqualTo(expected);
+        await Assert.That(Describe(result)).IsEqualTo(expected);
         await Assert.That(result.Errors).IsEmpty();
     }
 
@@ -30,32 +31,63 @@ public sealed class TemplateParserTests
     [Arguments("a[[b", 1, "]]")]
     [Arguments("[% x", 0, "%]")]
     [Arguments("ab [* note", 3, "*]")]
+    [Arguments("ab [[", 3, "]]")]
     public async Task Parse_UnclosedBlock_ReportsOpenerSpanAndCloser(string text, int start, string closingDelimiter)
     {
-        var result = new TemplateParser(TemplateParserOptions.Default).Parse(text.AsSpan());
+        var result = TemplateParser.Parse(text, CancellationToken.None);
         var error = result.Errors.Single();
 
-        await Assert.That(error.Start).IsEqualTo(start);
-        await Assert.That(error.Length).IsEqualTo(2);
-        await Assert.That(error.ClosingDelimiter).IsEqualTo(closingDelimiter);
+        await Assert.That(error.Descriptor).IsEqualTo(DiagnosticDescriptors.UnclosedBlock);
+        await Assert.That(error.Span.Start).IsEqualTo(start);
+        await Assert.That(error.Span.Length).IsEqualTo(2);
+        await Assert.That(error.Arguments).IsEquivalentTo(new[] { closingDelimiter });
     }
 
     [Test]
     [Arguments("#type X\r\n#model string\r\nbody", 24)]
     [Arguments("#type X", 7)]
     [Arguments("body", 0)]
-    public async Task Parse_DirectiveSection_EndsAtFirstBodyLine(string text, int directiveSectionEnd)
+    public async Task Parse_DirectiveSection_EndsAtFirstBodyLine(string text, int bodyStart)
     {
-        var result = new TemplateParser(TemplateParserOptions.Default).Parse(text.AsSpan());
+        var result = TemplateParser.Parse(text, CancellationToken.None);
 
-        await Assert.That(result.DirectiveSectionEnd).IsEqualTo(directiveSectionEnd);
+        await Assert.That(result.BodyStart).IsEqualTo(bodyStart);
     }
 
-    private static string Describe(Token token)
+    [Test]
+    [Arguments("#type X\r\n", "Type #type 0-5 value 6-7")]
+    [Arguments("#model\r\n#using A.B", "Model #model 0-6 value 6-6, Using #using 8-14 value 15-18")]
+    public async Task Parse_Directives_ReturnsNameAndValueSpans(string text, string expected)
     {
-        var trimPrevious = token.TrimPrevious ? " trim-previous" : string.Empty;
-        var trimNext = token.TrimNext ? " trim-next" : string.Empty;
+        var result = TemplateParser.Parse(text, CancellationToken.None);
+        var directives = result.Directives.Select(directive =>
+            $"{directive.Kind} {text.Substring(directive.Name.Start, directive.Name.Length)} {directive.Name.Start}-{directive.Name.End} value {directive.Value.Start}-{directive.Value.End}");
 
-        return $"{token.Type} {token.Start}-{token.End}{trimPrevious}{trimNext}";
+        await Assert.That(string.Join(", ", directives)).IsEqualTo(expected);
+        await Assert.That(result.Tokens).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_CanceledToken_Throws()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.That(() => TemplateParser.Parse("#type X\nbody", cancellation.Token)).Throws<OperationCanceledException>();
+    }
+
+    // Directives come first in the description because they come first in the template
+    private static string Describe(ParsedTemplate result)
+    {
+        var directives = result.Directives.Select(directive => $"Directive {directive.Value.Start}-{directive.Value.End}");
+        var tokens = result.Tokens.Select(token =>
+        {
+            var trimPrevious = token.TrimPrevious ? " trim-previous" : string.Empty;
+            var trimNext = token.TrimNext ? " trim-next" : string.Empty;
+
+            return $"{token.Type} {token.Span.Start}-{token.Span.End}{trimPrevious}{trimNext}";
+        });
+
+        return string.Join(", ", directives.Concat(tokens));
     }
 }

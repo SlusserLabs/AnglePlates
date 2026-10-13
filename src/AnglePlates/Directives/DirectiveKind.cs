@@ -1,8 +1,8 @@
 namespace SlusserLabs.AnglePlates;
 
+// The directives a template can start with
 internal enum DirectiveKind
 {
-    None, // The default for tokens that aren't directives, since Token is a struct
     Type,
     Model,
     Namespace,

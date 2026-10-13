@@ -44,5 +44,5 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Compiled template | The generated C# class that application code calls to render a template. |
 | Support types | The generated `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` types that compiled templates share. Every project that uses AnglePlates gets all three; trimming removes the ones an app doesn't use. |
 | Flush check | The point in `RenderAsync` where a UTF-8 compiled template checks for cancellation and flushes the pipe if enough output is waiting. It's fused into the first write after each C# block, and every render ends with one unconditional flush. |
-| Transpiler | The internal generator component that emits the C# source for a text or UTF-8 compiled template. Use it only for the generator's internals; applications use compiled templates. |
+| Template class writer | The internal generator component, `TemplateClassWriter`, that writes the C# source for a text or UTF-8 compiled template. Use it only for the generator's internals; applications use compiled templates. |
 | Consumer | An application or library that references AnglePlates and compiles the generated source. |
