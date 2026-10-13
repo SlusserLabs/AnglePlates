@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 using SlusserLabs.AnglePlates.Tests.Infrastructure;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
@@ -11,30 +12,29 @@ using TUnit.Core;
 
 namespace SlusserLabs.AnglePlates.Tests;
 
-public sealed partial class TemplateGeneratorTests
+// Public and internal templates and support types, alone and across referenced libraries
+public sealed class AccessibilityTests
 {
     [Test]
-    public async Task Initialize_PublicTemplateWithInternalSupportTypes_ReportsInconsistentAccessibility()
+    public async Task Access_PublicTemplateWithInternalSupportTypes_ReportsInconsistentAccessibility()
     {
         var template = RenderingTestHelper.Template("#access public\r\n#generate Text\r\npublic");
-        var compilation = GeneratorTestHelper.CreateCompilation();
-        var driver = GeneratorTestHelper.CreateDriver([template]).RunGenerators(compilation);
-        var tree = TemplateTrees(driver).Single();
+        const string file = "Consumer.ExampleTextTemplate.g.cs";
         var expected = new[]
         {
-            CompilerError(tree, 17, 21, 19, "CS0060",
-                "Inconsistent accessibility: base class 'TextTemplate<string>' is less accessible than class 'ExampleTextTemplate'"),
-            CompilerError(tree, 23, 11, 19, "CS0051",
-                "Inconsistent accessibility: parameter type 'TemplateOptions' is less accessible than method 'ExampleTextTemplate.ExampleTextTemplate(TemplateOptions?)'")
+            ExpectedCompilerDiagnostic.Generated("CS0060",
+                "Inconsistent accessibility: base class 'TextTemplate<string>' is less accessible than class 'ExampleTextTemplate'", file),
+            ExpectedCompilerDiagnostic.Generated("CS0051",
+                "Inconsistent accessibility: parameter type 'TemplateOptions' is less accessible than method 'ExampleTextTemplate.ExampleTextTemplate(TemplateOptions?)'", file)
         };
 
-        var result = GeneratorTestHelper.Run(compilation, driver, expected);
+        var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
     }
 
     [Test]
-    public async Task Initialize_PublicTemplateInReferencedLibrary_RendersFromConsumer()
+    public async Task Access_PublicTemplateInReferencedLibrary_RendersFromConsumer()
     {
         var libraryImage = EmitPublicLibrary("TemplateLibrary", "Library");
         const string consumerSource = """
@@ -62,11 +62,11 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(warnings.Length).IsGreaterThan(0);
         await Assert.That(warnings.All(warning => warning.Id == "CS0436")).IsTrue();
         await Assert.That(receipt).IsEqualTo("receipt &lt;value&gt;");
-        await AssertRenders(consumer.Compilation, "Consumer.Example", "app");
+        await RenderingTestHelper.AssertRendersAsync(consumer.Compilation, "Consumer.Example", "app");
     }
 
     [Test]
-    public async Task Initialize_ConsumerOptionsForReferencedLibraryTemplate_ReportsConversionError()
+    public async Task Access_ConsumerOptionsForReferencedLibraryTemplate_ReportsConversionError()
     {
         // TemplateOptions binds to the consumer's own copy, which isn't the type the library's constructor takes
         const string consumerSource = """
@@ -78,8 +78,9 @@ public sealed partial class TemplateGeneratorTests
             }
             """;
         var compilation = GeneratorTestHelper.CreateCompilation([consumerSource], references: ReferencesWith(EmitPublicLibrary("TemplateLibrary", "Library")));
-        var expected = CompilerError(compilation.SyntaxTrees.Single(), 4, 77, 53, "CS1503",
-            "Argument 1: cannot convert from 'SlusserLabs.AnglePlates.TemplateOptions' to 'SlusserLabs.AnglePlates.TemplateOptions?'");
+        var expected = ExpectedCompilerDiagnostic.Source("CS1503",
+            "Argument 1: cannot convert from 'SlusserLabs.AnglePlates.TemplateOptions' to 'SlusserLabs.AnglePlates.TemplateOptions?'",
+            "Consumer0.cs", new LinePositionSpan(new LinePosition(4, 77), new LinePosition(4, 130)));
 
         var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver(), [expected]);
 
@@ -87,7 +88,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_TwoReferencedLibrariesWithoutAnglePlates_ReportAmbiguousTemplateOptions()
+    public async Task Access_TwoReferencedLibrariesWithoutAnglePlates_ReportAmbiguousTemplateOptions()
     {
         // This consumer has no generator, so neither library's support types take precedence
         const string consumerSource = """
@@ -113,7 +114,7 @@ public sealed partial class TemplateGeneratorTests
     {
         var template = RenderingTestHelper.Template("#access public\r\nreceipt [[ model ]]", type: "Receipt", ns: ns);
         var library = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(assemblyName: assemblyName),
-            GeneratorTestHelper.CreateDriver([template], AccessModifierOptions("public")));
+            GeneratorTestHelper.CreateDriver([template], TestAnalyzerConfigOptionsProvider.WithAccessModifier("public")));
         using var image = new MemoryStream();
         library.Compilation.Emit(image);
 

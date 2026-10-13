@@ -30,7 +30,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 ## Current Repository
 
-- AnglePlates is a compile-time template engine prototype using a Roslyn incremental source generator; [docs/development.md](docs/development.md) describes the projects, source files, generator pipeline, and MSBuild assets
+- AnglePlates is a compile-time template engine using a Roslyn incremental source generator; [docs/development.md](docs/development.md) describes the projects, source files, generator pipeline, and MSBuild assets
 - Use `samples/HelloWorld/Templates/hello-world.html` as the current example
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
 - Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target and Roslyn 4.14.0 unless a host-compatibility change is deliberate and tested
@@ -81,6 +81,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 - Follow [docs/testing.md](docs/testing.md) for `GeneratorTestHelper`, Verify snapshots, expected diagnostics, and incremental reruns
 - Review every changed source and diagnostic snapshot manually; never enable automatic acceptance or feed generated output back as generator input
+- Support types have one snapshot; don't add per-test copies.
 - Cover valid inputs, boundaries, malformed templates, failures, diagnostics, and both rendering paths
 - Target 100% line and branch coverage separately for generator sources and emitted runtime code; report measured coverage separately from this target
 - Keep `tests/AnglePlates.PackageTests` and the consumers under `tests/AnglePlates.PackageConsumers` outside the solution, without source-tree imports or analyzer project references; each consumer checks its own results and exits nonzero on failure. Run them through `eng/validate-package.ps1` after freshly packing a unique version, and register new consumers in that script

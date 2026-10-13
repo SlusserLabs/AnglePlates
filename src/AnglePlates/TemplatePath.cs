@@ -5,8 +5,8 @@ namespace SlusserLabs.AnglePlates;
 
 internal static class TemplatePath
 {
-    // Names a template by its path relative to the project folder, with '/' separators, so class documentation and hint
-    // names are the same on every machine. Templates outside the folder get '../' segments. The result keeps the file's
+    // Names a template by its path relative to the project folder, with '/' separators, so the class documentation and
+    // the generated file header are the same on every machine. Templates outside the folder get '../' segments. The result keeps the file's
     // own casing, and falls back to the full path when there's no project folder or the two paths share no root.
     public static string GetRelativePath(string path, string projectDir)
     {

@@ -133,7 +133,7 @@ Each of these is a recommendation the owner can overturn in review. The rational
 | S18 | Encoding presets | `TemplateOptions` gets static `Html`, `Unencoded`, `JavaScript`, and `Url` presets, which `#encode` uses. | [4.3](#43-templateoptions) |
 | S19 | Terminology | Keep "C# variable" and `NullVariable`. A rename isn't worth the churn. | [14.6](#146-terminology) |
 | S20 | `#encode` values and name derivation | `html` (default), `none`, `javascript`, `url`. `#type` comes from the file name, `#namespace` from `RootNamespace` plus folders, and `#model` stays required. | [4.2](#42-directives) |
-| S21 | Duplicate template classes | No dedicated diagnostic; the compiler reports CS0101, matching the owner's AssemblyInfo choice (commit `d19854e`). Hint names get a numbered suffix so the generator never crashes on a clash. | [4.9](#49-generated-file-names) |
+| S21 | Duplicate template classes | No dedicated diagnostic; the compiler reports duplicate-member errors (CS0111, CS0102, CS0121, because the classes are partial and merge), matching the owner's AssemblyInfo choice (commit `d19854e`). Hint names get a numbered suffix so the generator never crashes on a clash. | [4.9](#49-generated-file-names) |
 | S22 | Visibility timing | Private through development and int previews. The owner makes it public after Phase 8 is accepted and before the first nuget.org release. | [12.4](#124-agent-guardrails) |
 | S23 | Preview trigger | Previews come only from a manual `workflow_dispatch`, numbered by run number. There are no preview tags. | [12.1](#121-versions) |
 | S24 | Stable trigger | A published GitHub Release for a `vX.Y.Z` tag, plus a `NUGET_ORG_PUBLISH_ENABLED` repository variable, plus the `nuget-org` environment approval. That's the AssemblyInfo pattern, with the approval gate added. | [12.3](#123-release-workflow) |
@@ -452,7 +452,7 @@ A generated-code test renders a parent with `TemplateOptions.Unencoded` and chec
 Template sources get the hint name `{Namespace}.{Type}{Target}Template.g.cs`, for example `MyApp.Templates.GreetingTextTemplate.g.cs`. Support types become `SlusserLabs.AnglePlates.TemplateOptions.g.cs`, `SlusserLabs.AnglePlates.TextTemplate.g.cs`, `SlusserLabs.AnglePlates.Utf8Template.g.cs`, and `SlusserLabs.AnglePlates.TemplateExtensions.g.cs`.
 
 - Roslyn compares hint names case-insensitively, and `AddSource` throws on a repeat, which crashes the generator. So the existing numbering step stays, but groups names with `StringComparer.OrdinalIgnoreCase` and sorts by ordinal path. The second file of a clash becomes `MyApp.Templates.GreetingTextTemplate.2.g.cs`.
-- Two templates that declare the same class get CS0101 from the compiler, as today (S21). Classes that differ only by case (`App.Page` and `app.page`) are legal C#; they just get numbered file names. A test covers each case.
+- Two templates that declare the same class get duplicate-member errors (CS0111, CS0102, CS0121) from the compiler, as today (S21). The classes are , so the two declarations merge instead of producing CS0101. Classes that differ only by case (`App.Page` and `app.page`) are legal C#; they just get numbered file names. A test covers each case.
 - The SHA-256 identity code, its length-prefix scheme, and the `System.Security.Cryptography` dependency go away.
 
 ### 4.10 Generated header
@@ -501,7 +501,7 @@ private static DiagnosticDescriptor Create(string id, string title, string messa
 }
 ```
 
-There's no diagnostic for two templates that declare the same class (S21). The compiler's CS0101 already says what's wrong, and the owner removed the equivalent check from AssemblyInfo for the same reason.
+There's no diagnostic for two templates that declare the same class (S21). The compiler's duplicate-member errors already say what's wrong, and the owner removed the equivalent check from AssemblyInfo for the same reason.
 
 ### 5.2 SLAP011 rule
 
@@ -775,7 +775,7 @@ Reorganize by feature into ordinary (non-partial) classes, and drop the meaningl
 | `DirectiveSpellCheckTests` | The SLAP011 table from [5.2](#52-slap011-rule). |
 | `DiagnosticTests` | One test per registry row: ID, severity, title, message, location, and help link, plus the help-anchor check against `docs/diagnostics.md`. |
 | `LineMappingTests` | Compiler errors in variables and blocks map to exact template spans in `Render` and `RenderAsync`. |
-| `HintNameTests` | Readable names, numbered clashes (same class, and case-only differences), and CS0101 for duplicate classes. |
+| `HintNameTests` | Readable names, numbered clashes (same class, and case-only differences), and the compiler's duplicate-member errors for duplicate classes. |
 | `MSBuildOptionTests` | Option parsing, tags, and relative paths. |
 | `AccessibilityTests` | Internal and public support types, and SLAP005. |
 | `LanguageVersionTests` | SLAP010 and C# 11 output. |
@@ -843,7 +843,7 @@ Consumers, existing and new:
 | RemoveDefault | `AnglePlate Remove` in the project file. Also runs the incremental check: build, edit a template, rebuild, see new output, delete it, see the class gone. | Edit |
 | DirectoryBuildPropsRemove | Becomes `EnableDefaultAnglePlateItems=false` set in `Directory.Build.props`, plus one assertion that a `Remove` there is still a no-op. | Rewrite |
 | DirectoryBuildTargetsRemove | `Remove` in `Directory.Build.targets`. | Edit |
-| BuildErrors (new) | Builds that must fail. One small project per case with an `ExpectedErrors.txt`: SLAP001, SLAP002, SLAP004, SLAP005, SLAP008, SLAP009 (`-p:AnglePlateBaseAccessModifier=private`), SLAP010 (`-p:LangVersion=10`), SLAP011 (warning with `-warnaserror`), CS0101 for a duplicate class, and a CS0103 inside `[% %]` at `Templates/bad.html(5,4)`. The script requires a nonzero exit and every expected line, with absolute paths normalized to project-relative ones. | Add |
+| BuildErrors (new) | Builds that must fail. One small project per case with an `ExpectedErrors.txt`: SLAP001, SLAP002, SLAP004, SLAP005, SLAP008, SLAP009 (`-p:AnglePlateBaseAccessModifier=private`), SLAP010 (`-p:LangVersion=10`), SLAP011 (warning with `-warnaserror`), CS0111 for a duplicate class, and a CS0103 inside `[% %]` at `Templates/bad.html(5,4)`. The script requires a nonzero exit and every expected line, with absolute paths normalized to project-relative ones. | Add |
 | NoPrivateAssets (new) | A library with a plain one-line reference, and an app that reaches it through a `ProjectReference` and has its own `Templates` folder. Asserts the app has no `AnglePlate` items and no generated classes. | Add |
 | CentralPackageManagement (new) | `ManagePackageVersionsCentrally` with `GlobalPackageReference`. | Add |
 | UnsupportedFramework (new) | `net8.0`; pins SLAP012 or the documented behavior. | Add |

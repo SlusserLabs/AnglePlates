@@ -5,31 +5,17 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Text;
 using SlusserLabs.AnglePlates.Tests.Infrastructure;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
 using TUnit.Core;
-using VerifyTUnit;
 
 namespace SlusserLabs.AnglePlates.Tests;
 
-public sealed partial class TemplateGeneratorTests
+// Runtime behavior of the generated RenderAsync: flush checks, cancellation, and backpressure
+public sealed class RenderAsyncTests
 {
     private const string _utf8Example = "Consumer.ExampleUtf8Template";
-
-    [Test]
-    public async Task Initialize_RenderAsync_MatchesReviewedSources()
-    {
-        // Literals, C# variables, a loop, brace-less C#, a comment after a block, and a trimmed literal that disappears
-        const string body = "#generate Utf8\r\n<ul>[% foreach (var c in model) { %]<li>[[ c ]]</li>[% } %][* note *][[ model ]]" +
-            "[% if (model.Length > 0) %]a[% else %][[ model.Length ]][% var n = 1; -%]  \r\n[%- n++; %]";
-        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-
-        await Verifier.Verify(result.RunResult);
-    }
 
     [Test]
     [Arguments("plain [[ model ]] text", "plain &lt;value&gt; text", 1)]
@@ -43,7 +29,7 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("[% var n = 1;\n%]\nx\n", "\nx\n", 2)]
     [Arguments("[% var n = 1;\r\n%]\r\nx\r\n", "\r\nx\r\n", 2)]
     [Arguments("[% var n = 1; %]\n\n", "\n\n", 2)]
-    public async Task Initialize_RenderAsync_ChecksForFlushOnlyAtFirstWriteAfterEachCSharpBlock(string body, string expected, int flushes)
+    public async Task RenderAsync_CSharpBlocks_ChecksForFlushOnlyAtFirstWriteAfterEach(string body, string expected, int flushes)
     {
         // A writer that can't report its unflushed bytes flushes at every check, so the flush count is the check count plus the final flush
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Utf8\r\n" + body));
@@ -61,7 +47,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_RenderAsync_FlushesAtChecksOnceThresholdIsReached()
+    public async Task RenderAsync_ThresholdReached_FlushesAtChecks()
     {
         // Each iteration writes 1,000 bytes and then checks, so the 16K threshold is first reached on the 17th iteration
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Utf8\r\n[% for (var i = 0; i < 40; i++) { %][[ model ]][% } %]"));
@@ -74,7 +60,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_RenderAsync_SmallPageFlushesOnlyAtEnd()
+    public async Task RenderAsync_SmallPage_FlushesOnlyAtEnd()
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Utf8\r\n[% for (var i = 0; i < 3; i++) { %]x[[ i ]][% } %]!"));
         using var generated = GeneratedAssembly.Load(result.Compilation);
@@ -86,7 +72,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_RenderAsync_ChildTemplateOutputFlushesAtParentsNextCheck()
+    public async Task RenderAsync_ChildTemplateOutput_FlushesAtParentsNextCheck()
     {
         // The loop body is only C# blocks, so its iterations pass no check until the write after the loop
         var child = RenderingTestHelper.Template("#generate Utf8\r\n<[[ model ]]>", type: "Child", path: "Templates/child.html");
@@ -105,7 +91,7 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     [Arguments("before [[ model ]]")]
     [Arguments("[% var n = 1; %][[ n ]]")]
-    public async Task Initialize_RenderAsyncCanceledBeforeRender_ThrowsWithoutFlushing(string body)
+    public async Task RenderAsync_CanceledBeforeRender_ThrowsWithoutFlushing(string body)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Utf8\r\n" + body));
         using var generated = GeneratedAssembly.Load(result.Compilation);
@@ -120,7 +106,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_RenderAsyncCanceledDuringRender_StopsAtNextCheck()
+    public async Task RenderAsync_CanceledDuringRender_StopsAtNextCheck()
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Utf8\r\n[% for (var i = 0; i < 5; i++) { %]x[[ i ]][% } %]"));
         using var generated = GeneratedAssembly.Load(result.Compilation);
@@ -145,7 +131,7 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     [Arguments(false, true, "The template stopped rendering because the pipe reader completed.")]
     [Arguments(true, false, "The template stopped rendering because a flush was canceled.")]
-    public async Task Initialize_RenderAsyncFlushResultStopped_ThrowsOperationCanceled(bool isCanceled, bool isCompleted, string message)
+    public async Task RenderAsync_FlushResultStopped_ThrowsOperationCanceled(bool isCanceled, bool isCompleted, string message)
     {
         // The nested loop shows that the exception unwinds C# blocks without any generated checks
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(
@@ -162,7 +148,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_RenderAsyncReaderCompleted_ThrowsAtFinalFlush()
+    public async Task RenderAsync_ReaderCompleted_ThrowsAtFinalFlush()
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Utf8\r\nno blocks"));
         using var generated = GeneratedAssembly.Load(result.Compilation);
@@ -176,7 +162,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_RenderAsyncOnPipe_WaitsForReaderUnderBackpressure()
+    public async Task RenderAsync_OnPipe_WaitsForReaderUnderBackpressure()
     {
         const string body = "#generate Utf8\r\n[% for (var i = 0; i < 100; i++) { %][[ model ]][% } %]";
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
@@ -195,30 +181,6 @@ public sealed partial class TemplateGeneratorTests
 
         await Assert.That(bytes.Length).IsEqualTo(100000);
         await Assert.That(bytes.All(value => value == (byte)'a')).IsTrue();
-    }
-
-    [Test]
-    [Arguments("[% System.Span<char> s = stackalloc char[1]; %]", LanguageVersion.CSharp11, false, 48, 8, 17, "CS9058",
-        "Feature 'ref and unsafe in async and iterator methods' is not available in C# 11.0. Please use language version 13.0 or greater.", 3, 44)]
-    [Arguments("[% System.Span<char> s = stackalloc char[1]; %]x[% s[0] = 'a'; %]", LanguageVersion.CSharp13, false, 62, 8, 1, "CS4007",
-        "Instance of type 'System.Span<char>' cannot be preserved across 'await' or 'yield' boundary.", 51, 62)]
-    [Arguments("[% lock (model) { %]x[% } %]", LanguageVersion.CSharp11, false, 58, 12, 72, "CS1996", "Cannot await in the body of a lock statement", 20, 21)]
-    [Arguments("[% unsafe { %]x[% } %]", LanguageVersion.CSharp11, true, 58, 12, 72, "CS4004", "Cannot await in an unsafe context", 14, 15)]
-    public async Task Initialize_AsyncRestrictionInCSharpBlock_ReportsCompilerErrorAtTemplate(
-        string body, LanguageVersion languageVersion, bool allowUnsafe, int line, int column, int length, string id, string message, int templateStart, int templateEnd)
-    {
-        // Each body compiles in Render, so the only error comes from RenderAsync. A ref struct local maps to its C# block or,
-        // from C# 13, to the block that uses it after a flush check; an await inside lock or unsafe maps to the literal that flushes.
-        var template = RenderingTestHelper.Template("#generate Utf8\r\n" + body);
-        var compilation = GeneratorTestHelper.CreateCompilation(languageVersion: languageVersion);
-        compilation = compilation.WithOptions(compilation.Options.WithAllowUnsafe(allowUnsafe));
-        var driver = GeneratorTestHelper.CreateDriver([template], languageVersion: languageVersion).RunGenerators(compilation);
-        var tree = TemplateTrees(driver).Single();
-        var mapped = new LinePositionSpan(new LinePosition(5, templateStart), new LinePosition(5, templateEnd));
-
-        var result = GeneratorTestHelper.Run(compilation, driver, [CompilerError(tree, line, column, length, id, message, mapped)]);
-
-        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
     }
 
     private static async Task<byte[]> ReadAllAsync(PipeReader reader)

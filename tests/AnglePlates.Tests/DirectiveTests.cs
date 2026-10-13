@@ -9,78 +9,31 @@ using SlusserLabs.AnglePlates.Tests.Infrastructure;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
 using TUnit.Core;
-using VerifyTUnit;
 
 namespace SlusserLabs.AnglePlates.Tests;
 
-public sealed partial class TemplateGeneratorTests
+// Every directive: where the directive section ends, valid and invalid values, duplicates, and what each one generates
+public sealed class DirectiveTests
 {
-    private const string _requiredDirectives = "#type Example\r\n#model string\r\n#namespace Consumer\r\n";
+    [Test]
+    [Arguments("", true, true, 5)]
+    [Arguments("#generate Text\r\n", true, false, 4)]
+    [Arguments("#generate Utf8\r\n", false, true, 4)]
+    public async Task Generate_Target_GeneratesSelectedTypes(string generateDirective, bool hasTextType, bool hasUtf8Type, int treeCount)
+    {
+        var template = TemplateText.Header + generateDirective + "Hello [[ model ]]";
 
-    private const string _frameworkNames = """
-            public class System { }
-            public class Convert { }
-            public class Globalization { }
-            public class CultureInfo { }
-            public class Span<T> { }
-            public class ReadOnlySpan<T> { }
-            public class OperationStatus { }
-            public class MethodImplAttribute { }
-            public class MethodImplOptions { }
-            public class TextWriter { }
-            public class ReadOnlyMemory<T> { }
-            public class ArrayPool<T> { }
-            public class TextEncoder { }
-            public class HtmlEncoder { }
-            public class Encoding { }
-            public class Math { }
-            public class Lazy<T> { }
-            public class IBufferWriter<T> { }
-            public class PipeWriter { }
-            public class CancellationToken { }
-            public class ValueTask { }
-            public class ValueTask<T> { }
-            public class FlushResult { }
-        """;
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template)).RunResult;
+        var generatedSource = string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
 
-    // Names declared in the template's own namespace and in the support type namespace
-    private const string _consumerConflicts = $$"""
-        namespace Consumer
-        {
-        {{_frameworkNames}}
-            public class SlusserLabs { }
-            public class TemplateOptions { }
-            public class TextTemplate<T> { }
-            public class Utf8Template<T> { }
-        }
-        namespace SlusserLabs.AnglePlates
-        {
-        {{_frameworkNames}}
-        }
-        """;
-
-    // Names brought into scope by a #using directive
-    private const string _importedConflicts = """
-        namespace Conflicts
-        {
-            public class System { }
-            public class Convert { }
-            public class CultureInfo { }
-            public class Lazy<T> { }
-            public class Span<T> { }
-            public class ReadOnlyMemory<T> { }
-            public class IBufferWriter<T> { }
-            public class TextWriter { }
-            public class SlusserLabs { }
-            public class TemplateOptions { }
-            public class TextTemplate { }
-            public class TextTemplate<T> { }
-            public class Utf8Template { }
-            public class Utf8Template<T> { }
-            public class ExampleTextTemplate { }
-            public class ExampleUtf8Template { }
-        }
-        """;
+        // Both base classes are generated whatever the template's targets
+        await Assert.That(result.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(treeCount);
+        await Assert.That(generatedSource.Contains("internal partial class ExampleTextTemplate", StringComparison.Ordinal)).IsEqualTo(hasTextType);
+        await Assert.That(generatedSource.Contains("internal partial class ExampleUtf8Template", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
+        await Assert.That(generatedSource.Contains("internal abstract class TextTemplate<TModel>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(generatedSource.Contains("internal abstract class Utf8Template<TModel>", StringComparison.Ordinal)).IsTrue();
+    }
 
     [Test]
     [Arguments("#typeGreeting")]
@@ -97,7 +50,7 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#acess internal")]
     [Arguments("#not directive")]
     [Arguments("</html>\r\n#not directive")]
-    public async Task Initialize_NonDirectiveLine_EndsDirectiveSectionAsLiteral(string body)
+    public async Task DirectiveSection_NonDirectiveLine_EndsSectionAsLiteral(string body)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
         var output = RenderingTestHelper.Render(result.Compilation, model: string.Empty);
@@ -109,7 +62,7 @@ public sealed partial class TemplateGeneratorTests
 
     [Test]
     [MethodDataSource(nameof(LineConsumptionCases))]
-    public async Task Initialize_DirectiveLines_AreConsumedWithTheirLineBreaks(string template, string expected)
+    public async Task DirectiveSection_DirectiveLines_AreConsumedWithTheirLineBreaks(string template, string expected)
     {
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
         var output = RenderingTestHelper.Render(result.Compilation);
@@ -136,7 +89,7 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_DirectiveErrorsWithLf_MapLines()
+    public async Task DirectiveErrors_WithLfLineBreaks_ReportOnTheirLines()
     {
         var template = "#type Example\n#model string\n#namespace Consumer\n#access privat\n#model int\nbody";
         var diagnostics = GenerateDiagnostics(template);
@@ -149,7 +102,7 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     [Arguments("\n")]
     [Arguments("\r\n")]
-    public async Task Initialize_TypoBeforeRequiredDirectives_ReportsAtTypo(string newline)
+    public async Task MissingDirective_AfterTypo_ReportsAtTypo(string newline)
     {
         var template = $"#type Example{newline}#namspace Consumer{newline}#model string{newline}body";
         var diagnostics = GenerateDiagnostics(template);
@@ -169,10 +122,10 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#type", "", "SLAP001")]
     [Arguments("#type", "\n", "SLAP001")]
     [Arguments("#type", "\r\n", "SLAP001")]
-    public async Task Initialize_BlankRequiredDirective_ReportsAtDirectiveName(string line, string tail, string id)
+    public async Task RequiredDirective_BlankValue_ReportsAtDirectiveName(string line, string tail, string id)
     {
         // The blank directive is last so the tail can end the line, the text, or neither
-        var template = ReplaceDirective(line, last: true).TrimEnd('\r', '\n') + tail;
+        var template = TemplateText.WithDirective(line, last: true).TrimEnd('\r', '\n') + tail;
         var diagnostic = GenerateDiagnostics(template).Single();
         var name = line.TrimEnd();
 
@@ -189,12 +142,12 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#access public", "#access")]
     [Arguments("#using System", "#using System")]
     [Arguments("#type\t", "#type")]
-    public async Task Initialize_RepeatedDirective_ReportsDuplicate(string line, string label)
+    public async Task Directive_Repeated_ReportsDuplicate(string line, string label)
     {
         // Required directives already appear once, so only optional ones need a first occurrence
         var name = line.Split(' ', '\t')[0];
-        var isRequired = _requiredDirectives.Contains(name + " ", StringComparison.Ordinal);
-        var template = _requiredDirectives + (isRequired ? string.Empty : line + "\r\n") + line + "\r\nbody";
+        var isRequired = TemplateText.Header.Contains(name + " ", StringComparison.Ordinal);
+        var template = TemplateText.Header + (isRequired ? string.Empty : line + "\r\n") + line + "\r\nbody";
         var diagnostic = GenerateDiagnostics(template).Single();
 
         await Assert.That(diagnostic.Id).IsEqualTo("SLAP006");
@@ -207,9 +160,9 @@ public sealed partial class TemplateGeneratorTests
     [Test]
     [Arguments("Bad")]
     [Arguments("Text, Utf8")]
-    public async Task Initialize_InvalidThenValidGenerate_ReportsBoth(string target)
+    public async Task Generate_InvalidThenValidTarget_ReportsBoth(string target)
     {
-        var template = _requiredDirectives + $"#generate {target}\r\n#generate Text\r\nbody";
+        var template = TemplateText.Header + $"#generate {target}\r\n#generate Text\r\nbody";
         var diagnostics = GenerateDiagnostics(template);
 
         await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP005,SLAP006");
@@ -243,11 +196,11 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#using System.Collections.Generic.List<int>", "a namespace name such as 'System.Linq'")]
     [Arguments("#using System // comment", "a namespace name such as 'System.Linq'")]
     [Arguments("#using", "a namespace name such as 'System.Linq'")]
-    public async Task Initialize_InvalidDirectiveValue_ReportsAtValue(string line, string expected)
+    public async Task Directive_InvalidValue_ReportsAtValue(string line, string expected)
     {
-        var template = ReplaceDirective(line) + "body";
+        var template = TemplateText.WithDirective(line) + "body";
         var diagnostic = GenerateDiagnostics(template).Single();
-        var separator = line.IndexOf(' ');
+        var separator = line.IndexOf(' ', StringComparison.Ordinal);
         var name = separator < 0 ? line.Substring(1) : line.Substring(1, separator - 1);
         var value = separator < 0 ? string.Empty : line.Substring(separator + 1);
         var lineIndex = LineOf(template, line);
@@ -276,11 +229,12 @@ public sealed partial class TemplateGeneratorTests
     [Arguments("#namespace @class", "class.Example")]
     [Arguments("#access public", "Consumer.Example")]
     [Arguments("#generate utf8", "Consumer.Example")]
-    public async Task Initialize_ValidDirectiveValue_Generates(string line, string type)
+    public async Task Directive_ValidValue_Generates(string line, string type)
     {
         // A public template class needs public support types
         var baseAccessModifier = line.StartsWith("#access", StringComparison.Ordinal) ? "public" : null;
-        var result = RunWithAccessModifier(baseAccessModifier, new TemplateAdditionalText(ReplaceDirective(line) + "[[ model ]]"));
+        var result = GeneratorTestHelper.Run(
+            TestAnalyzerConfigOptionsProvider.WithAccessModifier(baseAccessModifier), new TemplateAdditionalText(TemplateText.WithDirective(line) + "[[ model ]]"));
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         if (!line.StartsWith("#generate", StringComparison.Ordinal))
@@ -292,13 +246,13 @@ public sealed partial class TemplateGeneratorTests
     }
 
     [Test]
-    public async Task Initialize_UsingDirectives_EmitImportsInTemplateOrder()
+    public async Task Using_SeveralDirectives_EmitImportsInTemplateOrder()
     {
         var template = "#type Example\r\n#using System.Text\r\n#model IEnumerable<char>\r\n#using System.Collections.Generic\r\n#namespace Consumer\r\n" +
             "[% foreach (var c in model) { %][[ c ]][% } %][[ new StringBuilder(\"!\") ]]";
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
         var output = RenderingTestHelper.Render(result.Compilation);
-        var sources = result.RunResult.GeneratedTrees.Skip(3).Select(tree => tree.GetText().ToString()).ToArray();
+        var sources = result.TemplateSources;
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(sources.Length).IsEqualTo(2);
@@ -316,35 +270,6 @@ public sealed partial class TemplateGeneratorTests
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(output.text))).IsTrue();
     }
 
-    [Test]
-    [Arguments("", "", "Hello [[ model ]]", "Hello &lt;value&gt;")]
-    [Arguments(_consumerConflicts, "", "Hello [[ model ]]", "Hello &lt;value&gt;")]
-    [Arguments(_importedConflicts, "#using Conflicts\r\n", "Hello [[ model ]]", "Hello &lt;value&gt;")]
-    [Arguments("global using System.Text;", "#using System.Text\r\n", "> [[ new StringBuilder(model) ]]", "> &lt;value&gt;")]
-    public async Task Initialize_ConsumerSources_CompileWithEmittedCodeWithoutWarnings(string consumerSource, string usingDirective, string body, string expected)
-    {
-        // Run fails the test when the generated consumer has any emit error; the consumer has no implicit imports
-        var template = _requiredDirectives + usingDirective + body;
-        var compilation = GeneratorTestHelper.CreateCompilation(consumerSource.Length == 0 ? [] : [consumerSource]);
-        var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([new TemplateAdditionalText(template)]));
-        var warnings = result.Compilation.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning);
-        var output = RenderingTestHelper.Render(result.Compilation);
-
-        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
-        await Assert.That(string.Join(", ", warnings.Select(d => $"{d.Id} {d.GetMessage()}"))).IsEqualTo(string.Empty);
-        await Assert.That(output.text).IsEqualTo(expected);
-        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
-    }
-
-    [Test]
-    public async Task Initialize_DirectiveErrors_MatchesReviewedDiagnostics()
-    {
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(_requiredDirectives + "#access privat\r\n#type Other\r\nbody"));
-
-        await Verifier.Verify(result.RunResult);
-    }
-
     private static Diagnostic[] GenerateDiagnostics(string template)
     {
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
@@ -354,30 +279,6 @@ public sealed partial class TemplateGeneratorTests
         }
 
         return result.RunResult.Diagnostics.ToArray();
-    }
-
-    // Swaps the directive with the same name into the required set, or appends it; last moves the swapped directive to the end
-    private static string ReplaceDirective(string line, bool last = false)
-    {
-        var separator = line.IndexOf(' ');
-        var name = (separator < 0 ? line : line.Substring(0, separator)) + " ";
-        var lines = _requiredDirectives.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).ToList();
-        var index = lines.FindIndex(l => l.StartsWith(name, StringComparison.Ordinal));
-        if (index >= 0 && !last)
-        {
-            lines[index] = line;
-        }
-        else
-        {
-            if (index >= 0)
-            {
-                lines.RemoveAt(index);
-            }
-
-            lines.Add(line);
-        }
-
-        return string.Join("\r\n", lines) + "\r\n";
     }
 
     private static int LineOf(string template, string line)
@@ -391,7 +292,7 @@ public sealed partial class TemplateGeneratorTests
         var start = lines[line].Start + column;
 
         await Assert.That(diagnostic.Location.SourceSpan).IsEqualTo(new TextSpan(start, length));
-        await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan("Templates/example.html",
+        await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(TemplateText.Path,
             new LinePosition(line, column), new LinePosition(line, column + length)));
     }
 }

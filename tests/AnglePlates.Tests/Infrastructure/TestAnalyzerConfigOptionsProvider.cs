@@ -6,8 +6,11 @@ using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 
+// Stands in for the MSBuild properties and file metadata the generator reads in a real build
 internal sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsProvider
 {
+    private const string _baseAccessModifierKey = "build_property.AnglePlateBaseAccessModifier";
+    private const string _projectDirKey = "build_property.ProjectDir";
     private const string _anglePlateKey = "build_metadata.AdditionalFiles.AnglePlate";
 
     private readonly TestAnalyzerConfigOptions _empty = new();
@@ -22,6 +25,17 @@ internal sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsP
     }
 
     public override AnalyzerConfigOptions GlobalOptions { get; }
+
+    // Sets AnglePlateBaseAccessModifier; null leaves it unset, as in a project that doesn't import the props file
+    public static TestAnalyzerConfigOptionsProvider WithAccessModifier(string? value)
+    {
+        return new TestAnalyzerConfigOptionsProvider(value is null ? [] : [new KeyValuePair<string, string>(_baseAccessModifierKey, value)]);
+    }
+
+    public static TestAnalyzerConfigOptionsProvider WithProjectDir(string projectDir)
+    {
+        return new TestAnalyzerConfigOptionsProvider([new KeyValuePair<string, string>(_projectDirKey, projectDir)]);
+    }
 
     public override AnalyzerConfigOptions GetOptions(SyntaxTree tree)
     {
