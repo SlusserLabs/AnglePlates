@@ -77,36 +77,12 @@ public abstract class TextTemplate<TModel>
     /// <summary>
     /// Converts <paramref name="value" /> to text with the invariant culture, then encodes and writes it like a string.
     /// </summary>
-    /// <param name="value">The value to write.</param>
-    /// <param name="writer">The writer that receives the output.</param>
-    protected void Write(object? value, global::System.IO.TextWriter writer)
-    {
-        // Convert.ToString turns null into an empty string, so null is checked first to reach NullVariable
-        Write(value is null ? null : global::System.Convert.ToString(value, global::System.Globalization.CultureInfo.InvariantCulture), writer);
-    }
-
-    /// <summary>
-    /// Formats <paramref name="value" /> with the invariant culture, then encodes and writes it like a string.
-    /// </summary>
-    /// <typeparam name="T">The type of value, such as a number, date, or enum.</typeparam>
+    /// <typeparam name="T">The type of value, such as a number, date, enum, or your own class.</typeparam>
     /// <param name="value">The value to write.</param>
     /// <param name="writer">The writer that receives the output.</param>
     protected void Write<T>(T value, global::System.IO.TextWriter writer)
-        where T : global::System.IFormattable?
     {
-        Write(value is null ? null : value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture), writer);
-    }
-
-    /// <summary>
-    /// Formats <paramref name="value" /> with the invariant culture, then encodes and writes it like a string.
-    /// </summary>
-    /// <typeparam name="T">The type of value, such as a number, date, or enum.</typeparam>
-    /// <param name="value">The value to write.</param>
-    /// <param name="writer">The writer that receives the output.</param>
-    protected void Write<T>(T? value, global::System.IO.TextWriter writer)
-        where T : struct, global::System.IFormattable
-    {
-        Write(value.HasValue ? value.GetValueOrDefault().ToString(null, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+        Write(ToInvariantString(value), writer);
     }
 
     /// <summary>
@@ -117,5 +93,28 @@ public abstract class TextTemplate<TModel>
     private protected static void WriteLiteral(string value, global::System.IO.TextWriter writer)
     {
         writer.Write(value);
+    }
+
+    // Matches the pre-1.0 Convert.ToString(value, CultureInfo.InvariantCulture): IConvertible first, then IFormattable,
+    // then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below are on T rather
+    // than on pattern variables, so the JIT drops the box for most value types; a nullable value type is still boxed.
+    private static string? ToInvariantString<T>(T value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value is global::System.IConvertible)
+        {
+            return ((global::System.IConvertible)value).ToString(global::System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        if (value is global::System.IFormattable)
+        {
+            return ((global::System.IFormattable)value).ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return value.ToString();
     }
 }

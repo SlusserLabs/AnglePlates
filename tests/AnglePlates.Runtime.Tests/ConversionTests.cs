@@ -261,6 +261,11 @@ public sealed class ConversionTests
         yield return (true, "<b>", "&lt;b&gt;");
         yield return (false, "<b>", "<b>");
         yield return (true, -1.5E+20, "-1.5E&#x2B;20");
+        yield return (true, true, "True");
+        yield return (false, false, "False");
+        yield return (true, new CustomValue("<custom>"), "&lt;custom&gt;");
+        yield return (false, new byte[] { 1, 2, 3 }, "System.Byte[]");
+        yield return (true, new NullToString(), "");
     }
 
     // The tests below pin the 1.0 overload set, where it differs from the captured conversion or decides which conversion runs
@@ -277,23 +282,24 @@ public sealed class ConversionTests
     }
 
     [Test]
-    [Arguments(true, "<a>", "&lt;a&gt;")]
-    [Arguments(false, "<a>", "<a>")]
-    [Arguments(true, null, "&lt;null&gt;")]
-    public async Task Render_ImplicitStringConversion_UsesConversionInsteadOfToString(bool encoded, string? text, string expected)
+    [Arguments(true, "<a>")]
+    [Arguments(false, "<a>")]
+    [Arguments(true, null)]
+    public async Task Render_ImplicitStringConversion_UsesToStringLikePre10(bool encoded, string? text)
     {
+        // Write<T> is an exact match, so it beats the user-defined conversion to Write(string?), as Convert.ToString did before 1.0
         await AssertConvertsAsync(
-            o => new ConversionImplicitStringTextTemplate(o), o => new ConversionImplicitStringUtf8Template(o), encoded, new ImplicitText(text), expected, "<null>");
+            o => new ConversionImplicitStringTextTemplate(o), o => new ConversionImplicitStringUtf8Template(o), encoded, new ImplicitText(text), "ToString", "<null>");
     }
 
     [Test]
-    public async Task Render_FormattableValueType_BindsByStaticType()
+    public async Task Render_FormattableAndConvertibleValue_PrefersConvertibleLikeConvert()
     {
-        // The value as itself, as a nullable, as object, and as dynamic. Only the object cast reaches Write(object?), whose
-        // Convert.ToString prefers IConvertible; the runtime binder picks Write<T> for dynamic, as the compiler does.
+        // The value as itself, as a nullable, as object, and as dynamic all reach Write<T>, which checks IConvertible before
+        // IFormattable the way Convert.ToString does
         await AssertConvertsAsync(
             o => new ConversionDualFormatTextTemplate(o), o => new ConversionDualFormatUtf8Template(o), true, new DualFormat(),
-            "formattable|formattable|convertible|formattable");
+            "convertible|convertible|convertible|convertible");
     }
 
     [Test]
@@ -313,53 +319,33 @@ public sealed class ConversionTests
     {
         yield return (42, "42");
         yield return ("<b>", "&lt;b&gt;");
-        yield return (new DualFormat(), "formattable");
-    }
-
-    [Test]
-    [Arguments("bool")]
-    [Arguments("custom class")]
-    [Arguments("byte array")]
-    public async Task Render_DynamicNeitherStringNorFormattable_ThrowsRuntimeBinderException(string kind)
-    {
-        // Known limitation, reported to the owner: unlike the compiler, the runtime binder doesn't drop Write<T> when T fails
-        // the IFormattable constraint, so it picks Write<T> over Write(object?) and then throws. [[ (object)value ]] works.
-        // Statically typed values of these types bind to Write(object?) and are covered by the matrix above.
-        object value = kind switch
-        {
-            "bool" => true,
-            "custom class" => new CustomValue("custom"),
-            _ => new byte[] { 1 },
-        };
-        var text = new ConversionDynamicTextTemplate();
-        var utf8 = new ConversionDynamicAfterBlockUtf8Template();
-
-        await Assert.That(() => TemplateOutput.RenderText(text, value)).Throws<Microsoft.CSharp.RuntimeBinder.RuntimeBinderException>();
-        await Assert.That(() => TemplateOutput.RenderUtf8(utf8, value)).Throws<Microsoft.CSharp.RuntimeBinder.RuntimeBinderException>();
-        await Assert.That(async () => await TemplateOutput.RenderPipeAsync(utf8, value)).Throws<Microsoft.CSharp.RuntimeBinder.RuntimeBinderException>();
+        yield return (new DualFormat(), "convertible");
+        yield return (true, "True");
+        yield return (new CustomValue("<custom>"), "&lt;custom&gt;");
+        yield return (new byte[] { 1, 2, 3 }, "System.Byte[]");
     }
 
     [Test]
     [Arguments(42, "42")]
     [Arguments("<b>", "&lt;b&gt;")]
+    [Arguments(true, "True")]
+    [Arguments(-1.5E+20, "-1.5E&#x2B;20")]
     public async Task Render_DynamicModelMember_ConvertsAtRunTime(object member, string expected)
     {
+        // Every member of a #model dynamic template is dynamic too, so the runtime binder picks the overload
         object model = DynamicModel(member);
 
         await TemplateOutput.AssertRendersAsync<object>(new ConversionDynamicModelTextTemplate(), new ConversionDynamicModelUtf8Template(), model, expected);
     }
 
     [Test]
-    public async Task Render_DynamicModelBoolMember_ThrowsRuntimeBinderException()
+    [Arguments(true, "&lt;custom&gt;")]
+    [Arguments(false, "System.Byte[]")]
+    public async Task Render_DynamicModelReferenceMember_ConvertsAtRunTime(bool custom, string expected)
     {
-        // The same known limitation as a dynamic C# variable: every member of a #model dynamic template is dynamic too
-        object model = DynamicModel(true);
-        var text = new ConversionDynamicModelTextTemplate();
-        var utf8 = new ConversionDynamicModelUtf8Template();
+        object model = DynamicModel(custom ? new CustomValue("<custom>") : new byte[] { 1 });
 
-        await Assert.That(() => TemplateOutput.RenderText<object>(text, model)).Throws<Microsoft.CSharp.RuntimeBinder.RuntimeBinderException>();
-        await Assert.That(() => TemplateOutput.RenderUtf8<object>(utf8, model)).Throws<Microsoft.CSharp.RuntimeBinder.RuntimeBinderException>();
-        await Assert.That(async () => await TemplateOutput.RenderPipeAsync<object>(utf8, model)).Throws<Microsoft.CSharp.RuntimeBinder.RuntimeBinderException>();
+        await TemplateOutput.AssertRendersAsync<object>(new ConversionDynamicModelTextTemplate(), new ConversionDynamicModelUtf8Template(), model, expected);
     }
 
     private static ExpandoObject DynamicModel(object member)

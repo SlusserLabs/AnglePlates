@@ -137,6 +137,7 @@ Each of these is a recommendation the owner can overturn in review. The rational
 | S22 | Visibility timing | Private through development and int previews. The owner makes it public after Phase 8 is accepted and before the first nuget.org release. | [12.4](#124-agent-guardrails) |
 | S23 | Preview trigger | Previews come only from a manual `workflow_dispatch`, numbered by run number. There are no preview tags. | [12.1](#121-versions) |
 | S24 | Stable trigger | A published GitHub Release for a `vX.Y.Z` tag, plus a `NUGET_ORG_PUBLISH_ENABLED` repository variable, plus the `nuget-org` environment approval. That's the AssemblyInfo pattern, with the approval gate added. | [12.3](#123-release-workflow) |
+| S25 | C# variable overloads | Each base class has exactly two: `Write(string?)` and an unconstrained `Write<T>(T)`, with matching `WriteAsync` overloads. The constrained `IFormattable` overloads and `Write(object?)` are gone, because the C# runtime binder doesn't drop a candidate that fails its constraints, so a `dynamic` `bool`, array, or custom class picked the constrained `Write<T>` and threw `RuntimeBinderException`. `Write<T>` converts the way the pre-1.0 `Convert.ToString(value, CultureInfo.InvariantCulture)` did, so `dynamic` works for every type again. A type with an implicit conversion to `string` now binds `Write<T>` and uses `ToString()` like pre-1.0, which withdraws the behavior change that routed it to `Write(string?)`. This was decided during Phase 4b on the owner's behalf, and the owner can overturn it. | [4.4](#44-support-base-classes), [4.6](#46-how-c-variables-convert) |
 
 ## 3. Where the project stands today
 
@@ -256,10 +257,8 @@ internal abstract class TextTemplate<TModel>
     protected void Write(string? value, TextWriter writer);
     protected void WriteRaw(string? value, TextWriter writer);
 
-    // Overloads the generated code binds C# variables to (see 4.6)
-    protected void Write(object? value, TextWriter writer);
-    protected void Write<T>(T value, TextWriter writer) where T : IFormattable?;
-    protected void Write<T>(T? value, TextWriter writer) where T : struct, IFormattable;
+    // The overload the generated code binds every other C# variable to (see 4.6)
+    protected void Write<T>(T value, TextWriter writer);
 
     // Literal writes from generated code
     private protected static void WriteLiteral(string value, TextWriter writer);
@@ -274,16 +273,12 @@ internal abstract class Utf8Template<TModel>
 
     protected void Write(string? value, IBufferWriter<byte> writer);
     protected void WriteRaw(string? value, IBufferWriter<byte> writer);
-    protected void Write(object? value, IBufferWriter<byte> writer);
-    protected void Write<T>(T value, IBufferWriter<byte> writer) where T : IFormattable?;
-    protected void Write<T>(T? value, IBufferWriter<byte> writer) where T : struct, IFormattable;
+    protected void Write<T>(T value, IBufferWriter<byte> writer);
 
     private protected static void WriteLiteral(ReadOnlySpan<byte> value, IBufferWriter<byte> writer);
     private protected ValueTask WriteLiteralAsync(ReadOnlySpan<byte> value, PipeWriter writer, CancellationToken cancellationToken);
     private protected ValueTask WriteAsync(string? value, PipeWriter writer, CancellationToken cancellationToken);
-    private protected ValueTask WriteAsync(object? value, PipeWriter writer, CancellationToken cancellationToken);
-    private protected ValueTask WriteAsync<T>(T value, PipeWriter writer, CancellationToken cancellationToken) where T : IFormattable?;
-    private protected ValueTask WriteAsync<T>(T? value, PipeWriter writer, CancellationToken cancellationToken) where T : struct, IFormattable;
+    private protected ValueTask WriteAsync<T>(T value, PipeWriter writer, CancellationToken cancellationToken);
     private protected static ValueTask FlushAsync(PipeWriter writer, CancellationToken cancellationToken);
 }
 ```
@@ -291,10 +286,9 @@ internal abstract class Utf8Template<TModel>
 Notes:
 
 - `private protected` members are visible to compiled templates, which always live in the same assembly as their support types, but not to another assembly that derives from public support types. That shrinks the public surface to `Render`, `RenderAsync`, `Options`, `Write`, and `WriteRaw`.
-- A scratch build on .NET 10 with C# 11 confirmed that `private protected` members work from a sealed derived class's `async` method, from lambdas, and through `dynamic` arguments. The runtime binder respects the calling class's access, and it picked `WriteAsync<T>(T)` for a `dynamic` `int` and `WriteAsync(string?)` for a `dynamic` `string`. Runtime.Tests pins this with a `dynamic` C# variable in `Render` and `RenderAsync`.
-- The generic `T` overloads are constrained to the nullable `IFormattable?`, which lets a nullable reference type that implements `IFormattable` bind without a CS8631 warning under `#nullable enable`, which 4.6's `null` check for those types needs. It doesn't change which overload binds.
-- The runtime binder doesn't drop `Write<T>(T)` or `WriteAsync<T>(T)` when a `dynamic` value's type fails the `IFormattable?` constraint, so a `dynamic` `bool`, array, or custom class throws `RuntimeBinderException`. This contradicts 4.6's `dynamic` row and is waiting on an owner decision; `docs/roadmap.md` tracks it.
-- `WriteAsync(ReadOnlySpan<byte>)` is renamed to `WriteLiteralAsync`, so a `byte[]` C# variable can't become ambiguous between the span and `object` overloads.
+- A scratch build on .NET 10 with C# 11 confirmed that `private protected` members work from a sealed derived class's `async` method, from lambdas, and through `dynamic` arguments. The runtime binder respects the calling class's access, and it picks `WriteAsync<T>(T)` for a `dynamic` `int` and `WriteAsync(string?)` for a `dynamic` `string`. Runtime.Tests pins this with a `dynamic` C# variable in `Render` and `RenderAsync`.
+- `Write<T>` and `WriteAsync<T>` have no constraint on purpose ([S25](#decisions-made-by-this-spec)). The C# runtime binder doesn't drop a candidate whose constraints a `dynamic` argument fails; it picks it and then throws `RuntimeBinderException`. An earlier draft constrained `T` to `IFormattable` and added `Write(object?)` and a nullable `Write<T>(T?)`, which broke a `dynamic` `bool`, array, or custom class. With only `Write(string?)` and an unconstrained `Write<T>(T)`, a `dynamic` value of any type binds, and Runtime.Tests pins that for `bool`, `byte[]`, a custom class, and `#model dynamic` members.
+- `WriteAsync(ReadOnlySpan<byte>)` is renamed to `WriteLiteralAsync`, so a `byte[]` C# variable never meets a span overload and always reaches `WriteAsync<T>`.
 - The XML docs on every emitted member go through `/humanizer`, because consumers read them in IntelliSense.
 
 ### 4.5 Generated template class
@@ -366,26 +360,24 @@ The reserved local names inside render methods become `model`, `Model`, `writer`
 
 ### 4.6 How C# variables convert
 
-The overload set in [4.4](#44-support-base-classes) decides how a value becomes text. Overload resolution does the work, so there's no type-switching code to maintain. The rows below were checked with a scratch build on .NET 10.
+The two overloads in [4.4](#44-support-base-classes) decide how a value becomes text. A string binds `Write(string?)`; everything else binds `Write<T>(T)`, which calls one small private helper that matches the pre-1.0 `Convert.ToString(value, CultureInfo.InvariantCulture)`. The rows below were checked with a scratch build on .NET 10.
 
 | Value type | Overload | Conversion |
 | --- | --- | --- |
 | `string` | `Write(string?)` | Used as-is. |
-| A value type that implements `IFormattable` (numbers, `char`, `DateTime`, `Guid`, enums) | `Write<T>(T)` | `value.ToString(null, CultureInfo.InvariantCulture)`, with no boxing. |
-| A nullable of one of those (`int?`) | `Write<T>(T?)` | `null` or the same conversion. |
-| A reference type that implements `IFormattable` | `Write<T>(T)` | `null` check, then the same conversion. |
-| Anything else (`bool`, `byte[]`, custom classes) | `Write(object?)` | `Convert.ToString(value, CultureInfo.InvariantCulture)`, which is today's conversion. |
+| Everything else: value types (numbers, `bool`, `char`, `DateTime`, `Guid`, enums), nullable value types (`int?`), reference types that implement `IFormattable`, `byte[]`, and custom classes | `Write<T>(T)` | `null` check, then `IConvertible.ToString(CultureInfo.InvariantCulture)` if the value implements `IConvertible`, else `IFormattable.ToString(null, CultureInfo.InvariantCulture)` if it implements `IFormattable`, else `ToString()`. That's `Convert.ToString`'s order, so the output is today's. The checks and casts are on `T`, so the JIT drops the box for non-nullable value types (a scratch allocation check on .NET 10 found nothing beyond a constrained `IFormattable` call for `int`, `double`, `decimal`, `DateTime`, `Guid`, and enums, and nothing beyond the result string for `char` and `bool`). A nullable value type is boxed, as it is today. |
+| A type with an implicit conversion to `string` | `Write<T>(T)` | The same as the previous row, so `ToString()` decides the text as it does today. `[[ (string)value ]]` uses the conversion. |
 | `null` literal, `default` | `Write(string?)` | Writes `NullVariable`. |
-| `dynamic` | Bound at run time | Same rules at run time. AOT-hostile, as it is today; the framework's own IL2026/IL3050 warnings stay unsuppressed. |
+| `dynamic` | Bound at run time | Same rules at run time, for every type. AOT-hostile, as it is today; the framework's own IL2026/IL3050 warnings stay unsuppressed. |
 | `Span<char>` and other ref structs | none | Compile error at the template location, as today. |
 
-Every `null`, whatever its type, writes `NullVariable`. The value is then encoded with the options' encoder, or written raw when the encoder is `null`.
+Every `null`, whatever its type, writes `NullVariable`. A `ToString()` that returns `null` writes `NullVariable` too. The value is then encoded with the options' encoder, or written raw when the encoder is `null`.
 
 Behavior changes to document and pin with tests:
 
 1. `[[ null ]]` and `[[ default ]]` now compile and write `NullVariable`. The README stops saying they don't compile.
-2. A type with an implicit conversion to `string` now binds to `Write(string?)` and uses that conversion instead of `ToString()`.
-3. Output must match today's output for this matrix, which the implementer verifies against the current code **before** deleting it: `int`, `long`, `double` (including `-1.5E+20`), `decimal`, `float`, `DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `DateOnly`, `TimeOnly`, `bool`, `char`, an enum, a `[Flags]` enum, `int?` with and without a value, a custom class, a class whose `ToString` returns `null`, and `dynamic`.
+
+Output must match today's output for this matrix, which the implementer verifies against the current code **before** deleting it: `int`, `long`, `double` (including `-1.5E+20`), `decimal`, `float`, `DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `DateOnly`, `TimeOnly`, `bool`, `char`, an enum, a `[Flags]` enum, `int?` with and without a value, a custom class, a class whose `ToString` returns `null`, and `dynamic`.
 
 ### 4.7 `RenderToString`
 

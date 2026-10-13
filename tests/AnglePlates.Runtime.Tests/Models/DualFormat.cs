@@ -3,8 +3,8 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace SlusserLabs.AnglePlates.Runtime.Tests.Models;
 
-// Implements IFormattable and IConvertible with different text. Write<T> formats through IFormattable, while
-// Write(object?) goes through Convert.ToString, which prefers IConvertible, so the output names the overload that ran.
+// Implements IFormattable and IConvertible with different text, so the output shows which interface the conversion used.
+// Convert.ToString prefers IConvertible, and Write<T> checks the interfaces in the same order.
 [ExcludeFromCodeCoverage]
 public readonly struct DualFormat : IFormattable, IConvertible
 {

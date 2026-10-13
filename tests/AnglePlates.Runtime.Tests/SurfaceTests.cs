@@ -107,11 +107,13 @@ public sealed class SurfaceTests
     [Test]
     public async Task WriteAsync_Overloads_MatchWriteOverloads()
     {
-        // Write has string, object, IFormattable, and nullable IFormattable overloads, and WriteAsync mirrors them
+        // Write has a string overload and an unconstrained generic overload, and WriteAsync mirrors them
         var write = Array.FindAll(typeof(Utf8Template<string>).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic), method => method.Name == "Write");
         var writeAsync = Array.FindAll(typeof(Utf8Template<string>).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic), method => method.Name == "WriteAsync");
 
-        await Assert.That(write.Length).IsEqualTo(4);
-        await Assert.That(writeAsync.Length).IsEqualTo(4);
+        await Assert.That(write.Length).IsEqualTo(2);
+        await Assert.That(writeAsync.Length).IsEqualTo(2);
+        await Assert.That(Array.Exists(write, method => method.IsGenericMethodDefinition && method.GetGenericArguments()[0].GetGenericParameterConstraints().Length == 0)).IsTrue();
+        await Assert.That(Array.Exists(writeAsync, method => method.IsGenericMethodDefinition && method.GetGenericArguments()[0].GetGenericParameterConstraints().Length == 0)).IsTrue();
     }
 }

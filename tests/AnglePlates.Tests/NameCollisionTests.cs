@@ -38,6 +38,7 @@ public sealed class NameCollisionTests
             public class FlushResult { }
             public class ArgumentNullException { }
             public class IFormattable { }
+            public class IConvertible { }
             public class Nullable<T> { }
             public class StringWriter { }
             public class JavaScriptEncoder { }
@@ -64,6 +65,7 @@ public sealed class NameCollisionTests
             public class WriteLiteralAsync { }
             public class WriteAsync { }
             public class FlushAsync { }
+            public class ToInvariantString { }
         }
         namespace SlusserLabs.AnglePlates
         {
@@ -78,6 +80,8 @@ public sealed class NameCollisionTests
             public class System { }
             public class Convert { }
             public class CultureInfo { }
+            public class IConvertible { }
+            public class IFormattable { }
             public class Lazy<T> { }
             public class Span<T> { }
             public class ReadOnlyMemory<T> { }
