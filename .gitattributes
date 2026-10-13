@@ -10,6 +10,15 @@
 *.yml text eol=crlf
 *.yaml text eol=crlf
 .editorconfig text eol=crlf
+*.md text eol=crlf
+*.ps1 text eol=lf
+*.svg text eol=crlf
+*.dic text eol=crlf
+*.png binary
+
+# Text and Markdown files inside template folders are fixtures, so their bytes stay as committed
+**/Templates/**/*.txt -text
+**/Templates/**/*.md -text
 
 # Required by Verify for consistency across hosts
 *.verified.cs text eol=lf working-tree-encoding=UTF-8

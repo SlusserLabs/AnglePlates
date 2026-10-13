@@ -43,10 +43,26 @@ dotnet_naming_style.camel_case_underscore_prefix.required_prefix = _
 dotnet_naming_style.camel_case_underscore_prefix.capitalization = camel_case
 
 
-[*.{json,xml,yml,yaml,csproj,slnx,props,targets}]
+[*.{json,xml,yml,yaml,csproj,slnx,props,targets,svg}]
 indent_size = 2
 
 [*.md]
+trim_trailing_whitespace = false
+
+# PowerShell runs with either line ending; the validation script is LF so it runs unchanged in Linux containers
+[*.ps1]
+indent_size = 4
+end_of_line = lf
+
+# Template fixtures keep their exact bytes, including missing final newlines and LF line endings
+[{tests,benchmarks,samples}/**/{Templates,Emails}/**]
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = false
+
+[tests/AnglePlates.PackageTests/{CustomViews,Explicit}/**]
+end_of_line = unset
+insert_final_newline = unset
 trim_trailing_whitespace = false
 
 [*.verified.cs]
