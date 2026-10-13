@@ -12,7 +12,7 @@ Close the remaining rough edges in the language before calling the syntax stable
 
 ### CI and publishing
 
-The repository has no CI. Add a GitHub Actions workflow that builds, tests, packs, and runs the package consumers on every pull request, then publishes the validated package through NuGet trusted publishing. Rehearse on the NuGet integration feed before turning on nuget.org releases.
+The CI workflow already builds, tests, packs, and runs the package consumers on every pull request; [Releasing](releasing.md#what-ci-does) describes it. What's left is publishing the validated package through NuGet trusted publishing. Rehearse on the NuGet integration feed before turning on nuget.org releases.
 
 ### Documentation
 

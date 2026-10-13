@@ -11,6 +11,7 @@ using System.Xml.Linq;
 
 namespace SlusserLabs.AnglePlates.PackageTests;
 
+// Checks the packed archive, its nuspec metadata, and the symbol package against the analyzer-only contract
 internal static class PackageValidator
 {
     private const string _analyzerDirectory = "analyzers/dotnet/cs/netstandard2.0";
@@ -21,10 +22,10 @@ internal static class PackageValidator
     private static readonly Guid _metadataReferencesId = new("7E4D4708-096E-4C5C-AEDA-CB10BA6A740D");
     private static readonly Guid _sourceLinkId = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
 
-    public static void Validate(string packagePath, string symbolsPackagePath, string expectedVersion)
+    public static void Validate(PackageArguments arguments)
     {
-        using var package = ZipFile.OpenRead(packagePath);
-        using var symbolsPackage = ZipFile.OpenRead(symbolsPackagePath);
+        using var package = ZipFile.OpenRead(arguments.PackagePath);
+        using var symbolsPackage = arguments.SymbolsPackagePath is null ? null : ZipFile.OpenRead(arguments.SymbolsPackagePath);
         var packageEntries = package.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.Ordinal);
         var requiredEntries = new[]
         {
@@ -51,18 +52,21 @@ internal static class PackageValidator
         Require(!packageEntries.Any(entry => entry.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase)), "Portable PDBs must only be present in the symbol package.");
 
         var expectedPdbPath = $"{_analyzerDirectory}/{_assemblyName}.pdb";
-        var unexpectedSymbolEntries = symbolsPackage.Entries
-            .Select(entry => entry.FullName)
-            .Where(entry => !IsNuGetMetadata(entry) && !string.Equals(entry, NuspecEntryName(symbolsPackage), StringComparison.Ordinal) && !string.Equals(entry, expectedPdbPath, StringComparison.Ordinal))
-            .ToArray();
-        Require(unexpectedSymbolEntries.Length == 0, $"Unexpected symbol-package assets: {string.Join(", ", unexpectedSymbolEntries)}.");
+        if (symbolsPackage is not null)
+        {
+            var unexpectedSymbolEntries = symbolsPackage.Entries
+                .Select(entry => entry.FullName)
+                .Where(entry => !IsNuGetMetadata(entry) && !string.Equals(entry, NuspecEntryName(symbolsPackage), StringComparison.Ordinal) && !string.Equals(entry, expectedPdbPath, StringComparison.Ordinal))
+                .ToArray();
+            Require(unexpectedSymbolEntries.Length == 0, $"Unexpected symbol-package assets: {string.Join(", ", unexpectedSymbolEntries)}.");
+        }
 
         var nuspecEntry = package.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal));
         using var nuspecStream = nuspecEntry.Open();
         var nuspec = XDocument.Load(nuspecStream);
         var metadata = nuspec.Descendants().Single(element => element.Name.LocalName == "metadata");
         RequireValue(metadata, "id", _packageId);
-        RequireValue(metadata, "version", expectedVersion);
+        RequireValue(metadata, "version", arguments.Version);
         RequireValue(metadata, "license", "MIT");
         RequireValue(metadata, "readme", "README.md");
         RequireValue(metadata, "icon", "icon.png");
@@ -74,8 +78,15 @@ internal static class PackageValidator
         var repositoryCommit = repository.Attribute("commit")?.Value;
         Require(!string.IsNullOrEmpty(repositoryCommit), "The package repository commit is missing.");
 
-        var assemblyPath = $"{_analyzerDirectory}/{_assemblyName}.dll";
-        ValidateSymbols(ReadEntry(package, assemblyPath), ReadEntry(symbolsPackage, expectedPdbPath), repositoryCommit!);
+        // Only the commit is compared; tag and release builds record no branch attribute, so none is required
+        Require(arguments.ExpectedCommit is null || string.Equals(repositoryCommit, arguments.ExpectedCommit, StringComparison.OrdinalIgnoreCase),
+            $"Expected repository commit '{arguments.ExpectedCommit}', but the package records '{repositoryCommit}'.");
+
+        if (symbolsPackage is not null)
+        {
+            var assemblyPath = $"{_analyzerDirectory}/{_assemblyName}.dll";
+            ValidateSymbols(ReadEntry(package, assemblyPath), ReadEntry(symbolsPackage, expectedPdbPath), repositoryCommit!);
+        }
 
         var documentation = XDocument.Load(new MemoryStream(ReadEntry(package, $"{_analyzerDirectory}/{_assemblyName}.xml")));
         Require(documentation.Descendants("member").Any(), "The analyzer XML documentation is empty.");
@@ -88,11 +99,13 @@ internal static class PackageValidator
             || path.StartsWith("runtimes/", StringComparison.OrdinalIgnoreCase);
     }
 
+    // A feed adds its repository signature (.signature.p7s), so a package restored from -Source carries one
     private static bool IsNuGetMetadata(string path)
     {
         return path.StartsWith("_rels/", StringComparison.Ordinal)
             || path.StartsWith("package/services/", StringComparison.Ordinal)
-            || string.Equals(path, "[Content_Types].xml", StringComparison.Ordinal);
+            || string.Equals(path, "[Content_Types].xml", StringComparison.Ordinal)
+            || string.Equals(path, ".signature.p7s", StringComparison.Ordinal);
     }
 
     private static string NuspecEntryName(ZipArchive archive)

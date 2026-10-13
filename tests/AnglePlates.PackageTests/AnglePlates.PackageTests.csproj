@@ -33,7 +33,7 @@
     <AdditionalFiles Include="README.md" />
   </ItemGroup>
 
-  <!-- Tells the program where the build wrote the generated editorconfig so it can check the AnglePlate metadata. -->
+  <!-- Tells the program where the build wrote the generated editorconfig and the restore wrote project.assets.json, so it can check the AnglePlate metadata and the package's assets. -->
   <Target Name="AddGeneratedEditorConfigPath" BeforeTargets="GetAssemblyAttributes">
     <ItemGroup>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
@@ -43,6 +43,10 @@
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
         <_Parameter1>ProjectDirectory</_Parameter1>
         <_Parameter2>$(MSBuildProjectDirectory)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ProjectAssetsFile</_Parameter1>
+        <_Parameter2>$(ProjectAssetsFile)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>

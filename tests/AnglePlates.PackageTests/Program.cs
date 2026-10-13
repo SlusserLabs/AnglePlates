@@ -9,16 +9,15 @@ using SlusserLabs.AnglePlates.PackageTests.Templates;
 
 namespace SlusserLabs.AnglePlates.PackageTests;
 
+// Validates the package, then renders its templates through every output path in a clean consumer
 internal static class Program
 {
     private static async Task Main()
     {
-        var arguments = Environment.GetCommandLineArgs();
-        if (arguments.Length == 4)
-        {
-            PackageValidator.Validate(arguments[1], arguments[2], arguments[3]);
-        }
-
+        // The first command-line argument is the program itself
+        var arguments = PackageArguments.Parse(Environment.GetCommandLineArgs()[1..]);
+        PackageValidator.Validate(arguments);
+        ConsumerAssetsValidator.Validate();
         EditorConfigValidator.Validate();
 
         // The project sets no access options, so the support types and templates use the internal defaults

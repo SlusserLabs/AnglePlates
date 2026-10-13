@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 
 namespace SlusserLabs.AnglePlates.PackageTests;
 
+// Checks that the package's build assets tag exactly the expected templates in the generated editorconfig
 internal static class EditorConfigValidator
 {
     private const string _anglePlateKey = "build_metadata.AdditionalFiles.AnglePlate";
@@ -23,8 +23,8 @@ internal static class EditorConfigValidator
 
     public static void Validate()
     {
-        var editorConfigPath = GetAssemblyMetadata("GeneratedEditorConfig");
-        var projectDirectory = GetAssemblyMetadata("ProjectDirectory");
+        var editorConfigPath = AssemblyMetadata.Get("GeneratedEditorConfig");
+        var projectDirectory = AssemblyMetadata.Get("ProjectDirectory");
         var tags = new List<(string Path, string Value)>();
         string? section = null;
         foreach (var line in File.ReadLines(editorConfigPath))
@@ -53,12 +53,5 @@ internal static class EditorConfigValidator
         {
             throw new InvalidDataException($"The generated editorconfig has unexpected AnglePlate metadata. Expected: {expected}. Actual: {actual}.");
         }
-    }
-
-    private static string GetAssemblyMetadata(string key)
-    {
-        return typeof(EditorConfigValidator).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(attribute => string.Equals(attribute.Key, key, StringComparison.Ordinal)).Value
-            ?? throw new InvalidDataException($"The {key} assembly metadata is missing.");
     }
 }

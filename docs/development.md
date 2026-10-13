@@ -153,26 +153,39 @@ A new MSBuild option needs the same pieces: a default in the props file, a `Comp
 
 The sample and the test project load the generator from source and import the discovery files directly, so a passing build doesn't prove the package works. The package has to be packed and installed somewhere that can't see the source tree.
 
-Pack a fresh version to `artifacts/package` for each run. I use `0.1.0-alpha.local.<yyyyMMdd>.<n>`, where `<n>` goes up with each pack that day. Delete older packages from that folder first, so it only holds the version you're validating.
+Pack a fresh version to `artifacts/package` for each run, using the local format from the [version table](releasing.md#versions): `1.0.0-local.<yyyyMMdd>.<n>`, where `<n>` goes up with each pack that day. Delete older packages from that folder first, so it only holds the version you're validating. Pass `-p:Version`, not `-p:PackageVersion`; the second one changes the package version but leaves the assembly versions behind.
 
 ```powershell
-dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -p:PackageVersion=0.1.0-alpha.local.20261007.1
-./eng/validate-package.ps1 -Version 0.1.0-alpha.local.20261007.1
+dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -p:Version=1.0.0-local.20261013.1
+./eng/validate-package.ps1 -Version 1.0.0-local.20261013.1
 ```
 
-The script restores only from `artifacts/package` into an empty package cache. It runs the [package validation project](../tests/AnglePlates.PackageTests/README.md), which installs the package, renders templates, and checks the package's contents and metadata. Then it runs each consumer in `tests/AnglePlates.PackageConsumers`. Those consumers check that `Remove` works in the project file and `Directory.Build.targets`, that it doesn't work in `Directory.Build.props`, that discovery stops at the project that references AnglePlates, whether that's a project reference or a NuGet package, that two projects using AnglePlates get only `CS0436` warnings, that an ASP.NET Core app streams the right bytes and stops rendering when the client disconnects, and that generated code publishes under Native AOT. A new consumer has to be registered in the script, or it never runs. The [package validation README](../tests/AnglePlates.PackageTests/README.md) lists what each consumer checks.
+The script needs PowerShell 7.4 or later. It builds every consumer in one validation folder with an empty package cache and one generated `NuGet.config`. That configuration uses package source mapping, so AnglePlates comes only from `artifacts/package`, a library that a consumer packs comes only from the validation folder's own feed, and everything else (the Native AOT compiler and runtime packs, mostly) comes from nuget.org. The validation folder also gets a copy of the repository's `global.json`, and every `dotnet` command runs from there, so the consumers use the same SDK the repository does. The script prints that SDK version before it starts.
+
+It runs the [package validation project](../tests/AnglePlates.PackageTests/README.md) first, which installs the package, renders templates, and checks the package's contents, metadata, and the assets the consumer gets. Then it runs each consumer in `tests/AnglePlates.PackageConsumers`. Those consumers check that `Remove` works in the project file and `Directory.Build.targets`, that it doesn't work in `Directory.Build.props`, that discovery stops at the project that references AnglePlates, whether that's a project reference or a NuGet package, that two projects using AnglePlates get only `CS0436` warnings, that an ASP.NET Core app streams the right bytes and stops rendering when the client disconnects, and that generated code publishes under Native AOT. A new consumer has to be registered in the script, or it never runs. The [package validation README](../tests/AnglePlates.PackageTests/README.md) lists what each consumer checks.
 
 Two consumers need more than the default steps, and the script handles both:
 
-- `PackagedLibrary` packs its library into a folder of its own first, then restores the app from that folder and `artifacts/package`.
-- `NativeAot` runs with `dotnet run` like the others, then publishes with `PublishAot` and runs the native executable, because `dotnet run` never invokes the AOT compiler. Both runs check the same exact bytes. It restores the AOT compiler and runtime packs from nuget.org, with package source mapping so AnglePlates itself still comes only from `artifacts/package`.
+- `PackagedLibrary` packs its library into the validation folder's feed first, then restores the app from it.
+- `NativeAot` runs with `dotnet run` like the others, then publishes with `PublishAot` and runs the native executable, because `dotnet run` never invokes the AOT compiler. Both runs check the same exact bytes. The script prints the executable's size, and it stops with a named error if the publish doesn't produce one.
+
+The script takes a few options besides `-Version`:
+
+| Option | What it does |
+| --- | --- |
+| `-PackageDirectory <path>` | Reads the package pair from somewhere other than `artifacts/package`. |
+| `-KeepOutput <path>` | Keeps the validation folder at that path instead of deleting a temporary one. The folder has to be new or empty and outside the repository, so the consumers don't pick up the repository's `Directory.Build.props`; a relative path resolves against the current PowerShell location. Every restore, build, and publish writes a binlog to its `logs` folder, which is the first place to look when a consumer fails. CI passes `$RUNNER_TEMP/validation`. |
+| `-ExpectedCommit <sha>` | Fails unless the package records that commit in its nuspec `repository` element. It doesn't look for a `branch` attribute, because tag builds don't have one. |
+| `-SdkVersion <version>` | Writes a `global.json` that pins exactly that SDK (`rollForward` set to `disable`) instead of copying the repository's. The SDK has to be installed. CI's `sdk-floor` leg uses it with `10.0.100`. |
+| `-Source <feed>` | Restores AnglePlates from a feed instead of `artifacts/package`, to validate a package that's already published. The validation project checks the copy NuGet downloaded into the package cache. There's no symbol package to check in that case, so it skips the `.snupkg` checks. |
+| `-SkipNativeAot` | Skips the `NativeAot` consumer on a machine without the native toolchain. |
 
 Native AOT needs a platform toolchain that the .NET SDK doesn't install: the Visual Studio "Desktop development with C++" workload on Windows, or clang and the zlib development headers on Linux. The script checks for it before running anything and stops with a message that names what's missing. Pass `-SkipNativeAot` to validate everything else; the script then warns that `NativeAot` didn't run.
 
 Run the script on Linux as well as Windows, so `TemplatePath` and the MSBuild files see Unix paths. If you don't have a Linux machine, the `mcr.microsoft.com/dotnet/sdk:10.0-noble-aot` container has PowerShell, the SDK, and the Native AOT prerequisites. Mount the repository after packing on the host:
 
 ```powershell
-docker run --rm -v "${PWD}:/repo:ro" mcr.microsoft.com/dotnet/sdk:10.0-noble-aot pwsh -File /repo/eng/validate-package.ps1 -Version 0.1.0-alpha.local.20261007.1
+docker run --rm -v "${PWD}:/repo:ro" mcr.microsoft.com/dotnet/sdk:10.0-noble-aot pwsh -File /repo/eng/validate-package.ps1 -Version 1.0.0-local.20261013.1
 ```
 
 The package itself stays analyzer-only: it's a development dependency with no runtime assets or dependencies, and its analyzer and XML documentation live under `analyzers/dotnet/cs/netstandard2.0`. Changing that contract needs compatibility testing first.

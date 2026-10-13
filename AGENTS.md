@@ -84,7 +84,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - Cover valid inputs, boundaries, malformed templates, failures, diagnostics, and both rendering paths
 - Target 100% line and branch coverage separately for generator sources and emitted runtime code; report measured coverage separately from this target
 - Keep `tests/AnglePlates.PackageTests` and the consumers under `tests/AnglePlates.PackageConsumers` outside the solution, without source-tree imports or analyzer project references; each consumer checks its own results and exits nonzero on failure. Run them through `eng/validate-package.ps1` after freshly packing a unique version, and register new consumers in that script
-- Treat `artifacts/` as ignored local build output. Pack only to `artifacts/package` using `0.1.0-alpha.local.<yyyyMMdd>.<n>` versions; do not create sibling output directories or task-named versions. Before packing, remove older package pairs so the folder holds only the version under validation
+- Treat `artifacts/` as ignored local build output. Pack only to `artifacts/package` with `-p:Version`, using the local `X.Y.Z-local.<yyyyMMdd>.<n>` format from the version table in [docs/releasing.md](docs/releasing.md#versions); do not create sibling output directories or task-named versions. Before packing, remove older package pairs so the folder holds only the version under validation
 - A successful sample build or pack does not prove the package works; only the isolated package consumers verify analyzer loading, build assets, and rendering
 
 ## Validation
