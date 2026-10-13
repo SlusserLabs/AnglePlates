@@ -13,6 +13,13 @@
     <IsAotCompatible>true</IsAotCompatible>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
+    <!--
+      Documentation diagnostics run on the generated files too, so a bad cref in the support types fails this build.
+      CS1591 is off only because this consumer's own public models have no docs; AnglePlates.Tests checks the generated docs.
+    -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
     <!-- The report template is public, so the support types are too; the line template stays internal. -->
     <AnglePlateBaseAccessModifier>public</AnglePlateBaseAccessModifier>
   </PropertyGroup>

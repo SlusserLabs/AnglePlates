@@ -258,7 +258,7 @@ internal abstract class TextTemplate<TModel>
 
     // Overloads the generated code binds C# variables to (see 4.6)
     protected void Write(object? value, TextWriter writer);
-    protected void Write<T>(T value, TextWriter writer) where T : IFormattable;
+    protected void Write<T>(T value, TextWriter writer) where T : IFormattable?;
     protected void Write<T>(T? value, TextWriter writer) where T : struct, IFormattable;
 
     // Literal writes from generated code
@@ -275,14 +275,14 @@ internal abstract class Utf8Template<TModel>
     protected void Write(string? value, IBufferWriter<byte> writer);
     protected void WriteRaw(string? value, IBufferWriter<byte> writer);
     protected void Write(object? value, IBufferWriter<byte> writer);
-    protected void Write<T>(T value, IBufferWriter<byte> writer) where T : IFormattable;
+    protected void Write<T>(T value, IBufferWriter<byte> writer) where T : IFormattable?;
     protected void Write<T>(T? value, IBufferWriter<byte> writer) where T : struct, IFormattable;
 
     private protected static void WriteLiteral(ReadOnlySpan<byte> value, IBufferWriter<byte> writer);
     private protected ValueTask WriteLiteralAsync(ReadOnlySpan<byte> value, PipeWriter writer, CancellationToken cancellationToken);
     private protected ValueTask WriteAsync(string? value, PipeWriter writer, CancellationToken cancellationToken);
     private protected ValueTask WriteAsync(object? value, PipeWriter writer, CancellationToken cancellationToken);
-    private protected ValueTask WriteAsync<T>(T value, PipeWriter writer, CancellationToken cancellationToken) where T : IFormattable;
+    private protected ValueTask WriteAsync<T>(T value, PipeWriter writer, CancellationToken cancellationToken) where T : IFormattable?;
     private protected ValueTask WriteAsync<T>(T? value, PipeWriter writer, CancellationToken cancellationToken) where T : struct, IFormattable;
     private protected static ValueTask FlushAsync(PipeWriter writer, CancellationToken cancellationToken);
 }
@@ -292,6 +292,8 @@ Notes:
 
 - `private protected` members are visible to compiled templates, which always live in the same assembly as their support types, but not to another assembly that derives from public support types. That shrinks the public surface to `Render`, `RenderAsync`, `Options`, `Write`, and `WriteRaw`.
 - A scratch build on .NET 10 with C# 11 confirmed that `private protected` members work from a sealed derived class's `async` method, from lambdas, and through `dynamic` arguments. The runtime binder respects the calling class's access, and it picked `WriteAsync<T>(T)` for a `dynamic` `int` and `WriteAsync(string?)` for a `dynamic` `string`. Runtime.Tests pins this with a `dynamic` C# variable in `Render` and `RenderAsync`.
+- The generic `T` overloads are constrained to the nullable `IFormattable?`, which lets a nullable reference type that implements `IFormattable` bind without a CS8631 warning under `#nullable enable`, which 4.6's `null` check for those types needs. It doesn't change which overload binds.
+- The runtime binder doesn't drop `Write<T>(T)` or `WriteAsync<T>(T)` when a `dynamic` value's type fails the `IFormattable?` constraint, so a `dynamic` `bool`, array, or custom class throws `RuntimeBinderException`. This contradicts 4.6's `dynamic` row and is waiting on an owner decision; `docs/roadmap.md` tracks it.
 - `WriteAsync(ReadOnlySpan<byte>)` is renamed to `WriteLiteralAsync`, so a `byte[]` C# variable can't become ambiguous between the span and `object` overloads.
 - The XML docs on every emitted member go through `/humanizer`, because consumers read them in IntelliSense.
 
@@ -341,7 +343,7 @@ internal sealed partial class GreetingTextTemplate : global::SlusserLabs.AnglePl
         MyApp.GreetingModel Model = model; // Allows alternate casing
 
         WriteLiteral("<h1>Hello, ", writer);
-#line (2, 15) - (2, 24) 15 "C:\src\MyApp\Templates\greeting.html"
+#line (2, 15) - (2, 24) 14 "C:\src\MyApp\Templates\greeting.html"
         Write(model.Name, writer);
 #line default
         WriteLiteral("!</h1>", writer);
@@ -355,7 +357,7 @@ Changes from today:
 - The constructor falls back to the preset that matches `#encode` (`Html`, `Unencoded`, `JavaScript`, or `Url`) instead of allocating new options per instance.
 - `ThrowIfNull(writer)` comes first and sits outside any `#line` mapping. `model` isn't checked, because a nullable `#model` type is legal. `RenderAsync` is an `async` method, so a null writer there surfaces as a faulted `ValueTask` when awaited, not as a synchronous throw. Runtime.Tests asserts it with `await Assert.ThrowsAsync<ArgumentNullException>(...)`.
 - `Model` stays.
-- One `Write(expr, writer);` line per C# variable, with one `#line` mapping. The `__anglePlatesValueN` locals and the `ParseExpression` fallback are gone, because `[[1, 2]]` becomes `Write(1, 2, writer)`, which still fails to compile at the template location.
+- One `Write(expr, writer);` line per C# variable, with one `#line` mapping. The mapping's character offset is 0-based and points at the first character of `expr` (indent plus `Write(`), so an error inside the expression maps to its exact template span and an error on the call itself maps to the whole variable. The `__anglePlatesValueN` locals and the `ParseExpression` fallback are gone, because `[[1, 2]]` becomes `Write(1, 2, writer)`, which still fails to compile at the template location.
 - Literals use `WriteLiteral`. The UTF-8 target writes `WriteLiteral("…"u8, writer);`.
 - Literal runs merge across comments, zero-length blocks, and escaped openers when no trim marker sits between them, so `a[* c *]b` emits one write.
 - `RenderAsync` keeps today's flush rule: the first write after each C# block is `await WriteLiteralAsync(...)` or `await WriteAsync(...)`, and the method ends with `await FlushAsync(...)`. `ConfigureAwait(false)` stays.
@@ -793,7 +795,7 @@ Infrastructure changes:
 - Shared helpers move into `Infrastructure`: `TemplateText` (builds the directive header; replaces `_requiredDirectives` and `ReplaceDirective`), `ExpectedCompilerDiagnostic.Mapped(id, message, templatePath, templateSpan)`, and `AnalyzerOptions.WithAccessModifier(...)`.
 - Compiler-error tests assert the **mapped template location** exactly, and assert only the file for the generated location. That stops every cosmetic change to the emitted layout from breaking a dozen line numbers. Two or three snapshot tests still pin the generated layout.
 - The reference set is filtered to the shared framework folder (`Path.GetDirectoryName(typeof(object).Assembly.Location)`) instead of the whole trusted-platform list, so generated code can't accidentally depend on test-only assemblies.
-- `CountingCharPool` is deleted with `BufferPool`. `ProbeEncoder` keeps only its custom-encoder pass-through mode, and `AllowUnsafeBlocks` stays with a comment explaining that it's for `ProbeEncoder`'s pointer overrides.
+- `CountingCharPool` is deleted with `BufferPool`. `ProbeEncoder` moves to `AnglePlates.Runtime.Tests` and keeps only its custom-encoder pass-through mode; that project enables `AllowUnsafeBlocks` with a comment explaining that it's for `ProbeEncoder`'s pointer overrides. `AnglePlates.Tests` no longer needs a custom encoder, so it doesn't enable unsafe code.
 - `[assembly: ExcludeFromCodeCoverage]` stays in this project, because the emitted code it compiles lives in separate assemblies.
 - The 15 duplicated support-type snapshots are deleted.
 

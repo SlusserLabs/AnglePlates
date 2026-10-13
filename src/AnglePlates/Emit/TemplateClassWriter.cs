@@ -20,8 +20,8 @@ internal sealed class TemplateClassWriter
     // [% if (x) %]a[% else %]b would break if it were a separate statement. Only the first write after a C# block uses
     // it, because the writes between two C# blocks are fixed by the template and can't grow.
     private const string _flushingWrite = "await WriteAsync(";
+    private const string _flushingLiteral = "await WriteLiteralAsync(";
     private const string _flushingWriteEnd = ", writer, cancellationToken).ConfigureAwait(false);";
-    private const string _plainConversion = "global::System.Convert.ToString(";
 
     // Characters that end a line in C# source, including comments and preprocessor directives
     private static readonly char[] _lineBreaks = ['\r', '\n', '\u0085', '\u2028', '\u2029'];
@@ -37,6 +37,9 @@ internal sealed class TemplateClassWriter
     private readonly string _typeName;
     private readonly bool _isUtf8;
     private readonly bool _mapLines;
+
+    // Set until the render method being written has its first statement, which a blank line separates from the prelude
+    private bool _firstStatement;
 
     private TemplateClassWriter(
         StringWriter source, IndentedTextWriter writer, TextLineCollection lines, ParsedTemplate template, TemplateDirectives directives, GenerationTarget target, string absolutePath)
@@ -105,33 +108,38 @@ internal sealed class TemplateClassWriter
         WriteBlankLine();
     }
 
-    // Opens the class and leaves the writer indented for its members
+    // Opens the class and leaves the writer indented for its members. The class is partial so a hand-written half can
+    // add helper members, and sealed because nothing should override a compiled template.
     private void WriteClassDeclaration(string relativePath)
     {
         string description = _isUtf8 ? "A UTF-8 template" : "A text template";
         _writer.WriteLine("/// <summary>");
-        _writer.WriteLine($"/// {description} that can render the contents of '{EscapeDocumentationText(relativePath)}'.");
+        _writer.WriteLine($"/// {description} that renders '{EscapeDocumentationText(relativePath)}'.");
         _writer.WriteLine("/// </summary>");
-        _writer.WriteLine($"{_directives.AccessModifier} partial class {_typeName} : global::SlusserLabs.AnglePlates.{_target}Template<{_directives.ModelType}>");
+        _writer.WriteLine($"{_directives.AccessModifier} sealed partial class {_typeName} : global::SlusserLabs.AnglePlates.{_target}Template<{_directives.ModelType}>");
         _writer.WriteLine("{");
         _writer.Indent++;
     }
 
-    // The constructor takes optional options, and Default is a shared instance that uses the default options
+    // The constructor falls back to the preset that #encode picked, so creating a template allocates no options, and
+    // Default is a shared instance that uses that preset
     private void WriteConstructorAndDefault()
     {
         _writer.WriteLine("/// <summary>");
-        _writer.WriteLine($"/// Initializes a new instance of the <see cref=\"{_typeName}\" /> class.");
+        _writer.WriteLine("/// Creates the template with the given options, or with the template's default options when none are given.");
         _writer.WriteLine("/// </summary>");
-        _writer.WriteLine("/// <param name=\"options\">Options for controlling template processing.</param>");
-        _writer.WriteLine($"public {_typeName}(global::SlusserLabs.AnglePlates.TemplateOptions? options = default) : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())");
+        _writer.WriteLine("/// <param name=\"options\">The options that control how C# variables are written, or <see langword=\"null\" /> for the template's default options.</param>");
+        _writer.WriteLine($"public {_typeName}(global::SlusserLabs.AnglePlates.TemplateOptions? options = null)");
+        _writer.Indent++;
+        _writer.WriteLine($": base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.{_directives.Encoding})");
+        _writer.Indent--;
         _writer.WriteLine("{");
         _writer.WriteLine("}");
         WriteBlankLine();
         _writer.WriteLine("/// <summary>");
-        _writer.WriteLine("/// Gets a singleton instance of the template with default options.");
+        _writer.WriteLine("/// Gets a shared instance that uses the template's default options.");
         _writer.WriteLine("/// </summary>");
-        _writer.WriteLine($"public static {_typeName} Default {{ get; }} = new {_typeName}();");
+        _writer.WriteLine($"public static {_typeName} Default {{ get; }} = new();");
         WriteBlankLine();
     }
 
@@ -148,7 +156,12 @@ internal sealed class TemplateClassWriter
             : $"public override void Render({_directives.ModelType} model, {writerType} writer)");
         _writer.WriteLine("{");
         _writer.Indent++;
+
+        // The model isn't checked, because a nullable #model type is legal. In RenderAsync a null writer faults the
+        // returned ValueTask, because the method is async.
+        _writer.WriteLine("global::System.ArgumentNullException.ThrowIfNull(writer);");
         _writer.WriteLine($"{_directives.ModelType} Model = model; // Allows alternate casing");
+        _firstStatement = true;
 
         // Empty blocks, empty literal runs, and comments write nothing, so they don't change whether the last write was a C# block
         var tokens = _template.Tokens;
@@ -174,7 +187,7 @@ internal sealed class TemplateClassWriter
                 case TokenType.Variable:
                     if (!token.Span.IsEmpty)
                     {
-                        WriteVariable(token, i, isAsync && afterCode);
+                        WriteVariable(token, isAsync && afterCode);
                         afterCode = false;
                     }
 
@@ -206,14 +219,24 @@ internal sealed class TemplateClassWriter
         _writer.WriteLine("}");
     }
 
-    // Escaped openers split literal text into adjacent tokens, which are written together as one literal
+    // Finds where a run of literal text ends. Escaped openers split literal text into adjacent tokens, and comments and
+    // empty blocks sit between literals without writing anything, so all of them join the run. A trim marker on one of
+    // those tokens ends the run, because it trims the literal next to it. The run ends after its last literal token.
     private int FindLiteralRunEnd(int start)
     {
         var tokens = _template.Tokens;
         int end = start + 1;
-        while (end < tokens.Count && tokens[end].Type == TokenType.Literal)
+        for (int i = start + 1; i < tokens.Count; i++)
         {
-            end++;
+            var token = tokens[i];
+            if (token.Type == TokenType.Literal)
+            {
+                end = i + 1;
+            }
+            else if (token.TrimPrevious || token.TrimNext || (token.Type != TokenType.Comment && !token.Span.IsEmpty))
+            {
+                break;
+            }
         }
 
         return end;
@@ -224,17 +247,35 @@ internal sealed class TemplateClassWriter
     private bool WriteLiteralRun(int start, int end, bool checkFlush)
     {
         var tokens = _template.Tokens;
-        var literal = end == start + 1 ? Slice(tokens[start].Span) : ConcatenateLiterals(start, end).AsSpan();
 
         // Trim markers on neighboring blocks remove whitespace from the run's edges. The first body token has no block before it.
-        if (start > 0 && tokens[start - 1].TrimNext)
+        bool trimStart = start > 0 && tokens[start - 1].TrimNext;
+        bool trimEnd = end < tokens.Count && tokens[end].TrimPrevious;
+
+        // A trim marker reaches only the literal tokens next to it, so trimming stops at a comment or empty block inside
+        // the run, the same as it does when they aren't merged. The head and tail are the literal tokens at each edge.
+        int headEnd = start + 1;
+        while (headEnd < end && tokens[headEnd].Type == TokenType.Literal)
         {
-            literal = literal.TrimStart(TemplateSyntax.Whitespace.AsSpan());
+            headEnd++;
         }
 
-        if (end < tokens.Count && tokens[end].TrimPrevious)
+        ReadOnlySpan<char> literal;
+        if (headEnd == end)
         {
-            literal = literal.TrimEnd(TemplateSyntax.Whitespace.AsSpan());
+            literal = Trim(JoinLiterals(start, end), trimStart, trimEnd);
+        }
+        else
+        {
+            int tailStart = end - 1;
+            while (tokens[tailStart - 1].Type == TokenType.Literal)
+            {
+                tailStart--;
+            }
+
+            var head = Trim(JoinLiterals(start, headEnd), trimStart, trimEnd: false).ToString();
+            var tail = Trim(JoinLiterals(tailStart, end), trimStart: false, trimEnd).ToString();
+            literal = (head + ConcatenateLiterals(headEnd, tailStart) + tail).AsSpan();
         }
 
         if (literal.IsEmpty)
@@ -242,73 +283,47 @@ internal sealed class TemplateClassWriter
             return false;
         }
 
-        var quoted = SyntaxFactory.Literal(literal.ToString()).ToFullString();
-        WriteBlankLine();
+        var quoted = SyntaxFactory.Literal(literal.ToString()).ToFullString() + (_isUtf8 ? "u8" : string.Empty);
+        BeginStatement();
         if (checkFlush)
         {
             // An await can't appear inside lock or unsafe, so errors anywhere on this line point at the whole literal
-            var flushingWrite = $"{_flushingWrite}{quoted}u8{_flushingWriteEnd}";
+            var flushingWrite = $"{_flushingLiteral}{quoted}{_flushingWriteEnd}";
             WriteLineMapping(TextSpan.FromBounds(tokens[start].Span.Start, tokens[end - 1].Span.End), flushingWrite.Length);
             _writer.WriteLine(flushingWrite);
             WriteDefaultLineMapping();
         }
         else
         {
-            _writer.WriteLine(_isUtf8 ? $"global::System.Buffers.BuffersExtensions.Write(writer, {quoted}u8);" : $"writer.Write({quoted});");
+            _writer.WriteLine($"WriteLiteral({quoted}{_writeEnd}");
         }
 
         return true;
     }
 
-    // Writes one C# variable as an encoded write. The token's index keeps its pattern variable's name unique.
-    private void WriteVariable(Token token, int index, bool checkFlush)
+    // Writes one C# variable as one call. The base class overloads pick the conversion, and an expression that isn't one
+    // argument, such as "1, 2", fails to compile at the template location.
+    private void WriteVariable(Token token, bool checkFlush)
     {
         var variable = Slice(token.Span).ToString();
         var (call, end) = checkFlush ? (_flushingWrite, _flushingWriteEnd) : (_write, _writeEnd);
+        BeginStatement();
+        WriteLineMapping(token.Span, call.Length);
 
-        // A // comment at the end of the variable would comment out the rest of its line, so the generated code after
-        // the variable starts on the next line
-        bool endsWithLineComment = CSharpBlockScanner.EndsWithLineComment(variable);
-        WriteBlankLine();
-
-        // Text that isn't one complete expression, such as a stray "[[1, 2]]", keeps the plain call so the compiler
-        // still rejects it; the parentheses below would turn it into a tuple that renders
-        if (SyntaxFactory.ParseExpression(variable).ContainsDiagnostics)
+        // A // comment at the end of the variable would comment out the rest of its line, so the rest of the call
+        // starts on the next line
+        if (CSharpBlockScanner.EndsWithLineComment(variable))
         {
-            var plainEnd = $", global::System.Globalization.CultureInfo.InvariantCulture){end}";
-            WriteLineMapping(token.Span, call.Length + _plainConversion.Length);
-            if (endsWithLineComment)
-            {
-                // Errors on the closing line point at the whole C# variable because the mapping's column is past its end
-                _writer.WriteLine($"{call}{_plainConversion}{variable}");
-                WriteLineMapping(token.Span, plainEnd.Length);
-                _writer.WriteLine(plainEnd);
-            }
-            else
-            {
-                _writer.WriteLine($"{call}{_plainConversion}{variable}{plainEnd}");
-            }
-
-            WriteDefaultLineMapping();
-            return;
+            _writer.WriteLine($"{call}{variable}");
+            _writer.Indent++;
+            _writer.WriteLine(end);
+            _writer.Indent--;
+        }
+        else
+        {
+            _writer.WriteLine($"{call}{variable}{end}");
         }
 
-        // Check for null before converting so every null value reaches NullVariable, not only strings. The pattern
-        // variable evaluates the expression once and unwraps nullable value types. It needs a per-token suffix because
-        // expression variables share the enclosing block's scope. The suffix counts the directives too, as every token
-        // in the template file does.
-        var valueName = $"__anglePlatesValue{_template.Directives.Count + index}";
-        var (variableEnd, conversionStart) = endsWithLineComment ? (string.Empty, ") ") : (")", string.Empty);
-        var conversion = $"{conversionStart}is {{ }} {valueName} ? global::System.Convert.ToString({valueName}, global::System.Globalization.CultureInfo.InvariantCulture) : null{end}";
-        WriteLineMapping(token.Span, call.Length + 1);
-        _writer.WriteLine($"{call}({variable}{variableEnd}");
-
-        // Errors in the pattern and conversion, such as a ref struct value that can't be converted or can't be a local
-        // in RenderAsync, point at the whole C# variable because the mapping's column is past the end of this line
-        _writer.Indent++;
-        WriteLineMapping(token.Span, conversion.Length);
-        _writer.WriteLine(conversion);
-        _writer.Indent--;
         WriteDefaultLineMapping();
     }
 
@@ -318,7 +333,7 @@ internal sealed class TemplateClassWriter
     {
         var code = Slice(token.Span).ToString();
         var (closed, opened) = CSharpBlockScanner.CountBraces(code);
-        WriteBlankLine();
+        BeginStatement();
         _writer.Indent -= closed;
         WriteLineMapping(token.Span, 0);
         _writer.WriteLine(code);
@@ -326,9 +341,20 @@ internal sealed class TemplateClassWriter
         _writer.Indent += opened;
     }
 
+    // Separates the first statement of a render method from the method's prelude
+    private void BeginStatement()
+    {
+        if (_firstStatement)
+        {
+            WriteBlankLine();
+            _firstStatement = false;
+        }
+    }
+
     // Maps the next generated line, from the column after its indentation and prefix, to a span in the template, so
-    // compiler errors in template C# point at the template. The compiler reports a span that starts before that column
-    // as the whole template span. Like blank lines, #line directives skip the indented writer.
+    // compiler errors in template C# point at the template. The character offset is 0-based. The compiler reports a
+    // span that starts before that column as the whole template span. Like blank lines, #line directives skip the
+    // indented writer.
     private void WriteLineMapping(TextSpan templateSpan, int prefixLength)
     {
         if (!_mapLines)
@@ -353,8 +379,8 @@ internal sealed class TemplateClassWriter
             end = new LinePosition(start.Line, start.Character + 1);
         }
 
-        int column = _writer.Indent * _indentString.Length + prefixLength + 1;
-        _source.WriteLine($"#line ({start.Line + 1}, {start.Character + 1}) - ({end.Line + 1}, {end.Character}) {column} \"{_absolutePath}\"");
+        int offset = _writer.Indent * _indentString.Length + prefixLength;
+        _source.WriteLine($"#line ({start.Line + 1}, {start.Character + 1}) - ({end.Line + 1}, {end.Character}) {offset} \"{_absolutePath}\"");
     }
 
     // Ends a mapping so the generated lines after it report their own locations
@@ -377,12 +403,33 @@ internal sealed class TemplateClassWriter
         return _template.Text.AsSpan(span.Start, span.Length);
     }
 
+    // Joins literal tokens without copying when there's only one
+    private ReadOnlySpan<char> JoinLiterals(int start, int end)
+    {
+        return end == start + 1 ? Slice(_template.Tokens[start].Span) : ConcatenateLiterals(start, end).AsSpan();
+    }
+
+    private static ReadOnlySpan<char> Trim(ReadOnlySpan<char> literal, bool trimStart, bool trimEnd)
+    {
+        if (trimStart)
+        {
+            literal = literal.TrimStart(TemplateSyntax.Whitespace.AsSpan());
+        }
+
+        return trimEnd ? literal.TrimEnd(TemplateSyntax.Whitespace.AsSpan()) : literal;
+    }
+
+    // Joins the literal tokens of a run, skipping the comments and empty blocks between them
     private string ConcatenateLiterals(int start, int end)
     {
         var run = new StringBuilder();
         for (int i = start; i < end; i++)
         {
-            run.Append(Slice(_template.Tokens[i].Span).ToString());
+            var token = _template.Tokens[i];
+            if (token.Type == TokenType.Literal)
+            {
+                run.Append(Slice(token.Span).ToString());
+            }
         }
 
         return run.ToString();

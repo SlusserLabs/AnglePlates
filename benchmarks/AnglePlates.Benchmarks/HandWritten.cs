@@ -121,7 +121,7 @@ internal static class HandWritten
         }
     }
 
-    // Formats straight into the destination with the invariant culture, which is what the templates' Convert.ToString uses
+    // Formats straight into the destination with the invariant culture, which is the culture the templates format with
     private static void WriteFormatted<T>(TextWriter writer, T value)
         where T : ISpanFormattable
     {

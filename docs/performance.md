@@ -27,7 +27,7 @@ Every class uses the memory diagnoser. Destinations are reused between operation
 | --- | --- | --- |
 | `LiteralPageBenchmarks` | A 4 KB page of markup with two C# variables, rendered to each destination. | None. Its generated code is already a run of constant writes, which is what hand-written code would do. |
 | `TableBenchmarks` | A table of 10 or 1,000 rows. Each row has an `int`, a `string` that needs HTML encoding every fourth row, a `decimal`, an `int?` that's `null` every third row, an enum, a `DateTime`, and a `double`. It includes `RenderAsync` to a `Pipe` against `Render` to the same `Pipe` followed by one flush. | Hand-written code that formats each value straight into the destination with the invariant culture and encodes the strings with `HtmlEncoder.Default`. |
-| `ValueBenchmarks` | One C# variable holding 200 plain ASCII characters, 220 characters that need HTML encoding, or 100,000 plain characters, which is past the 32K-character buffer the encoder rents. Each runs with encoding on and with `Encoder` set to `null`. | Hand-written code that writes the value with or without `HtmlEncoder.Default`. |
+| `ValueBenchmarks` | One C# variable holding 200 plain ASCII characters, 220 characters that need HTML encoding, or 100,000 plain characters, which was past the 32K-character buffer the encoder rented when these numbers were recorded. Each runs with encoding on and with `Encoder` set to `null`. | Hand-written code that writes the value with or without `HtmlEncoder.Default`. |
 | `ManyVariablesBenchmarks` | A template with 3,000 C# variables, each holding a short string. | A hand-written loop that encodes and writes the same value 3,000 times. |
 
 ## Results
@@ -113,7 +113,7 @@ No value benchmark triggered a Gen0 collection.
 These are observations for the next plan, not changes this pass made:
 
 - Value conversion is the main allocation. The table allocates about 207 bytes per row in both renderers, and the hand-written code allocates nothing for text and 20 bytes per row for UTF-8. That's the cost of `Convert.ToString` for each non-string value, which is the first candidate on the roadmap.
-- Encoding costs more than it has to on plain values. `Write` rents a buffer and copies even when nothing needs encoding, so a plain value with encoding on takes more than twice as long as `HtmlEncoder.Default.Encode(TextWriter, string)`, and the 3,000-variable template is 12 times slower than the hand-written loop. Values that do need encoding come out about even.
+- Encoding cost more than it had to on plain values. When these numbers were recorded, `Write` rented a buffer and copied even when nothing needed encoding, so a plain value with encoding on takes more than twice as long as `HtmlEncoder.Default.Encode(TextWriter, string)`, and the 3,000-variable template is 12 times slower than the hand-written loop. Values that do need encoding come out about even.
 - With encoding off, the text baselines write to `TextWriter.Null`, which does nothing, so the 0.24 ns times measure an empty call. Those ratios aren't meaningful; the UTF-8 rows with encoding off are the useful comparison, and they're within 16% of hand-written code.
 - `RenderAsync` with its flush checks costs 0.5% to 3% more than `Render` followed by one flush, at 10 and 1,000 rows. Neither allocates for the async state machine, because every flush completes synchronously on a pipe without backpressure.
 

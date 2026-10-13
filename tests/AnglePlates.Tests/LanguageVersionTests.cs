@@ -47,7 +47,7 @@ public sealed class LanguageVersionTests
         var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([RenderingTestHelper.Template("Hello [[ model ]]")], languageVersion: languageVersion));
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(6);
         await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", "Hello &lt;value&gt;");
     }
 

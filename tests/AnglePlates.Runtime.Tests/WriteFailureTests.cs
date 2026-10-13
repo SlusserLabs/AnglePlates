@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading.Tasks;
@@ -10,38 +9,19 @@ using TUnit.Core;
 
 namespace SlusserLabs.AnglePlates.Runtime.Tests;
 
-// Custom encoders and writers that fail or misbehave while a C# variable is written
+// Custom encoders, and writers that fail while a C# variable is written
 [ExcludeFromCodeCoverage]
 public sealed class WriteFailureTests
 {
     [Test]
-    [Arguments(false, "throw", "Encoder failed")]
-    [Arguments(true, "throw", "Encoder failed")]
-    [Arguments(false, "invalid", "Invalid data found in string. Does this string contain unpaired surrogates?")]
-    [Arguments(true, "invalid", "Invalid data found in string. Does this string contain unpaired surrogates?")]
-    [Arguments(false, "incomplete", "Encoder needs more data, but all data was provided. Does this string end with an unpaired surrogate?")]
-    [Arguments(true, "incomplete", "Encoder needs more data, but all data was provided. Does this string end with an unpaired surrogate?")]
-    [Arguments(false, "stalled", "Encoder made no progress with the temporary buffer.")]
-    [Arguments(true, "stalled", "Encoder made no progress with the temporary buffer.")]
-    public async Task Render_EncoderFailure_ThrowsInvalidOperation(bool utf8, string mode, string message)
+    public async Task Render_CustomEncoder_EncodesThroughOptionsEncoder()
     {
-        var options = TestOptions.Create(new ProbeEncoder(mode));
-        Action render = utf8
-            ? () => TemplateOutput.RenderUtf8(new VariableUtf8Template(options), "data")
-            : () => TemplateOutput.RenderText(new VariableTextTemplate(options), "data");
+        // The probe leaves "<" alone, so the output shows the options' encoder ran instead of the HTML default
+        var encoder = new ProbeEncoder();
+        var options = TestOptions.Create(encoder);
 
-        var exception = await Assert.That(render).ThrowsExactly<InvalidOperationException>();
-
-        await Assert.That(exception!.Message).IsEqualTo(message);
-    }
-
-    [Test]
-    public async Task Render_OverflowProneExpansion_ClampsAndWritesValue()
-    {
-        // The probe claims int.MaxValue output characters per input character, so the rental size must clamp without overflowing
-        var options = TestOptions.Create(new ProbeEncoder("copy"));
-
-        await TemplateOutput.AssertRendersAsync(new VariableTextTemplate(options), new VariableUtf8Template(options), "data", "data");
+        await TemplateOutput.AssertRendersAsync(new VariableTextTemplate(options), new VariableUtf8Template(options), "<data>", "<data>");
+        await Assert.That(encoder.Calls).IsGreaterThan(0);
     }
 
     [Test]

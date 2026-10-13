@@ -23,8 +23,16 @@ internal static class RenderingTestHelper
     public static (string text, byte[] bytes) Render(Compilation compilation, string? model = "<value>", string type = "Consumer.Example", string? nullVariable = null)
     {
         using var generated = GeneratedAssembly.Load(compilation);
-        var options = Activator.CreateInstance(generated.Assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions", throwOnError: true)!)!;
-        options.GetType().GetProperty("NullVariable")!.SetValue(options, nullVariable);
+
+        // Without a NullVariable the templates use their own default options, which is the preset #encode picked.
+        // Reflection can still call the init accessor.
+        object? options = null;
+        if (nullVariable is not null)
+        {
+            options = Activator.CreateInstance(generated.Assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions", throwOnError: true)!)!;
+            options.GetType().GetProperty("NullVariable")!.SetValue(options, nullVariable);
+        }
+
         using var writer = new StringWriter();
         var buffer = new ArrayBufferWriter<byte>();
         Render(generated, type + "TextTemplate", model, writer, options);

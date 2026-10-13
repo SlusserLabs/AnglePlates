@@ -11,75 +11,59 @@ using System;
 namespace Consumer;
 
 /// <summary>
-/// A UTF-8 template that can render the contents of 'Templates/example.html'.
+/// A UTF-8 template that renders 'Templates/example.html'.
 /// </summary>
-internal partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf8Template<string>
+internal sealed partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf8Template<string>
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="ExampleUtf8Template" /> class.
+    /// Creates the template with the given options, or with the template's default options when none are given.
     /// </summary>
-    /// <param name="options">Options for controlling template processing.</param>
-    public ExampleUtf8Template(global::SlusserLabs.AnglePlates.TemplateOptions? options = default) : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())
+    /// <param name="options">The options that control how C# variables are written, or <see langword="null" /> for the template's default options.</param>
+    public ExampleUtf8Template(global::SlusserLabs.AnglePlates.TemplateOptions? options = null)
+        : base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.Html)
     {
     }
 
     /// <summary>
-    /// Gets a singleton instance of the template with default options.
+    /// Gets a shared instance that uses the template's default options.
     /// </summary>
-    public static ExampleUtf8Template Default { get; } = new ExampleUtf8Template();
+    public static ExampleUtf8Template Default { get; } = new();
 
     /// <inheritdoc />
     public override void Render(string model, global::System.Buffers.IBufferWriter<byte> writer)
     {
+        global::System.ArgumentNullException.ThrowIfNull(writer);
         string Model = model; // Allows alternate casing
 
-        global::System.Buffers.BuffersExtensions.Write(writer, "<ul>"u8);
-
-#line (6, 8) - (6, 33) 9 "Templates/example.html"
+        WriteLiteral("<ul>"u8, writer);
+#line (6, 8) - (6, 33) 8 "Templates/example.html"
         foreach (var c in model) {
 #line default
-
-            global::System.Buffers.BuffersExtensions.Write(writer, "<li>"u8);
-
-#line (6, 44) - (6, 44) 20 "Templates/example.html"
-            Write((c)
-#line (6, 44) - (6, 44) 174 "Templates/example.html"
-                is { } __anglePlatesValue8 ? global::System.Convert.ToString(__anglePlatesValue8, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+            WriteLiteral("<li>"u8, writer);
+#line (6, 44) - (6, 44) 18 "Templates/example.html"
+            Write(c, writer);
 #line default
-
-            global::System.Buffers.BuffersExtensions.Write(writer, "</li>"u8);
-
-#line (6, 56) - (6, 56) 9 "Templates/example.html"
+            WriteLiteral("</li>"u8, writer);
+#line (6, 56) - (6, 56) 8 "Templates/example.html"
         }
 #line default
-
-#line (6, 73) - (6, 77) 16 "Templates/example.html"
-        Write((model)
-#line (6, 73) - (6, 77) 172 "Templates/example.html"
-            is { } __anglePlatesValue12 ? global::System.Convert.ToString(__anglePlatesValue12, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+#line (6, 73) - (6, 77) 14 "Templates/example.html"
+        Write(model, writer);
 #line default
-
-#line (6, 84) - (6, 104) 9 "Templates/example.html"
+#line (6, 84) - (6, 104) 8 "Templates/example.html"
         if (model.Length > 0)
 #line default
-
-        global::System.Buffers.BuffersExtensions.Write(writer, "a"u8);
-
-#line (6, 112) - (6, 115) 9 "Templates/example.html"
+        WriteLiteral("a"u8, writer);
+#line (6, 112) - (6, 115) 8 "Templates/example.html"
         else
 #line default
-
-#line (6, 122) - (6, 133) 16 "Templates/example.html"
-        Write((model.Length)
-#line (6, 122) - (6, 133) 172 "Templates/example.html"
-            is { } __anglePlatesValue16 ? global::System.Convert.ToString(__anglePlatesValue16, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+#line (6, 122) - (6, 133) 14 "Templates/example.html"
+        Write(model.Length, writer);
 #line default
-
-#line (6, 140) - (6, 149) 9 "Templates/example.html"
+#line (6, 140) - (6, 149) 8 "Templates/example.html"
         var n = 1;
 #line default
-
-#line (7, 5) - (7, 8) 9 "Templates/example.html"
+#line (7, 5) - (7, 8) 8 "Templates/example.html"
         n++;
 #line default
     }
@@ -87,59 +71,42 @@ internal partial class ExampleUtf8Template : global::SlusserLabs.AnglePlates.Utf
     /// <inheritdoc />
     public override async global::System.Threading.Tasks.ValueTask RenderAsync(string model, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken = default)
     {
+        global::System.ArgumentNullException.ThrowIfNull(writer);
         string Model = model; // Allows alternate casing
 
-        global::System.Buffers.BuffersExtensions.Write(writer, "<ul>"u8);
-
-#line (6, 8) - (6, 33) 9 "Templates/example.html"
+        WriteLiteral("<ul>"u8, writer);
+#line (6, 8) - (6, 33) 8 "Templates/example.html"
         foreach (var c in model) {
 #line default
-
-#line (6, 37) - (6, 40) 89 "Templates/example.html"
-            await WriteAsync("<li>"u8, writer, cancellationToken).ConfigureAwait(false);
+#line (6, 37) - (6, 40) 95 "Templates/example.html"
+            await WriteLiteralAsync("<li>"u8, writer, cancellationToken).ConfigureAwait(false);
 #line default
-
-#line (6, 44) - (6, 44) 20 "Templates/example.html"
-            Write((c)
-#line (6, 44) - (6, 44) 174 "Templates/example.html"
-                is { } __anglePlatesValue8 ? global::System.Convert.ToString(__anglePlatesValue8, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+#line (6, 44) - (6, 44) 18 "Templates/example.html"
+            Write(c, writer);
 #line default
-
-            global::System.Buffers.BuffersExtensions.Write(writer, "</li>"u8);
-
-#line (6, 56) - (6, 56) 9 "Templates/example.html"
+            WriteLiteral("</li>"u8, writer);
+#line (6, 56) - (6, 56) 8 "Templates/example.html"
         }
 #line default
-
-#line (6, 73) - (6, 77) 27 "Templates/example.html"
-        await WriteAsync((model)
-#line (6, 73) - (6, 77) 213 "Templates/example.html"
-            is { } __anglePlatesValue12 ? global::System.Convert.ToString(__anglePlatesValue12, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer, cancellationToken).ConfigureAwait(false);
+#line (6, 73) - (6, 77) 25 "Templates/example.html"
+        await WriteAsync(model, writer, cancellationToken).ConfigureAwait(false);
 #line default
-
-#line (6, 84) - (6, 104) 9 "Templates/example.html"
+#line (6, 84) - (6, 104) 8 "Templates/example.html"
         if (model.Length > 0)
 #line default
-
-#line (6, 108) - (6, 108) 82 "Templates/example.html"
-        await WriteAsync("a"u8, writer, cancellationToken).ConfigureAwait(false);
+#line (6, 108) - (6, 108) 88 "Templates/example.html"
+        await WriteLiteralAsync("a"u8, writer, cancellationToken).ConfigureAwait(false);
 #line default
-
-#line (6, 112) - (6, 115) 9 "Templates/example.html"
+#line (6, 112) - (6, 115) 8 "Templates/example.html"
         else
 #line default
-
-#line (6, 122) - (6, 133) 27 "Templates/example.html"
-        await WriteAsync((model.Length)
-#line (6, 122) - (6, 133) 213 "Templates/example.html"
-            is { } __anglePlatesValue16 ? global::System.Convert.ToString(__anglePlatesValue16, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer, cancellationToken).ConfigureAwait(false);
+#line (6, 122) - (6, 133) 25 "Templates/example.html"
+        await WriteAsync(model.Length, writer, cancellationToken).ConfigureAwait(false);
 #line default
-
-#line (6, 140) - (6, 149) 9 "Templates/example.html"
+#line (6, 140) - (6, 149) 8 "Templates/example.html"
         var n = 1;
 #line default
-
-#line (7, 5) - (7, 8) 9 "Templates/example.html"
+#line (7, 5) - (7, 8) 8 "Templates/example.html"
         n++;
 #line default
 

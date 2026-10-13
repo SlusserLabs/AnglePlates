@@ -84,7 +84,7 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(duplicates.Combine(settings), AddNumberedSources);
     }
 
-    // Every project gets all three support types, and trimming removes the ones an app doesn't use. A class with the wrong
+    // Every project gets all four support types, and trimming removes the ones an app doesn't use. A class with the wrong
     // accessibility isn't a safe fallback, and code for an older C# version can't compile, so either problem generates
     // nothing at all.
     private static void AddSupportTypes(SourceProductionContext context, GeneratorSettings settings)
@@ -108,6 +108,7 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         context.AddSource("SlusserLabs.AnglePlates.TemplateOptions.g.cs", SupportTypes.TemplateOptions(accessModifier));
         context.AddSource("SlusserLabs.AnglePlates.TextTemplate.g.cs", SupportTypes.TextTemplate(accessModifier));
         context.AddSource("SlusserLabs.AnglePlates.Utf8Template.g.cs", SupportTypes.Utf8Template(accessModifier));
+        context.AddSource("SlusserLabs.AnglePlates.TemplateExtensions.g.cs", SupportTypes.TemplateExtensions(accessModifier));
     }
 
     // Reports one template's diagnostics and adds its sources on their own, so the driver keeps the generated trees of

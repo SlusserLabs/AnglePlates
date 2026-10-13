@@ -26,6 +26,16 @@ public sealed class TemplateSnapshotTests
     }
 
     [Test]
+    public Task Snapshot_MergedLiteralRuns_MatchesReviewedSources()
+    {
+        // A comment, empty blocks, and an escaped opener between literals write one literal; the trim marker ends the run.
+        // #encode none makes the constructor fall back to the Unencoded preset.
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Text\r\n#encode none\r\na[* c *]b[%%]c\\[[d[[]]e [*- x *]f"));
+
+        return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+    }
+
+    [Test]
     public Task Snapshot_RenderAsync_MatchesReviewedSources()
     {
         // Literals, C# variables, a loop, brace-less C#, a comment after a block, and a trimmed literal that disappears

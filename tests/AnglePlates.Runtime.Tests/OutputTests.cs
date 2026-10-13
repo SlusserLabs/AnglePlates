@@ -94,7 +94,7 @@ public sealed class OutputTests
         yield return "<\U0001F600\u00E9\"&";
         yield return new string('<', 100000) + "\U0001F600\u00E9\"&";
 
-        // A surrogate pair straddling the 32K-character chunk boundary must survive as one scalar
+        // A surrogate pair just past the first 32K characters must survive as one scalar, wherever the encoder splits its work
         yield return new string('a', 32767) + "\U0001F600" + new string('<', 20000);
     }
 
@@ -108,15 +108,12 @@ public sealed class OutputTests
     }
 
     [Test]
-    public async Task Constructor_WithoutOptions_UsesNewHtmlOptions()
+    public async Task Constructor_WithoutOptions_UsesSharedHtmlPreset()
     {
-        var text = new VariableTextTemplate();
-        var utf8 = new VariableUtf8Template();
-
-        await Assert.That(text.Options).IsNotSameReferenceAs(utf8.Options);
-        await Assert.That(text.Options.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
-        await Assert.That(utf8.Options.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
-        await Assert.That(VariableTextTemplate.Default.Options.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
-        await Assert.That(VariableUtf8Template.Default.Options.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
+        // A template without #encode falls back to the Html preset instead of allocating options per instance
+        await Assert.That(new VariableTextTemplate().Options).IsSameReferenceAs(TemplateOptions.Html);
+        await Assert.That(new VariableUtf8Template(null).Options).IsSameReferenceAs(TemplateOptions.Html);
+        await Assert.That(VariableTextTemplate.Default.Options).IsSameReferenceAs(TemplateOptions.Html);
+        await Assert.That(VariableUtf8Template.Default.Options).IsSameReferenceAs(TemplateOptions.Html);
     }
 }

@@ -6,13 +6,20 @@ namespace SlusserLabs.AnglePlates;
 internal sealed class TemplateDirectives
 {
     public TemplateDirectives(
-        string type, string @namespace, string modelType, GenerationTarget generationTarget, string accessModifier, IReadOnlyList<string> usings)
+        string type,
+        string @namespace,
+        string modelType,
+        GenerationTarget generationTarget,
+        string accessModifier,
+        TemplateEncoding encoding,
+        IReadOnlyList<string> usings)
     {
         Type = type;
         Namespace = @namespace;
         ModelType = modelType;
         GenerationTarget = generationTarget;
         AccessModifier = accessModifier;
+        Encoding = encoding;
         Usings = usings;
     }
 
@@ -25,6 +32,8 @@ internal sealed class TemplateDirectives
     public GenerationTarget GenerationTarget { get; }
 
     public string AccessModifier { get; }
+
+    public TemplateEncoding Encoding { get; }
 
     // In template order, without repeats
     public IReadOnlyList<string> Usings { get; }

@@ -1,0 +1,5 @@
+#type AsyncWriteOverloads
+#model string
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+#generate Utf8
+[% int? maybe = model.Length; %][[ maybe ]],[% int? none = null; %][[ none ]],[% var flag = true; %][[ flag ]],[% var count = 1; %][[ count ]],[% var text = model; %][[ text ]]

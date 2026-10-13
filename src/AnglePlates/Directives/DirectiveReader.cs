@@ -19,6 +19,15 @@ internal sealed class DirectiveReader
     private const string _expectedNamespace = "a namespace name such as 'MyApp.Templates'";
     private const string _expectedImport = "a namespace name such as 'System.Linq'";
     private const string _expectedGenerationTarget = "'Text' or 'Utf8'";
+    private const string _expectedEncoding = "'html', 'none', 'javascript', or 'url'";
+
+    private static readonly (string Name, TemplateEncoding Encoding)[] _encodings =
+    [
+        ("html", TemplateEncoding.Html),
+        ("none", TemplateEncoding.Unencoded),
+        ("javascript", TemplateEncoding.JavaScript),
+        ("url", TemplateEncoding.Url)
+    ];
 
     private readonly string _text;
     private readonly string _path;
@@ -32,6 +41,7 @@ internal sealed class DirectiveReader
     private string? _modelType;
     private GenerationTarget _generationTarget = GenerationTarget.Text | GenerationTarget.Utf8;
     private string _accessModifier = "internal";
+    private TemplateEncoding _encoding = TemplateEncoding.Html;
 
     // A blank required directive is reported as missing at its name, so the reader remembers where each one was
     private TextSpan? _blankType;
@@ -62,7 +72,7 @@ internal sealed class DirectiveReader
             return null;
         }
 
-        return new TemplateDirectives(reader._type!, reader._namespace!, reader._modelType!, reader._generationTarget, reader._accessModifier, [.. reader._usings]);
+        return new TemplateDirectives(reader._type!, reader._namespace!, reader._modelType!, reader._generationTarget, reader._accessModifier, reader._encoding, [.. reader._usings]);
     }
 
     private void ReadDirective(DirectiveToken directive)
@@ -102,6 +112,10 @@ internal sealed class DirectiveReader
 
             case DirectiveKind.Access:
                 ReadAccess(directive, value);
+                break;
+
+            case DirectiveKind.Encode:
+                ReadEncode(directive, value);
                 break;
 
             case DirectiveKind.Using:
@@ -191,6 +205,21 @@ internal sealed class DirectiveReader
         {
             AddInvalidValue(directive, value, ExpectedAccessModifier);
         }
+    }
+
+    // The value names a preset in lowercase, but any casing works, like #generate
+    private void ReadEncode(DirectiveToken directive, string value)
+    {
+        foreach (var (name, encoding) in _encodings)
+        {
+            if (string.Equals(value, name, StringComparison.OrdinalIgnoreCase))
+            {
+                _encoding = encoding;
+                return;
+            }
+        }
+
+        AddInvalidValue(directive, value, _expectedEncoding);
     }
 
     private void ReadUsing(DirectiveToken directive, string value)

@@ -36,7 +36,7 @@ public sealed class DiagnosticTests
         // The directive section ends at the body, so that's where the missing directive is reported
         await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(TemplateText.Path,
             new LinePosition(2, 0), new LinePosition(2, 5)));
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
     }
 
     [Test]
@@ -45,7 +45,7 @@ public sealed class DiagnosticTests
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText("#generate Text\r\nHello")).RunResult;
 
         await Assert.That(string.Join(",", result.Diagnostics.Select(diagnostic => diagnostic.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003");
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
     }
 
     [Test]
@@ -69,7 +69,7 @@ public sealed class DiagnosticTests
         var explicitFile = GeneratorTestHelper.Run(new TemplateAdditionalText(content, path, TemplateAdditionalText.Explicit)).RunResult;
 
         await Assert.That(discovered.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(discovered.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        await Assert.That(discovered.RunResult.GeneratedTrees.Length).IsEqualTo(6);
         await Assert.That(RenderingTestHelper.Render(discovered.Compilation).text).IsEqualTo("valid");
 
         await Assert.That(explicitFile.Diagnostics.Length).IsEqualTo(1);
@@ -81,7 +81,7 @@ public sealed class DiagnosticTests
         await Assert.That(diagnostic.GetMessage()).IsEqualTo(
             $"Template file '{path}' has no directives; a file added with an AnglePlate Include must start with a directive such as '#type MyTemplate'");
         await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(path, new LinePosition(0, 0), new LinePosition(0, firstLineLength)));
-        await Assert.That(explicitFile.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(explicitFile.GeneratedTrees.Length).IsEqualTo(4);
     }
 
     [Test]
@@ -101,7 +101,7 @@ public sealed class DiagnosticTests
         await Assert.That(diagnostic.Location.SourceSpan).IsEqualTo(new TextSpan(header.Length + 7, 2));
         await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(template.Path,
             new LinePosition(3, 7), new LinePosition(3, 9)));
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(3);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
     }
 
     public static IEnumerable<(string header, string open, string contents, string close)> UnclosedBlockCases()
@@ -140,7 +140,7 @@ public sealed class DiagnosticTests
         // Missing directives, unclosed blocks, and directive errors each skip only their own template
         await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id).Order(StringComparer.Ordinal)))
             .IsEqualTo("SLAP001,SLAP002,SLAP003,SLAP004,SLAP004,SLAP006");
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(7);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(8);
         await Assert.That(first.text).IsEqualTo("first &lt;value&gt;");
         await Assert.That(second.text).IsEqualTo("second &lt;value&gt;");
         await Assert.That(first.bytes.SequenceEqual(Encoding.UTF8.GetBytes(first.text))).IsTrue();

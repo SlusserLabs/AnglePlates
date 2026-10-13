@@ -147,6 +147,23 @@ public sealed class BlockSyntaxTests
     }
 
     [Test]
+    [Arguments("x [* n *]\n[%- var c = 1; %]", "x ")]
+    [Arguments("x [%%]\n[%- var c = 1; %]", "x ")]
+    [Arguments("[% var c = 1; -%] [* n *] y", " y")]
+    [Arguments("[% var c = 1; -%] a [* n *] b [%- var d = 2; %]", "a  b")]
+    [Arguments("[% var c = 1; -%] \\[[x]] [* n *] y", "[[x]]  y")]
+    [Arguments("[% var c = 1; -%] x [* n *] \\[[y]] \n[%- var d = 2; %]", "x  [[y]]")]
+    [Arguments("[% var c = 1; -%] [* n *] [* m *] \n[%- var d = 2; %]", " ")]
+    public async Task MergedLiteralRun_NextToTrimMarker_TrimsOnlyAdjacentLiterals(string body, string expected)
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+        var output = RenderingTestHelper.Render(result.Compilation);
+
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
     [Arguments("a[[]][%%][**]b", "ab")]
     [Arguments("a \n[[-]][%- -%][*- -*]\n b", "ab")]
     [Arguments("a [[-1]] b", "a1 b")]

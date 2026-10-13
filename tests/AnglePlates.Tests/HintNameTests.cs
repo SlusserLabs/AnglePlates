@@ -42,7 +42,7 @@ public sealed class HintNameTests
         var reversed = GeneratorTestHelper.Run(templates.Reverse().ToArray());
         var changed = GeneratorTestHelper.Run(templates[0], RenderingTestHelper.Template("changed", ns: "Two", path: "Templates/b.html"));
 
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(7);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(8);
         await Assert.That(result.GeneratedSource("One.ExampleTextTemplate.g.cs").SourceText.ToString()).Contains("namespace One;");
         await Assert.That(result.GeneratedSource("Two.ExampleUtf8Template.g.cs").SourceText.ToString()).Contains("namespace Two;");
         await Assert.That(result.HintNames()).IsEqualTo(reversed.HintNames());
@@ -69,7 +69,7 @@ public sealed class HintNameTests
         var numbered = result.GeneratedSources.Where(source => source.HintName.EndsWith(".2.g.cs", StringComparison.Ordinal)).ToArray();
 
         await Assert.That(result.Exception).IsNull();
-        await Assert.That(result.GeneratedSources.Length).IsEqualTo(7);
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(8);
         await Assert.That(SourcesByHintName(reversed)).IsEquivalentTo(SourcesByHintName(result));
         await Assert.That(numbered.Select(source => source.HintName)).IsEquivalentTo(
             new[] { "Consumer.AlphaTextTemplate.2.g.cs", "Consumer.BetaTextTemplate.2.g.cs" });
@@ -111,9 +111,9 @@ public sealed class HintNameTests
         var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([first, second]), expected);
         var reversed = GeneratorTestHelper.CreateDriver([second, first]).RunGenerators(compilation).GetRunResult();
 
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(6);
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(result.GeneratorResult.GeneratedSources.Select(source => source.HintName).Distinct().Count()).IsEqualTo(5);
+        await Assert.That(result.GeneratorResult.GeneratedSources.Select(source => source.HintName).Distinct().Count()).IsEqualTo(6);
         // Sources follow the file order, but each hint name must name the same source either way
         await Assert.That(GeneratedSources.ByHintName(reversed)).IsEqualTo(GeneratedSources.ByHintName(result.RunResult));
     }

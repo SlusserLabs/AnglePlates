@@ -26,6 +26,8 @@ public sealed class RenderAsyncTests
     [Arguments("if-else", "ac", 3)]
     [Arguments("foreach-if", "A!", 3)]
     [Arguments("foreach-if-else", "&lt;v-lue&gt;", 8)]
+    // C# variables of type int?, a null int?, bool, int, and string, each the first write after a block
+    [Arguments("write-async-overloads", "7,,True,1,&lt;value&gt;", 6)]
     // Blocks and flushing literals that end right after a line break
     [Arguments("block-end-lf", "\nx\n", 2)]
     [Arguments("block-end-crlf", "\r\nx\r\n", 2)]
@@ -182,6 +184,7 @@ public sealed class RenderAsyncTests
             "if-else" => new AsyncIfElseUtf8Template(),
             "foreach-if" => new AsyncForeachIfUtf8Template(),
             "foreach-if-else" => new AsyncForeachIfElseUtf8Template(),
+            "write-async-overloads" => new AsyncWriteOverloadsUtf8Template(),
             "block-end-lf" => new AsyncBlockEndLfUtf8Template(),
             "block-end-crlf" => new AsyncBlockEndCrlfUtf8Template(),
             "block-then-blank-lines" => new AsyncBlockThenBlankLinesUtf8Template(),

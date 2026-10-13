@@ -9,44 +9,42 @@
 namespace SlusserLabs.AnglePlates;
 
 /// <summary>
-/// Base class for a UTF-8 template.
+/// The base class of compiled templates that render UTF-8 bytes to a <see cref="global::System.Buffers.IBufferWriter{T}" />
+/// or a <see cref="global::System.IO.Pipelines.PipeWriter" />.
 /// </summary>
-/// <typeparam name="TModel">The type of model supported by the template.</typeparam>
+/// <typeparam name="TModel">The type of model the template renders.</typeparam>
 public abstract class Utf8Template<TModel>
 {
-    // Cap requests at 32K characters; custom pools may return larger arrays
-    private const int _maxRental = 32 * 1024;
     // RenderAsync flushes at a check once this many bytes are waiting in the pipe
     private const int _flushThreshold = 16 * 1024;
-    private readonly TemplateOptions _options;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="Utf8Template{TModel}" /> class.
+    /// Creates the template with the options it writes C# variables with.
     /// </summary>
-    /// <param name="options">Options for controlling template processing.</param>
-    protected Utf8Template(TemplateOptions options)
+    /// <param name="options">The options that control how C# variables are written.</param>
+    private protected Utf8Template(TemplateOptions options)
     {
         global::System.ArgumentNullException.ThrowIfNull(options);
-        _options = options;
+        Options = options;
     }
 
     /// <summary>
-    /// Gets the <see cref="TemplateOptions" /> used to create this instance.
+    /// Gets the options this template writes C# variables with.
     /// </summary>
-    public TemplateOptions Options => _options;
+    public TemplateOptions Options { get; }
 
     /// <summary>
-    /// Renders the template.
+    /// Renders the template as UTF-8 bytes.
     /// </summary>
-    /// <param name="model">The data model to render.</param>
-    /// <param name="writer">The <see cref="global::System.Buffers.IBufferWriter{byte}" /> to render the template to.</param>
+    /// <param name="model">The model to render.</param>
+    /// <param name="writer">The buffer writer that receives the output.</param>
     public abstract void Render(TModel model, global::System.Buffers.IBufferWriter<byte> writer);
 
     /// <summary>
-    /// Renders the template to a <see cref="global::System.IO.Pipelines.PipeWriter" />, flushing it as the output grows.
+    /// Renders the template as UTF-8 bytes to a <see cref="global::System.IO.Pipelines.PipeWriter" />, flushing it as the output grows.
     /// </summary>
-    /// <param name="model">The data model to render.</param>
-    /// <param name="writer">The <see cref="global::System.IO.Pipelines.PipeWriter" /> to render the template to.</param>
+    /// <param name="model">The model to render.</param>
+    /// <param name="writer">The pipe writer that receives the output. The template flushes it but doesn't complete it.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <remarks>
     /// The render checks for cancellation, and flushes when enough output is waiting, at the first write after each C# block.
@@ -58,72 +56,28 @@ public abstract class Utf8Template<TModel>
     public abstract global::System.Threading.Tasks.ValueTask RenderAsync(TModel model, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Encodes the specified <paramref name="value" /> and writes it to the output.
+    /// Encodes <paramref name="value" /> with the options' encoder and writes it as UTF-8. A <see langword="null" /> value writes
+    /// <see cref="TemplateOptions.NullVariable" /> instead.
     /// </summary>
-    /// <param name="value">The string value to write.</param>
-    /// <param name="writer">The template writer.</param>
+    /// <param name="value">The text to write.</param>
+    /// <param name="writer">The buffer writer that receives the output.</param>
     protected void Write(string? value, global::System.Buffers.IBufferWriter<byte> writer)
     {
-        value ??= _options.NullVariable;
-
+        value ??= Options.NullVariable;
         if (string.IsNullOrEmpty(value))
         {
             return;
         }
 
-        var encoder = _options.Encoder;
-        if (encoder is null)
-        {
-            WriteRaw(value, writer);
-            return;
-        }
-
-        // Widen before multiplying so large values cannot overflow before clamping
-        int rentalSize = (int)global::System.Math.Min((long)encoder.MaxOutputCharactersPerInputCharacter * value.Length, _maxRental);
-        var pool = _options.BufferPool;
-        global::System.ReadOnlySpan<char> sourceChars = global::System.MemoryExtensions.AsSpan(value);
-        var encodedChars = pool.Rent(rentalSize);
-
-        // Encode one buffer-sized chunk at a time; the finally block returns the buffer even if encoding or writing throws
-        try
-        {
-            do
-            {
-                global::System.Buffers.OperationStatus status = encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
-                switch (status)
-                {
-                    case global::System.Buffers.OperationStatus.NeedMoreData:
-                        throw new global::System.InvalidOperationException("Encoder needs more data, but all data was provided. Does this string end with an unpaired surrogate?");
-
-                    case global::System.Buffers.OperationStatus.InvalidData:
-                        throw new global::System.InvalidOperationException("Invalid data found in string. Does this string contain unpaired surrogates?");
-                }
-
-                if (charsConsumed == 0 && charsWritten == 0)
-                {
-                    throw new global::System.InvalidOperationException("Encoder made no progress with the temporary buffer.");
-                }
-
-                // Write the encoded characters as UTF-8 and advance the source chars
-                global::System.Text.EncodingExtensions.GetBytes(global::System.Text.Encoding.UTF8, new global::System.ReadOnlySpan<char>(encodedChars, 0, charsWritten), writer);
-                sourceChars = sourceChars.Slice(charsConsumed);
-
-                // If OperationStatus.Done, the loop will exit because sourceChars.IsEmpty
-                // If OperationStatus.DestinationTooSmall, the loop will go again because !sourceChars.IsEmpty
-            } while (!sourceChars.IsEmpty);
-        }
-        finally
-        {
-            pool.Return(encodedChars);
-        }
+        var encoder = Options.Encoder;
+        WriteRaw(encoder is null ? value : encoder.Encode(value), writer);
     }
 
     /// <summary>
-    /// Writes the raw, unencoded specified <paramref name="value" /> to the output.
+    /// Writes <paramref name="value" /> as UTF-8 without encoding it. A <see langword="null" /> value writes nothing.
     /// </summary>
-    /// <param name="value">The string value to write.</param>
-    /// <param name="writer">The template writer.</param>
-    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    /// <param name="value">The text to write.</param>
+    /// <param name="writer">The buffer writer that receives the output.</param>
     protected void WriteRaw(string? value, global::System.Buffers.IBufferWriter<byte> writer)
     {
         if (!string.IsNullOrEmpty(value))
@@ -133,35 +87,120 @@ public abstract class Utf8Template<TModel>
     }
 
     /// <summary>
-    /// Writes the specified UTF-8 <paramref name="value" />, then flushes if enough output is waiting.
+    /// Converts <paramref name="value" /> to text with the invariant culture, then encodes and writes it like a string.
     /// </summary>
-    /// <param name="value">The UTF-8 bytes to write.</param>
-    /// <param name="writer">The template writer.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    protected global::System.Threading.Tasks.ValueTask WriteAsync(global::System.ReadOnlySpan<byte> value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The buffer writer that receives the output.</param>
+    protected void Write(object? value, global::System.Buffers.IBufferWriter<byte> writer)
+    {
+        // Convert.ToString turns null into an empty string, so null is checked first to reach NullVariable
+        Write(value is null ? null : global::System.Convert.ToString(value, global::System.Globalization.CultureInfo.InvariantCulture), writer);
+    }
+
+    /// <summary>
+    /// Formats <paramref name="value" /> with the invariant culture, then encodes and writes it like a string.
+    /// </summary>
+    /// <typeparam name="T">The type of value, such as a number, date, or enum.</typeparam>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The buffer writer that receives the output.</param>
+    protected void Write<T>(T value, global::System.Buffers.IBufferWriter<byte> writer)
+        where T : global::System.IFormattable?
+    {
+        Write(value is null ? null : value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture), writer);
+    }
+
+    /// <summary>
+    /// Formats <paramref name="value" /> with the invariant culture, then encodes and writes it like a string.
+    /// </summary>
+    /// <typeparam name="T">The type of value, such as a number, date, or enum.</typeparam>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The buffer writer that receives the output.</param>
+    protected void Write<T>(T? value, global::System.Buffers.IBufferWriter<byte> writer)
+        where T : struct, global::System.IFormattable
+    {
+        Write(value.HasValue ? value.GetValueOrDefault().ToString(null, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+    }
+
+    /// <summary>
+    /// Writes literal template text that's already UTF-8.
+    /// </summary>
+    /// <param name="value">The bytes to write.</param>
+    /// <param name="writer">The buffer writer that receives the output.</param>
+    private protected static void WriteLiteral(global::System.ReadOnlySpan<byte> value, global::System.Buffers.IBufferWriter<byte> writer)
     {
         global::System.Buffers.BuffersExtensions.Write(writer, value);
+    }
+
+    /// <summary>
+    /// Writes literal template text that's already UTF-8, then flushes if enough output is waiting.
+    /// </summary>
+    /// <param name="value">The bytes to write.</param>
+    /// <param name="writer">The pipe writer that receives the output.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    private protected global::System.Threading.Tasks.ValueTask WriteLiteralAsync(global::System.ReadOnlySpan<byte> value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+    {
+        WriteLiteral(value, writer);
         return FlushIfNeededAsync(writer, cancellationToken);
     }
 
     /// <summary>
-    /// Encodes and writes the specified <paramref name="value" />, then flushes if enough output is waiting.
+    /// Writes <paramref name="value" /> like <c>Write</c>, then flushes if enough output is waiting.
     /// </summary>
-    /// <param name="value">The string value to write.</param>
-    /// <param name="writer">The template writer.</param>
+    /// <param name="value">The text to write.</param>
+    /// <param name="writer">The pipe writer that receives the output.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    protected global::System.Threading.Tasks.ValueTask WriteAsync(string? value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+    private protected global::System.Threading.Tasks.ValueTask WriteAsync(string? value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
     {
         Write(value, writer);
         return FlushIfNeededAsync(writer, cancellationToken);
     }
 
     /// <summary>
-    /// Flushes the <paramref name="writer" /> and stops the render if the reader completed or the flush was canceled.
+    /// Converts and writes <paramref name="value" /> like <c>Write</c>, then flushes if enough output is waiting.
     /// </summary>
-    /// <param name="writer">The template writer.</param>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The pipe writer that receives the output.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    protected static async global::System.Threading.Tasks.ValueTask FlushAsync(global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+    private protected global::System.Threading.Tasks.ValueTask WriteAsync(object? value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+    {
+        Write(value, writer);
+        return FlushIfNeededAsync(writer, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes a formattable <paramref name="value" /> like <c>Write</c>, then flushes if enough output is waiting.
+    /// </summary>
+    /// <typeparam name="T">The type of value, such as a number, date, or enum.</typeparam>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The pipe writer that receives the output.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    private protected global::System.Threading.Tasks.ValueTask WriteAsync<T>(T value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+        where T : global::System.IFormattable?
+    {
+        Write(value, writer);
+        return FlushIfNeededAsync(writer, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes a nullable formattable <paramref name="value" /> like <c>Write</c>, then flushes if enough output is waiting.
+    /// </summary>
+    /// <typeparam name="T">The type of value, such as a number, date, or enum.</typeparam>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The pipe writer that receives the output.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    private protected global::System.Threading.Tasks.ValueTask WriteAsync<T>(T? value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
+        where T : struct, global::System.IFormattable
+    {
+        Write(value, writer);
+        return FlushIfNeededAsync(writer, cancellationToken);
+    }
+
+    /// <summary>
+    /// Flushes <paramref name="writer" /> and stops the render if the reader completed or the flush was canceled.
+    /// </summary>
+    /// <param name="writer">The pipe writer to flush.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    private protected static async global::System.Threading.Tasks.ValueTask FlushAsync(global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken)
     {
         global::System.IO.Pipelines.FlushResult result = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
 

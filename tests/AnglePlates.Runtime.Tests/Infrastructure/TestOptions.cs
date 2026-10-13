@@ -9,13 +9,9 @@ internal static class TestOptions
 {
     public static TemplateOptions Create(bool encoded, string? nullVariable = null)
     {
-        var options = new TemplateOptions { NullVariable = nullVariable };
-        if (!encoded)
-        {
-            options.Encoder = null;
-        }
-
-        return options;
+        return encoded
+            ? new TemplateOptions { NullVariable = nullVariable }
+            : new TemplateOptions { Encoder = null, NullVariable = nullVariable };
     }
 
     public static TemplateOptions Create(TextEncoder encoder)

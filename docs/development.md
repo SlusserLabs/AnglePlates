@@ -86,11 +86,13 @@ The generator is built against Roslyn 4.14, but at build time it runs on the com
 
 ### Directives
 
-`DirectiveReader.Read` turns the directive tokens into an immutable `TemplateDirectives` with the class name, model type, namespace, generation target, accessibility, and `#using` list. Each directive kind has its own private method in the reader. Missing, repeated, and invalid directives become `TemplateError` values, and then `Read` returns `null`. The generator converts directive errors and parse errors in one loop. When a template has any errors, the generator reports them and skips that template, so one broken template doesn't stop the rest of the project from building.
+`DirectiveReader.Read` turns the directive tokens into an immutable `TemplateDirectives` with the class name, model type, namespace, generation target, accessibility, encoding, and `#using` list. The encoding is a `TemplateEncoding` value whose names match the `TemplateOptions` presets (`#encode none` reads as `Unencoded`), so the writer emits the name as it is. Each directive kind has its own private method in the reader. Missing, repeated, and invalid directives become `TemplateError` values, and then `Read` returns `null`. The generator converts directive errors and parse errors in one loop. When a template has any errors, the generator reports them and skips that template, so one broken template doesn't stop the rest of the project from building.
 
 ### Emitting C#
 
-`TemplateClassWriter.Write` writes one class for one target. It creates a writer instance that holds what every step needs (the indented writer, the template's lines and text, its directives, and its absolute path), and each part of the class has its own method: the file header, the class declaration, the constructor and `Default`, the render methods, and inside those, literal runs, C# variables, C# blocks, and `#line` mappings. Text classes derive from `TextTemplate<TModel>` and write to a `TextWriter`. UTF-8 classes derive from `Utf8Template<TModel>` and write UTF-8 string literals to an `IBufferWriter<byte>`. Literal text becomes literal writes, C# variables become encoded writes, and C# blocks are copied into the render method as they are.
+`TemplateClassWriter.Write` writes one class for one target. It creates a writer instance that holds what every step needs (the indented writer, the template's lines and text, its directives, and its absolute path), and each part of the class has its own method: the file header, the class declaration, the constructor and `Default`, the render methods, and inside those, literal runs, C# variables, C# blocks, and `#line` mappings. Classes are `sealed partial`, so a consumer can add helper members in a hand-written half. Text classes derive from `TextTemplate<TModel>` and write to a `TextWriter`. UTF-8 classes derive from `Utf8Template<TModel>` and write UTF-8 string literals to an `IBufferWriter<byte>`. The constructor takes optional options and falls back to the preset that `#encode` picked, and `Default` is a shared instance made the same way. Each render method starts with `ArgumentNullException.ThrowIfNull(writer)`, outside any `#line` mapping, and the `Model` alias.
+
+Literal text becomes a `WriteLiteral(..., writer)` call. A run of literal text keeps going across comments, empty blocks, and escaped openers, so `a[* c *]b` is one call; a trim marker on one of those tokens ends the run, because it trims the literal next to it. Each C# variable becomes one `Write(expression, writer);` line with one `#line` mapping, and overload resolution on the base class picks how the value turns into text: `Write(string?)`, `Write<T>(T)` for `IFormattable` values, `Write<T>(T?)` for nullable value types, and `Write(object?)` for the rest. A variable that isn't a single argument, such as `[[1, 2]]`, becomes `Write(1, 2, writer)` and fails to compile at the template location. C# blocks are copied into the render method as they are.
 
 ### Two render methods from one walk
 
@@ -99,19 +101,19 @@ A UTF-8 class gets two methods: `Render`, which writes to an `IBufferWriter<byte
 A flush check is fused into the first write after each C# block. The walk only remembers whether the previous token it emitted was a C# block, so there's no lookahead. Here's the end of a `RenderAsync` for `[% foreach (var row in model.Rows) { %]<li>[[ row ]]</li>[% } %]</ul>`:
 
 > [!NOTE]
-> This excerpt leaves out the `#line` directives and shortens the pattern variable's name.
+> This excerpt leaves out the `#line` directives.
 
 ```csharp
 foreach (var row in model.Rows) {
     // The first write after a C# block carries a flush check
-    await WriteAsync("<li>"u8, writer, cancellationToken).ConfigureAwait(false);
+    await WriteLiteralAsync("<li>"u8, writer, cancellationToken).ConfigureAwait(false);
 
     // Ordinary writes, the same as in Render
-    Write((row) is { } value ? global::System.Convert.ToString(value, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
-    global::System.Buffers.BuffersExtensions.Write(writer, "</li>"u8);
+    Write(row, writer);
+    WriteLiteral("</li>"u8, writer);
 }
 
-await WriteAsync("</ul>"u8, writer, cancellationToken).ConfigureAwait(false);
+await WriteLiteralAsync("</ul>"u8, writer, cancellationToken).ConfigureAwait(false);
 
 // Every render ends with one unconditional flush
 await FlushAsync(writer, cancellationToken).ConfigureAwait(false);
@@ -119,17 +121,19 @@ await FlushAsync(writer, cancellationToken).ConfigureAwait(false);
 
 Loops and child template calls live in C# blocks, so that's where output can grow without bound. Every loop iteration that writes anything starts with a write that follows a C# block, so every such iteration passes a check. The writes between two C# blocks are fixed by the template, so they need no checks of their own. Each check is one statement, because templates can wrap a write in brace-less C# such as `[% if (x) %]a[% else %]b`.
 
-The checks call helpers on `Utf8Template<TModel>`. `WriteAsync` has one overload per existing write kind, a UTF-8 literal and an encoded string, and the string overload goes through the same `Write` as everything else. Both write, then check the cancellation token and flush only once 16 KB are waiting, so most checks complete synchronously and don't suspend the method. `FlushAsync` turns a flush result that reports a completed reader or a canceled flush into an `OperationCanceledException`, which unwinds nested C# blocks and child templates without any generated code. The threshold is a private constant. Every helper is `protected` or `private`; `RenderAsync` is the only public member.
+The checks call helpers on `Utf8Template<TModel>`. `WriteLiteralAsync` writes a UTF-8 literal, and `WriteAsync` mirrors the four `Write` overloads and calls them. Each one writes, then checks the cancellation token and flushes only once 16 KB are waiting, so most checks complete synchronously and don't suspend the method. `FlushAsync` turns a flush result that reports a completed reader or a canceled flush into an `OperationCanceledException`, which unwinds nested C# blocks and child templates without any generated code. The threshold is a private constant.
+
+The base classes keep their surface small. `Options`, `Render`, and `RenderAsync` are public. `Write` and `WriteRaw` are `protected`, because template C# calls them. The constructors, `WriteLiteral`, `WriteLiteralAsync`, `WriteAsync`, and `FlushAsync` are `private protected`: compiled templates always live in the same assembly as their support types, so they can call them, but another assembly that derives from public support types can't.
 
 Because C# blocks also land in an async method, a UTF-8 template can't hold a ref struct local across a flush check or put a check inside `lock` or `unsafe`. The generator doesn't look for these; the compiler reports them at the template location, and the README lists the errors.
 
 Emitted code follows a few rules that keep it safe to drop into any consumer project:
 
 - Every type and static member is written with a `global::`-qualified name. The only `using` lines in a generated file come from the template's `#using` directives, and extension methods are called as static methods. That way a consumer type named `System` or `TextWriter` can't change what the generated code means.
-- C# variables, C# blocks, and the literal writes that carry a flush check are wrapped in `#line` directives, so a compiler error in template code points at the template's path, line, and column. An error in either render method maps to the same template location, so a UTF-8 class can report the same error twice. If you change how statements are laid out, check that those mappings still land in the right place.
+- C# variables, C# blocks, and the literal writes that carry a flush check are wrapped in `#line` directives, so a compiler error in template code points at the template's path, line, and column. The directive's character offset is 0-based and points at the first character of the template code on the generated line, so an error inside the code maps to its exact span, and an error in the call around a C# variable, which starts before that offset, maps to the whole variable. An error in either render method maps to the same template location, so a UTF-8 class can report the same error twice. If you change how statements are laid out, check that those mappings still land in the right place.
 - Output streams straight to the writer. Nothing buffers the whole render.
 
-The base classes and `TemplateOptions` come from raw string literals in `Emit/SupportTypes.cs`, one method per type. They follow the same rules as template classes because they're emitted into the consumer's project too. Their snapshot in `SupportTypesSnapshotTests` is the contract, so any change to those strings shows up there for review.
+The base classes, `TemplateOptions`, and `TemplateExtensions` come from raw string literals in `Emit/SupportTypes.cs`, one method per type. `TemplateOptions` is `sealed` with `init`-only properties and four presets (`Html`, `Unencoded`, `JavaScript`, and `Url`). `Write` hands encoding to the framework: the text target calls `encoder.Encode(writer, value)`, and the UTF-8 target encodes to a string and writes it as UTF-8. `TemplateExtensions` holds the `RenderToString` extension method. Every emitted member has XML documentation, and the `cref`s avoid keyword type arguments such as `IBufferWriter{byte}`, which warn under `GenerateDocumentationFile`; `DocumentationModeTests` checks this. They follow the same rules as template classes because they're emitted into the consumer's project too. Their snapshot in `SupportTypesSnapshotTests` is the contract, so any change to those strings shows up there for review.
 
 ## Coordinating many templates
 
@@ -157,7 +161,7 @@ Three output methods turn the results into sources. `AddSupportTypes` adds the s
 
 Each generated file is named after the class it declares, so a text template for `MyApp.Templates.Greeting` becomes `MyApp.Templates.GreetingTextTemplate.g.cs`, and the support types become `SlusserLabs.AnglePlates.TemplateOptions.g.cs` and so on. Roslyn compares these hint names without case and throws on a repeat, so one small collected step looks across all templates. `DuplicateTemplates` finds sources whose names match when case is ignored, sorts them by template path, and numbers the second and later ones `.2`, `.3`, and so on, as in `MyApp.Templates.GreetingTextTemplate.2.g.cs`. Two templates that declare the same class still compile into conflicting members, so the compiler reports those errors; classes that differ only by case, like `App.Page` and `app.page`, are legal and only get numbered names. The step rarely changes, so ordinary template edits leave it cached.
 
-Every project gets all three support types, whatever its templates generate. .NET 10 includes `System.IO.Pipelines` in the base framework, so `Utf8Template` costs a text-only project nothing it has to reference, and trimming removes the types an app doesn't use. The support types depend only on `GeneratorSettings`: the `AnglePlateBaseAccessModifier` property, which `GeneratorSetting` reads and validates, and the C# version from the parse options. An invalid property value reports `SLAP009` and a C# version below 11 reports `SLAP010`. Either one stops the generator from emitting anything at all, because a base class with the wrong accessibility isn't a safe fallback and code for an older C# version would only produce errors inside generated files. Diagnostic IDs are defined in `Diagnostics/DiagnosticDescriptors.cs` and documented in [diagnostics](diagnostics.md).
+Every project gets all four support types, whatever its templates generate. .NET 10 includes `System.IO.Pipelines` in the base framework, so `Utf8Template` costs a text-only project nothing it has to reference, and trimming removes the types an app doesn't use. The support types depend only on `GeneratorSettings`: the `AnglePlateBaseAccessModifier` property, which `GeneratorSetting` reads and validates, and the C# version from the parse options. An invalid property value reports `SLAP009` and a C# version below 11 reports `SLAP010`. Either one stops the generator from emitting anything at all, because a base class with the wrong accessibility isn't a safe fallback and code for an older C# version would only produce errors inside generated files. Diagnostic IDs are defined in `Diagnostics/DiagnosticDescriptors.cs` and documented in [diagnostics](diagnostics.md).
 
 ## How MSBuild hands over templates
 

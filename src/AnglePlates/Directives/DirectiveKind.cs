@@ -8,5 +8,6 @@ internal enum DirectiveKind
     Namespace,
     Generate,
     Access,
+    Encode,
     Using
 }

@@ -11,38 +11,35 @@ using System;
 namespace Consumer;
 
 /// <summary>
-/// A text template that can render the contents of 'Templates/example.html'.
+/// A text template that renders 'Templates/example.html'.
 /// </summary>
-internal partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.TextTemplate<string>
+internal sealed partial class ExampleTextTemplate : global::SlusserLabs.AnglePlates.TextTemplate<string>
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="ExampleTextTemplate" /> class.
+    /// Creates the template with the given options, or with the template's default options when none are given.
     /// </summary>
-    /// <param name="options">Options for controlling template processing.</param>
-    public ExampleTextTemplate(global::SlusserLabs.AnglePlates.TemplateOptions? options = default) : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())
+    /// <param name="options">The options that control how C# variables are written, or <see langword="null" /> for the template's default options.</param>
+    public ExampleTextTemplate(global::SlusserLabs.AnglePlates.TemplateOptions? options = null)
+        : base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.Html)
     {
     }
 
     /// <summary>
-    /// Gets a singleton instance of the template with default options.
+    /// Gets a shared instance that uses the template's default options.
     /// </summary>
-    public static ExampleTextTemplate Default { get; } = new ExampleTextTemplate();
+    public static ExampleTextTemplate Default { get; } = new();
 
     /// <inheritdoc />
     public override void Render(string model, global::System.IO.TextWriter writer)
     {
+        global::System.ArgumentNullException.ThrowIfNull(writer);
         string Model = model; // Allows alternate casing
 
-        writer.Write("[ordinary] ");
-
-#line (5, 15) - (5, 19) 16 "Templates/example.html"
-        Write((model)
-#line (5, 15) - (5, 19) 170 "Templates/example.html"
-            is { } __anglePlatesValue5 ? global::System.Convert.ToString(__anglePlatesValue5, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+        WriteLiteral("[ordinary] ", writer);
+#line (5, 15) - (5, 19) 14 "Templates/example.html"
+        Write(model, writer);
 #line default
-
-        writer.Write("\r\na");
-
-        writer.Write("b");
+        WriteLiteral("\r\na", writer);
+        WriteLiteral("b", writer);
     }
 }

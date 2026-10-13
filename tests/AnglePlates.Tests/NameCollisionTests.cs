@@ -36,6 +36,16 @@ public sealed class NameCollisionTests
             public class ValueTask { }
             public class ValueTask<T> { }
             public class FlushResult { }
+            public class ArgumentNullException { }
+            public class IFormattable { }
+            public class Nullable<T> { }
+            public class StringWriter { }
+            public class JavaScriptEncoder { }
+            public class UrlEncoder { }
+            public class BuffersExtensions { }
+            public class EncodingExtensions { }
+            public class MemoryExtensions { }
+            public class OperationCanceledException { }
         """;
 
     // Names declared in the template's own namespace and in the support type namespace
@@ -47,6 +57,13 @@ public sealed class NameCollisionTests
             public class TemplateOptions { }
             public class TextTemplate<T> { }
             public class Utf8Template<T> { }
+            public class TemplateExtensions { }
+            public class Write { }
+            public class WriteRaw { }
+            public class WriteLiteral { }
+            public class WriteLiteralAsync { }
+            public class WriteAsync { }
+            public class FlushAsync { }
         }
         namespace SlusserLabs.AnglePlates
         {
@@ -74,13 +91,20 @@ public sealed class NameCollisionTests
             public class Utf8Template<T> { }
             public class ExampleTextTemplate { }
             public class ExampleUtf8Template { }
+            public class TemplateExtensions { }
+            public class ArgumentNullException { }
+            public class StringWriter { }
+            public class WriteLiteral { }
+            public class WriteLiteralAsync { }
+            public class WriteAsync { }
         }
         """;
 
     [Test]
     [Arguments("", "", "Hello [[ model ]]", "Hello &lt;value&gt;")]
-    [Arguments(_consumerConflicts, "", "Hello [[ model ]]", "Hello &lt;value&gt;")]
-    [Arguments(_importedConflicts, "#using Conflicts\r\n", "Hello [[ model ]]", "Hello &lt;value&gt;")]
+    // The C# block makes RenderAsync use the flushing literal and variable writes too
+    [Arguments(_consumerConflicts, "", "[% var n = 1; %]Hello [[ model ]] [% n++; %][[ n ]]", "Hello &lt;value&gt; 2")]
+    [Arguments(_importedConflicts, "#using Conflicts\r\n", "[% var n = 1; %]Hello [[ model ]] [% n++; %][[ n ]]", "Hello &lt;value&gt; 2")]
     [Arguments("global using System.Text;", "#using System.Text\r\n", "> [[ new StringBuilder(model) ]]", "> &lt;value&gt;")]
     public async Task ConsumerSources_WithCollidingNames_CompileWithoutWarnings(string consumerSource, string usingDirective, string body, string expected)
     {
@@ -92,7 +116,7 @@ public sealed class NameCollisionTests
         var output = RenderingTestHelper.Render(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(6);
         await Assert.That(string.Join(", ", warnings.Select(d => $"{d.Id} {d.GetMessage()}"))).IsEqualTo(string.Empty);
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();

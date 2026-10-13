@@ -119,7 +119,7 @@ public sealed class IncrementalTests
         var restored = GeneratorTestHelper.Run(compilation, invalid.Driver.WithUpdatedAnalyzerConfigOptions(TestAnalyzerConfigOptionsProvider.WithAccessModifier("internal")));
 
         await Assert.That(changedReasons).IsEquivalentTo(new[] { IncrementalStepRunReason.Cached });
-        await Assert.That(changed.GeneratedSource("SlusserLabs.AnglePlates.TemplateOptions.g.cs").SourceText.ToString()).Contains("internal class TemplateOptions");
+        await Assert.That(changed.GeneratedSource("SlusserLabs.AnglePlates.TemplateOptions.g.cs").SourceText.ToString()).Contains("internal sealed class TemplateOptions");
         await Assert.That(invalidReasons).IsEquivalentTo(new[] { IncrementalStepRunReason.Cached });
         await Assert.That(invalid.RunResult.Diagnostics.Select(diagnostic => diagnostic.Id)).IsEquivalentTo(new[] { "SLAP009" });
         await Assert.That(invalid.RunResult.GeneratedTrees.Length).IsEqualTo(0);

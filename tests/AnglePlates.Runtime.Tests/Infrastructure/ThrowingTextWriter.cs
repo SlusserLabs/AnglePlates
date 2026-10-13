@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
@@ -13,7 +12,8 @@ internal sealed class ThrowingTextWriter : TextWriter
 
     public bool WasDisposed { get; private set; }
 
-    public override void Write(ReadOnlySpan<char> buffer)
+    // Every other TextWriter write overload ends here unless a subclass overrides it
+    public override void Write(char value)
     {
         throw new IOException("Writer failed");
     }

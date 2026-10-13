@@ -16,9 +16,9 @@ namespace SlusserLabs.AnglePlates.Tests;
 public sealed class DirectiveTests
 {
     [Test]
-    [Arguments("", true, true, 5)]
-    [Arguments("#generate Text\r\n", true, false, 4)]
-    [Arguments("#generate Utf8\r\n", false, true, 4)]
+    [Arguments("", true, true, 6)]
+    [Arguments("#generate Text\r\n", true, false, 5)]
+    [Arguments("#generate Utf8\r\n", false, true, 5)]
     public async Task Generate_Target_GeneratesSelectedTypes(string generateDirective, bool hasTextType, bool hasUtf8Type, int treeCount)
     {
         var template = TemplateText.Header + generateDirective + "Hello [[ model ]]";
@@ -29,8 +29,8 @@ public sealed class DirectiveTests
         // Both base classes are generated whatever the template's targets
         await Assert.That(result.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(result.GeneratedTrees.Length).IsEqualTo(treeCount);
-        await Assert.That(generatedSource.Contains("internal partial class ExampleTextTemplate", StringComparison.Ordinal)).IsEqualTo(hasTextType);
-        await Assert.That(generatedSource.Contains("internal partial class ExampleUtf8Template", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
+        await Assert.That(generatedSource.Contains("internal sealed partial class ExampleTextTemplate", StringComparison.Ordinal)).IsEqualTo(hasTextType);
+        await Assert.That(generatedSource.Contains("internal sealed partial class ExampleUtf8Template", StringComparison.Ordinal)).IsEqualTo(hasUtf8Type);
         await Assert.That(generatedSource.Contains("internal abstract class TextTemplate<TModel>", StringComparison.Ordinal)).IsTrue();
         await Assert.That(generatedSource.Contains("internal abstract class Utf8Template<TModel>", StringComparison.Ordinal)).IsTrue();
     }
@@ -140,6 +140,7 @@ public sealed class DirectiveTests
     [Arguments("#namespace Other", "#namespace")]
     [Arguments("#generate Text", "#generate")]
     [Arguments("#access public", "#access")]
+    [Arguments("#encode none", "#encode")]
     [Arguments("#using System", "#using System")]
     [Arguments("#type\t", "#type")]
     public async Task Directive_Repeated_ReportsDuplicate(string line, string label)
@@ -188,6 +189,10 @@ public sealed class DirectiveTests
     [Arguments("#access Public", "'public' or 'internal'")]
     [Arguments("#access", "'public' or 'internal'")]
     [Arguments("#generate", "'Text' or 'Utf8'")]
+    [Arguments("#encode htm", "'html', 'none', 'javascript', or 'url'")]
+    [Arguments("#encode raw", "'html', 'none', 'javascript', or 'url'")]
+    [Arguments("#encode html none", "'html', 'none', 'javascript', or 'url'")]
+    [Arguments("#encode", "'html', 'none', 'javascript', or 'url'")]
     [Arguments("#using static System.Math", "a namespace name such as 'System.Linq'")]
     [Arguments("#using Text = System.Text", "a namespace name such as 'System.Linq'")]
     [Arguments("#using System;", "a namespace name such as 'System.Linq'")]
@@ -246,6 +251,27 @@ public sealed class DirectiveTests
     }
 
     [Test]
+    [Arguments("", "Html", "&lt;b&gt; &amp;")]
+    [Arguments("#encode html\r\n", "Html", "&lt;b&gt; &amp;")]
+    [Arguments("#encode HTML\r\n", "Html", "&lt;b&gt; &amp;")]
+    [Arguments("#encode none\r\n", "Unencoded", "<b> &")]
+    [Arguments("#encode None\r\n", "Unencoded", "<b> &")]
+    [Arguments("#encode javascript\r\n", "JavaScript", "\\u003Cb\\u003E \\u0026")]
+    [Arguments("#encode JavaScript\r\n", "JavaScript", "\\u003Cb\\u003E \\u0026")]
+    [Arguments("#encode url\r\n", "Url", "%3Cb%3E%20%26")]
+    [Arguments("#encode URL\r\n", "Url", "%3Cb%3E%20%26")]
+    public async Task Encode_AnyCasing_FallsBackToMatchingPreset(string encodeDirective, string preset, string expected)
+    {
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(TemplateText.Header + encodeDirective + "[[ model ]]"));
+        var sources = result.TemplateSources;
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(sources.Length).IsEqualTo(2);
+        await Assert.That(sources.All(source => source.Contains($": base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.{preset})", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(RenderingTestHelper.Render(result.Compilation, model: "<b> &").text).IsEqualTo(expected);
+    }
+
+    [Test]
     public async Task Using_SeveralDirectives_EmitImportsInTemplateOrder()
     {
         var template = "#type Example\r\n#using System.Text\r\n#model IEnumerable<char>\r\n#using System.Collections.Generic\r\n#namespace Consumer\r\n" +
@@ -273,7 +299,7 @@ public sealed class DirectiveTests
     private static Diagnostic[] GenerateDiagnostics(string template)
     {
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
-        if (result.RunResult.GeneratedTrees.Length != 3)
+        if (result.RunResult.GeneratedTrees.Length != 4)
         {
             throw new InvalidOperationException("A template with directive errors should not generate.");
         }

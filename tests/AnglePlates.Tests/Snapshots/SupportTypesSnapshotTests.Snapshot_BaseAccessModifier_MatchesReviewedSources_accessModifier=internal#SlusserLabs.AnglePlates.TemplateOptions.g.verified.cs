@@ -9,26 +9,42 @@
 namespace SlusserLabs.AnglePlates;
 
 /// <summary>
-/// Controls encoding and temporary storage for generated templates.
+/// Controls how compiled templates encode C# variables. Options can't change after they're created,
+/// so a template and its options are safe to share between threads.
 /// </summary>
-internal class TemplateOptions
+internal sealed class TemplateOptions
 {
     /// <summary>
-    /// Gets or sets the buffer pool to use for temporary encoding.
-    /// The default is <see cref="global::System.Buffers.ArrayPool{char}.Shared" />.
+    /// Gets options that HTML-encode C# variables with <see cref="global::System.Text.Encodings.Web.HtmlEncoder.Default" />.
+    /// Templates use these unless their <c>#encode</c> directive picks another preset.
     /// </summary>
-    public global::System.Buffers.ArrayPool<char> BufferPool { get; set; } = global::System.Buffers.ArrayPool<char>.Shared;
+    public static TemplateOptions Html { get; } = new();
 
     /// <summary>
-    /// Gets or sets the <see cref="global::System.Text.Encodings.Web.TextEncoder" /> to use when writing variables.
+    /// Gets options that write C# variables as they are, with no encoding.
+    /// </summary>
+    public static TemplateOptions Unencoded { get; } = new() { Encoder = null };
+
+    /// <summary>
+    /// Gets options that encode C# variables for JavaScript strings with <see cref="global::System.Text.Encodings.Web.JavaScriptEncoder.Default" />.
+    /// </summary>
+    public static TemplateOptions JavaScript { get; } = new() { Encoder = global::System.Text.Encodings.Web.JavaScriptEncoder.Default };
+
+    /// <summary>
+    /// Gets options that encode C# variables for URLs with <see cref="global::System.Text.Encodings.Web.UrlEncoder.Default" />.
+    /// </summary>
+    public static TemplateOptions Url { get; } = new() { Encoder = global::System.Text.Encodings.Web.UrlEncoder.Default };
+
+    /// <summary>
+    /// Gets the encoder for C# variables, or <see langword="null" /> to write them unencoded.
     /// The default is <see cref="global::System.Text.Encodings.Web.HtmlEncoder.Default" />.
     /// </summary>
-    /// <remarks>Set to <c>null</c> to disable C# variable encoding.</remarks>
-    public global::System.Text.Encodings.Web.TextEncoder? Encoder { get; set; } = global::System.Text.Encodings.Web.HtmlEncoder.Default;
+    public global::System.Text.Encodings.Web.TextEncoder? Encoder { get; init; } = global::System.Text.Encodings.Web.HtmlEncoder.Default;
 
     /// <summary>
-    /// Gets or sets the substitute value to use when a variable evaluates to <c>null</c>.
+    /// Gets the text written in place of a C# variable whose value is <see langword="null" />.
+    /// The default writes nothing.
     /// </summary>
-    /// <remarks>Setting this property to a non-empty string can be helpful when debugging templates.</remarks>
-    public string? NullVariable { get; set; }
+    /// <remarks>A visible marker such as <c>"(null)"</c> can help while debugging a template.</remarks>
+    public string? NullVariable { get; init; }
 }

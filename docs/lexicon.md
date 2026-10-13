@@ -42,7 +42,9 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Generation | The compile-time process that turns a template into C# source. |
 | Rendering | The runtime process that runs a compiled template and writes its output. |
 | Compiled template | The generated C# class that application code calls to render a template. |
-| Support types | The generated `TemplateOptions`, `TextTemplate<TModel>`, and `Utf8Template<TModel>` types that compiled templates share. Every project that uses AnglePlates gets all three; trimming removes the ones an app doesn't use. |
+| Support types | The generated `TemplateOptions`, `TextTemplate<TModel>`, `Utf8Template<TModel>`, and `TemplateExtensions` types that compiled templates share. Every project that uses AnglePlates gets all four; trimming removes the ones an app doesn't use. |
+| Preset | One of the shared `TemplateOptions` instances: `Html`, `Unencoded`, `JavaScript`, or `Url`. A compiled template created without options uses the preset its `#encode` directive picks, which is `Html` unless the template says otherwise. |
+| Literal run | Adjacent literal text that a compiled template writes with one `WriteLiteral` call. A run continues across comments, empty blocks, and escaped openers, and a trim marker ends it. |
 | Flush check | The point in `RenderAsync` where a UTF-8 compiled template checks for cancellation and flushes the pipe if enough output is waiting. It's fused into the first write after each C# block, and every render ends with one unconditional flush. |
 | Template class writer | The internal generator component, `TemplateClassWriter`, that writes the C# source for a text or UTF-8 compiled template. Use it only for the generator's internals; applications use compiled templates. |
 | Consumer | An application or library that references AnglePlates and compiles the generated source. |

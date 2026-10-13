@@ -9,109 +9,113 @@
 namespace SlusserLabs.AnglePlates;
 
 /// <summary>
-/// Base class for a text template.
+/// The base class of compiled templates that render to a <see cref="global::System.IO.TextWriter" />.
 /// </summary>
-/// <typeparam name="TModel">The type of model supported by the template.</typeparam>
+/// <typeparam name="TModel">The type of model the template renders.</typeparam>
 public abstract class TextTemplate<TModel>
 {
-    // Cap requests at 32K characters; custom pools may return larger arrays
-    private const int _maxRental = 32 * 1024;
-    private readonly TemplateOptions _options;
-
     /// <summary>
-    /// Initializes a new instance of the <see cref="TextTemplate{TModel}" /> class.
+    /// Creates the template with the options it writes C# variables with.
     /// </summary>
-    /// <param name="options">Options for controlling template processing.</param>
-    protected TextTemplate(TemplateOptions options)
+    /// <param name="options">The options that control how C# variables are written.</param>
+    private protected TextTemplate(TemplateOptions options)
     {
         global::System.ArgumentNullException.ThrowIfNull(options);
-        _options = options;
+        Options = options;
     }
 
     /// <summary>
-    /// Gets the <see cref="TemplateOptions" /> used to create this instance.
+    /// Gets the options this template writes C# variables with.
     /// </summary>
-    public TemplateOptions Options => _options;
+    public TemplateOptions Options { get; }
 
     /// <summary>
     /// Renders the template.
     /// </summary>
-    /// <param name="model">The data model to render.</param>
-    /// <param name="writer">The <see cref="global::System.IO.TextWriter" /> to render the template to.</param>
+    /// <param name="model">The model to render.</param>
+    /// <param name="writer">The writer that receives the output. The template doesn't flush or dispose it.</param>
     public abstract void Render(TModel model, global::System.IO.TextWriter writer);
 
     /// <summary>
-    /// Encodes the specified <paramref name="value" /> and writes it to the output.
+    /// Encodes <paramref name="value" /> with the options' encoder and writes it. A <see langword="null" /> value writes
+    /// <see cref="TemplateOptions.NullVariable" /> instead.
     /// </summary>
-    /// <param name="value">The string value to write.</param>
-    /// <param name="writer">The template writer.</param>
+    /// <param name="value">The text to write.</param>
+    /// <param name="writer">The writer that receives the output.</param>
     protected void Write(string? value, global::System.IO.TextWriter writer)
     {
-        value ??= _options.NullVariable;
-
+        value ??= Options.NullVariable;
         if (string.IsNullOrEmpty(value))
         {
             return;
         }
 
-        var encoder = _options.Encoder;
+        var encoder = Options.Encoder;
         if (encoder is null)
         {
-            WriteRaw(value, writer);
-            return;
+            writer.Write(value);
         }
-
-        // Widen before multiplying so large values cannot overflow before clamping
-        int rentalSize = (int)global::System.Math.Min((long)encoder.MaxOutputCharactersPerInputCharacter * value.Length, _maxRental);
-        var pool = _options.BufferPool;
-        global::System.ReadOnlySpan<char> sourceChars = global::System.MemoryExtensions.AsSpan(value);
-        var encodedChars = pool.Rent(rentalSize);
-
-        // Encode one buffer-sized chunk at a time; the finally block returns the buffer even if encoding or writing throws
-        try
+        else
         {
-            do
-            {
-                global::System.Buffers.OperationStatus status = encoder.Encode(sourceChars, encodedChars, out int charsConsumed, out int charsWritten, isFinalBlock: true);
-                switch (status)
-                {
-                    case global::System.Buffers.OperationStatus.NeedMoreData:
-                        throw new global::System.InvalidOperationException("Encoder needs more data, but all data was provided. Does this string end with an unpaired surrogate?");
-
-                    case global::System.Buffers.OperationStatus.InvalidData:
-                        throw new global::System.InvalidOperationException("Invalid data found in string. Does this string contain unpaired surrogates?");
-                }
-
-                if (charsConsumed == 0 && charsWritten == 0)
-                {
-                    throw new global::System.InvalidOperationException("Encoder made no progress with the temporary buffer.");
-                }
-
-                // Write the encoded characters and advance the source chars
-                writer.Write(new global::System.ReadOnlySpan<char>(encodedChars, 0, charsWritten));
-                sourceChars = sourceChars.Slice(charsConsumed);
-
-                // If OperationStatus.Done, the loop will exit because sourceChars.IsEmpty
-                // If OperationStatus.DestinationTooSmall, the loop will go again because !sourceChars.IsEmpty
-            } while (!sourceChars.IsEmpty);
-        }
-        finally
-        {
-            pool.Return(encodedChars);
+            encoder.Encode(writer, value);
         }
     }
 
     /// <summary>
-    /// Writes the raw, unencoded specified <paramref name="value" /> to the output.
+    /// Writes <paramref name="value" /> as it is, without encoding. A <see langword="null" /> value writes nothing.
     /// </summary>
-    /// <param name="value">The string value to write.</param>
-    /// <param name="writer">The template writer.</param>
-    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    /// <param name="value">The text to write.</param>
+    /// <param name="writer">The writer that receives the output.</param>
     protected void WriteRaw(string? value, global::System.IO.TextWriter writer)
     {
         if (!string.IsNullOrEmpty(value))
         {
             writer.Write(value);
         }
+    }
+
+    /// <summary>
+    /// Converts <paramref name="value" /> to text with the invariant culture, then encodes and writes it like a string.
+    /// </summary>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The writer that receives the output.</param>
+    protected void Write(object? value, global::System.IO.TextWriter writer)
+    {
+        // Convert.ToString turns null into an empty string, so null is checked first to reach NullVariable
+        Write(value is null ? null : global::System.Convert.ToString(value, global::System.Globalization.CultureInfo.InvariantCulture), writer);
+    }
+
+    /// <summary>
+    /// Formats <paramref name="value" /> with the invariant culture, then encodes and writes it like a string.
+    /// </summary>
+    /// <typeparam name="T">The type of value, such as a number, date, or enum.</typeparam>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The writer that receives the output.</param>
+    protected void Write<T>(T value, global::System.IO.TextWriter writer)
+        where T : global::System.IFormattable?
+    {
+        Write(value is null ? null : value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture), writer);
+    }
+
+    /// <summary>
+    /// Formats <paramref name="value" /> with the invariant culture, then encodes and writes it like a string.
+    /// </summary>
+    /// <typeparam name="T">The type of value, such as a number, date, or enum.</typeparam>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The writer that receives the output.</param>
+    protected void Write<T>(T? value, global::System.IO.TextWriter writer)
+        where T : struct, global::System.IFormattable
+    {
+        Write(value.HasValue ? value.GetValueOrDefault().ToString(null, global::System.Globalization.CultureInfo.InvariantCulture) : null, writer);
+    }
+
+    /// <summary>
+    /// Writes literal template text.
+    /// </summary>
+    /// <param name="value">The text to write.</param>
+    /// <param name="writer">The writer that receives the output.</param>
+    private protected static void WriteLiteral(string value, global::System.IO.TextWriter writer)
+    {
+        writer.Write(value);
     }
 }

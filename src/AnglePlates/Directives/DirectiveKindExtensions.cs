@@ -10,6 +10,7 @@ internal static class DirectiveKindExtensions
         DirectiveKind.Namespace,
         DirectiveKind.Generate,
         DirectiveKind.Access,
+        DirectiveKind.Encode,
         DirectiveKind.Using
     ];
 
@@ -22,6 +23,7 @@ internal static class DirectiveKindExtensions
             DirectiveKind.Namespace => "namespace",
             DirectiveKind.Generate => "generate",
             DirectiveKind.Access => "access",
+            DirectiveKind.Encode => "encode",
             DirectiveKind.Using => "using",
             _ => throw UnexpectedValue.Exception(kind, nameof(kind))
         };

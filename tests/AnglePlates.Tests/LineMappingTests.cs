@@ -15,27 +15,30 @@ namespace SlusserLabs.AnglePlates.Tests;
 public sealed class LineMappingTests
 {
     [Test]
-    [Arguments("[[ null ]]", "CS8117", "Invalid operand for pattern match; value required, but found '<null>'.", 5, 3, 4)]
-    [Arguments("[[ default ]]", "CS8716", "There is no target type for the default literal.", 5, 3, 7)]
-    [Arguments("[[ 1, 2 ]]", "CS1501", "No overload for method 'ToString' takes 3 arguments", 5, 3, 4)]
+    // "1, 2" becomes a third argument, and the error on the method name, before the mapped column, maps to the whole variable
+    [Arguments("[[ 1, 2 ]]", "CS1501", "No overload for method 'Write' takes 3 arguments", 5, 3, 4)]
+    [Arguments("[[ missing ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 3, 7)]
+    [Arguments("x [[ model + missing ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 13, 7)]
     [Arguments("<p>[% var count = 1;\r\n  count += missing; %]</p>", "CS0103", "The name 'missing' does not exist in the current context", 6, 11, 7)]
-    // Closers that the scanner skips inside C# don't move the template lines after them
+    [Arguments("[% var count = missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 5, 15, 7)]
+    // Closers that the scanner skips inside C# don't move the template lines or columns after them
+    [Arguments("[[ \"]]\" + missing ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 10, 7)]
     [Arguments("[[ \"]]\" +\r\n  missing ]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
     [Arguments("[[ model[\r\n  missing[0]] ]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
+    [Arguments("[% var s = \"%]\"; s += missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 5, 22, 7)]
     [Arguments("[% var s = \"%]\";\r\n  s += missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 6, 7, 7)]
     [Arguments("[% /* %] */ var s = $\"{\r\n  missing}%]\"; %]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
-    // A C# variable that ends in a // comment closes its call on the next generated line. An error at the start of the
-    // variable maps to all of it, the same as any other variable.
-    [Arguments("[[ missing // note ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 3, 15)]
+    // A C# variable that ends in a // comment closes its call on the next generated line
+    [Arguments("[[ missing // note ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 3, 7)]
     [Arguments("[[ model +\r\n  missing // note\r\n]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
-    [Arguments("[[ 1, 2 // note ]]", "CS1501", "No overload for method 'ToString' takes 3 arguments", 5, 3, 12)]
+    [Arguments("[[ 1, 2 // note ]]", "CS1501", "No overload for method 'Write' takes 3 arguments", 5, 3, 12)]
     public async Task InvalidCSharp_InVariableOrBlock_ReportsCompilerErrorAtTemplate(
         string body, string id, string message, int templateLine, int templateColumn, int templateLength)
     {
         // Generate one renderer at a time because the compiler doesn't report errors from separate trees in a stable order.
-        // Every variable error maps to the whole expression on the template's sixth line, including errors in generated code around it,
-        // and a block's second line keeps its template columns, so an undefined name there maps to the seventh line.
-        // A UTF-8 class reports the same error again from RenderAsync, at the same template location.
+        // An error inside a C# variable or block maps to its exact template span, and an error in the generated call around
+        // a variable maps to the whole variable. A block's second line keeps its template columns, so an undefined name there
+        // maps to the seventh line. A UTF-8 class reports the same error again from RenderAsync, at the same template location.
         var mapped = new LinePositionSpan(new LinePosition(templateLine, templateColumn), new LinePosition(templateLine, templateColumn + templateLength));
         foreach (var target in new[] { "Text", "Utf8" })
         {
@@ -45,7 +48,7 @@ public sealed class LineMappingTests
 
             var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
 
-            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
         }
     }
 
@@ -64,44 +67,43 @@ public sealed class LineMappingTests
 
             var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
 
-            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
         }
     }
 
     [Test]
     public async Task RefStructVariable_InRenderAndRenderAsync_ReportsErrorsAtWholeVariable()
     {
-        // The value can't be converted in either method, and RenderAsync can't hold it in a pattern variable before C# 13
+        // No Write overload takes a ref struct, and the error on the method name maps to the whole variable
         var mapped = new LinePositionSpan(new LinePosition(5, 3), new LinePosition(5, 29));
-        const string conversionMessage = "Argument 1: cannot convert from 'System.Span<char>' to 'object?'";
-        const string asyncLocalMessage = "Feature 'ref and unsafe in async and iterator methods' is not available in C# 11.0. Please use language version 13.0 or greater.";
-        foreach (var target in new[] { "Text", "Utf8" })
+        foreach (var (target, writerType) in new[] { ("Text", "TextWriter"), ("Utf8", "IBufferWriter<byte>") })
         {
             var template = RenderingTestHelper.Template($"#generate {target}\r\n[[ default(System.Span<char>) ]]");
             var file = $"Consumer.Example{target}Template.g.cs";
-            var conversion = ExpectedCompilerDiagnostic.Mapped("CS1503", conversionMessage, TemplateText.Path, mapped, file);
-            var expected = target == "Text"
-                ? new[] { conversion }
-                : new[] { conversion, ExpectedCompilerDiagnostic.Mapped("CS9058", asyncLocalMessage, TemplateText.Path, mapped, file), conversion };
+            var message = $"The type 'Span<char>' may not be a ref struct or a type parameter allowing ref structs in order to use it as parameter 'T' " +
+                $"in the generic type or method '{target}Template<string>.Write<T>(T, {writerType})'";
+            var error = ExpectedCompilerDiagnostic.Mapped("CS9244", message, TemplateText.Path, mapped, file);
+            var expected = target == "Text" ? new[] { error } : new[] { error, error };
 
             var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
 
-            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
         }
     }
 
     [Test]
     [Arguments("[% System.Span<char> s = stackalloc char[1]; %]", LanguageVersion.CSharp11, false, "CS9058",
-        "Feature 'ref and unsafe in async and iterator methods' is not available in C# 11.0. Please use language version 13.0 or greater.", 3, 44)]
+        "Feature 'ref and unsafe in async and iterator methods' is not available in C# 11.0. Please use language version 13.0 or greater.", 3, 20)]
     [Arguments("[% System.Span<char> s = stackalloc char[1]; %]x[% s[0] = 'a'; %]", LanguageVersion.CSharp13, false, "CS4007",
-        "Instance of type 'System.Span<char>' cannot be preserved across 'await' or 'yield' boundary.", 51, 62)]
+        "Instance of type 'System.Span<char>' cannot be preserved across 'await' or 'yield' boundary.", 51, 52)]
     [Arguments("[% lock (model) { %]x[% } %]", LanguageVersion.CSharp11, false, "CS1996", "Cannot await in the body of a lock statement", 20, 21)]
     [Arguments("[% unsafe { %]x[% } %]", LanguageVersion.CSharp11, true, "CS4004", "Cannot await in an unsafe context", 14, 15)]
     public async Task AsyncRestriction_InCSharpBlock_ReportsCompilerErrorAtTemplate(
         string body, LanguageVersion languageVersion, bool allowUnsafe, string id, string message, int templateStart, int templateEnd)
     {
-        // Each body compiles in Render, so the only error comes from RenderAsync. A ref struct local maps to its C# block or,
-        // from C# 13, to the block that uses it after a flush check; an await inside lock or unsafe maps to the literal that flushes.
+        // Each body compiles in Render, so the only error comes from RenderAsync. A ref struct local maps to the exact span the
+        // compiler reports in the template: its type in C# 11, or from C# 13 its use after a flush check. An await inside lock
+        // or unsafe maps to the whole literal that flushes, because the await sits before the mapped column.
         var template = RenderingTestHelper.Template("#generate Utf8\r\n" + body);
         var compilation = GeneratorTestHelper.CreateCompilation(languageVersion: languageVersion);
         compilation = compilation.WithOptions(compilation.Options.WithAllowUnsafe(allowUnsafe));
@@ -140,7 +142,7 @@ public sealed class LineMappingTests
 
         // The header and the class summary are comments, so a line break in the path would end them early
         await Assert.That(sources.Length).IsEqualTo(2);
-        await Assert.That(sources.All(source => source.Contains($"render the contents of '{documentedPath}'.", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(sources.All(source => source.Contains($"renders '{documentedPath}'.", StringComparison.Ordinal))).IsTrue();
         await Assert.That(sources.All(source => source.Contains($"//     Generated by SlusserLabs.AnglePlates from {documentedPath}.", StringComparison.Ordinal))).IsTrue();
         await Assert.That(sources.Any(source => source.Contains("#line", StringComparison.Ordinal))).IsFalse();
         await Assert.That(RenderingTestHelper.Render(result.Compilation).text).IsEqualTo("a&lt;value&gt;");

@@ -1,0 +1,10 @@
+#type Order
+#model SlusserLabs.AnglePlates.Runtime.Tests.Models.OrderModel
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+#generate Text
+<h1>Order [[ model.Number ]]</h1>
+<ul>
+[% foreach (var line in model.Lines) { -%]
+[% Line.Render(line, writer); -%]
+[% } -%]
+</ul>

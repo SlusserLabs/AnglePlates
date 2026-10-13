@@ -85,7 +85,7 @@ Directives occupy consecutive lines at the very beginning of the file, so a temp
 
 The first line that isn't a directive starts the template body. That includes a blank line, an indented line, `# Heading`, `#!`, a CSS rule like `#header { ... }`, and, yes, a misspelled directive. Directive lines and their line breaks never reach the output, so if your markup starts on the line right after the last directive, the output starts with your markup. Want a leading newline? Add a blank line.
 
-`#type`, `#model`, `#namespace`, `#generate`, and `#access` may each appear once. Repeat `#using` as often as you like, one namespace per line.
+`#type`, `#model`, `#namespace`, `#generate`, `#access`, and `#encode` may each appear once. Repeat `#using` as often as you like, one namespace per line.
 
 | Directive | Required | Purpose and default | Sample value |
 | --- | --- | --- | --- |
@@ -94,6 +94,7 @@ The first line that isn't a directive starts the template body. That includes a 
 | `#namespace` | Yes | Namespace for compiled template classes, as a dotted name. | `#namespace MyApp.Templates` |
 | `#generate` | No | Omit it to generate both compiled templates. Set it to the case-insensitive value `Text` or `Utf8` to generate only that template type. | `#generate Utf8` |
 | `#access` | No | Compiled template accessibility, `public` or `internal`; defaults to `internal`. See [Public templates](#public-templates). | `#access public` |
+| `#encode` | No | How C# variables are encoded when you don't pass options: `html` (the default), `none`, `javascript`, or `url`, in any casing. See [Encoding and options](#encoding-and-options). | `#encode none` |
 | `#using` | No | Adds a `using` directive for the template's C# and the `#model` type. Plain namespace names only; no `static`, aliases, or `global::`. | `#using System.Linq` |
 
 ### Template syntax
@@ -109,7 +110,7 @@ AnglePlates preserves literal text, including line endings. C# variables and C# 
 | Raw output in C# | `[% WriteRaw(model.Html, writer); %]` | Writes a string without encoding in either rendering path. |
 | Escaped opener | `\[[1, 2]]` | Writes `[[1, 2]]` as literal text. See [Escaping openers](#escaping-openers). |
 
-AnglePlates converts C# variables with `Convert.ToString` and the invariant culture before encoding them, so numbers and dates render the same on every machine. A null C# variable of any type, whether it's a `string`, an `object`, or an `int?`, writes the `NullVariable` option, which is nothing unless you set it (see [Encoding and options](#encoding-and-options)). A bare `[[ null ]]` doesn't compile. If you really want a placeholder that only ever writes `NullVariable`, cast it: `[[ (string?)null ]]`. To write output directly, C# blocks can call `Write(value, writer)` to write a string through the configured encoder or `WriteRaw(value, writer)` to bypass encoding.
+AnglePlates converts C# variables to text with the invariant culture before encoding them, so numbers and dates render the same on every machine. A string is written as it is. Numbers, dates, enums, `Guid`, and anything else that's `IFormattable` get `ToString(null, CultureInfo.InvariantCulture)`, with no boxing for value types. Everything else, like a `bool` or your own class, goes through `Convert.ToString`. A type with an implicit conversion to `string` uses that conversion. A null C# variable of any type, whether it's a `string`, an `object`, or an `int?`, writes the `NullVariable` option, which is nothing unless you set it (see [Encoding and options](#encoding-and-options)). That includes `[[ null ]]` and `[[ default ]]`. To write output directly, C# blocks can call `Write(value, writer)` to write a string through the configured encoder or `WriteRaw(value, writer)` to bypass encoding.
 
 Empty C# variables, C# blocks, and comments produce no output.
 
@@ -152,13 +153,17 @@ Each compiled template has a `Render` method. Text templates write characters to
 ```csharp
 namespace MyApp.Templates;
 
-public partial class GreetingTextTemplate
+public sealed partial class GreetingTextTemplate
 {
+    public GreetingTextTemplate(TemplateOptions? options = null);
+    public static GreetingTextTemplate Default { get; }
     public override void Render(GreetingModel model, TextWriter writer);
 }
 
-public partial class GreetingUtf8Template
+public sealed partial class GreetingUtf8Template
 {
+    public GreetingUtf8Template(TemplateOptions? options = null);
+    public static GreetingUtf8Template Default { get; }
     public override void Render(GreetingModel model, IBufferWriter<byte> writer);
     public override ValueTask RenderAsync(GreetingModel model, PipeWriter writer, CancellationToken cancellationToken = default);
 }
@@ -183,6 +188,8 @@ GreetingTextTemplate.Default.Render(model, Console.Out);
 ```
 
 This writes `<h1>Hello, Ada &amp; Grace!</h1>` and the welcome paragraph to standard output. Comments do not appear in the output. The original whitespace and line breaks remain unchanged.
+
+Need a string? Add `using SlusserLabs.AnglePlates;` and call `GreetingTextTemplate.Default.RenderToString(model)`. It holds the whole output in memory, so stick with `Render` when you already have a writer.
 
 ### UTF-8 streaming
 
@@ -223,7 +230,11 @@ If the token is canceled, the next check throws an `OperationCanceledException`.
 
 ### Encoding and options
 
-AnglePlates writes literal text unchanged and encodes C# variables with `HtmlEncoder.Default`. A null C# variable writes nothing by default, whatever its type. Pass `SlusserLabs.AnglePlates.TemplateOptions` to a compiled template to choose another `Encoder`. Set `Encoder` to `null` to disable C# variable encoding, or set `NullVariable` to choose what AnglePlates writes for a null C# variable.
+AnglePlates writes literal text unchanged and encodes C# variables with `HtmlEncoder.Default`. A null C# variable writes nothing by default, whatever its type. Pass `SlusserLabs.AnglePlates.TemplateOptions` to a compiled template to choose another `Encoder` or to set `NullVariable`, which is what AnglePlates writes for a null C# variable. An `Encoder` of `null` turns C# variable encoding off.
+
+`TemplateOptions` has presets for the common cases: `TemplateOptions.Html`, `Unencoded`, `JavaScript`, and `Url`. So `new GreetingTextTemplate(TemplateOptions.Unencoded)` renders without encoding. For anything else, build your own with an object initializer, like `new TemplateOptions { Encoder = null, NullVariable = "-" }`. Options can't change once they're created, so a template and its options are safe to share between threads.
+
+A template that isn't HTML can say so with `#encode`. A template with `#encode none` uses `TemplateOptions.Unencoded` when you don't pass options, and so does its `Default` instance. Options you pass to the constructor always win.
 
 ### Templates inside templates
 
@@ -247,9 +258,24 @@ And the parent, `Templates/order.html`, which passes each `OrderLineModel` from 
 <h1>Order [[ model.Number ]]</h1>
 <ul>
 [% foreach (var line in model.Lines) { -%]
-[% OrderLineTextTemplate.Default.Render(line, writer); -%]
+[% Line.Render(line, writer); -%]
 [% } -%]
 </ul>
+```
+
+`Line` comes from your own half of the parent class. Compiled templates are `partial`, so you can add helper members to them:
+
+```csharp
+namespace MyApp.Templates;
+
+// The hand-written half of the generated OrderTextTemplate
+internal sealed partial class OrderTextTemplate
+{
+    private OrderLineTextTemplate? _line;
+
+    // One child per parent instance, created with the parent's options
+    private OrderLineTextTemplate Line => _line ??= new(Options);
+}
 ```
 
 The models are plain classes:
@@ -282,7 +308,7 @@ Rendering an order with two fish and chips and a tea writes:
 
 The child writes straight to the parent's `writer`, so nothing gets buffered along the way. The trim markers keep the loop from adding blank lines.
 
-Both templates use `#generate Text` because `writer` is a `TextWriter` in a text template and an `IBufferWriter<byte>` in a UTF-8 template. For UTF-8 output, generate both with `#generate Utf8` and call `OrderLineUtf8Template` instead. Keep calling the child's `Render`, even from the parent's `RenderAsync`, where `writer` is a `PipeWriter` and still an `IBufferWriter<byte>`. The child doesn't flush; the parent's next flush check picks up its output. In the order above, that's the `</ul>` after the loop, because the loop body is nothing but C# blocks. If a loop like that renders a huge amount, put a literal in the loop body, even a line break, so each iteration gets a flush check. `Default` uses the default options, so if you render the parent with custom `TemplateOptions`, pass them along with `new OrderLineTextTemplate(Options)`.
+Both templates use `#generate Text` because `writer` is a `TextWriter` in a text template and an `IBufferWriter<byte>` in a UTF-8 template. For UTF-8 output, generate both with `#generate Utf8` and call `OrderLineUtf8Template` instead. Keep calling the child's `Render`, even from the parent's `RenderAsync`, where `writer` is a `PipeWriter` and still an `IBufferWriter<byte>`. The child doesn't flush; the parent's next flush check picks up its output. In the order above, that's the `</ul>` after the loop, because the loop body is nothing but C# blocks. If a loop like that renders a huge amount, put a literal in the loop body, even a line break, so each iteration gets a flush check. The child shares the parent's `Options`, so rendering the parent with `TemplateOptions.Unencoded` leaves the child unencoded too. Calling `OrderLineTextTemplate.Default` instead would quietly use the child's own default options.
 
 ## Advanced options
 
@@ -330,7 +356,7 @@ Native AOT already trims the whole app, and any support type your app doesn't us
 Two things are up to you:
 
 - Template C# is your code. A C# block that uses reflection, `Type.GetType`, or compiles a `System.Linq.Expressions` tree gets the same AOT and trimming warnings it would get in a hand-written class, and those warnings are right.
-- A `dynamic` C# variable, or a template with `#model dynamic`, converts its value through the C# runtime binder, which doesn't work with Native AOT. It's still a supported input, and you'll get the framework's own `IL2026` or `IL3050` warnings. AnglePlates doesn't suppress them.
+- A `dynamic` C# variable, or a template with `#model dynamic`, converts its value through the C# runtime binder, which doesn't work with Native AOT. You'll get the framework's own `IL2026` or `IL3050` warnings, and AnglePlates doesn't suppress them. It also has a run-time gap; see the `dynamic` bullet under [Good to know](#good-to-know).
 
 ## Good to know
 
@@ -340,10 +366,11 @@ Two things are up to you:
 - If the C# in a block is broken, say a string is missing its closing quote, the block ends at the first closer, and the compiler points at the typo in the template. It won't swallow the HTML that follows.
 - A C# variable can end in a `//` comment. `[[ model.Name // display name ]]` works, because the generated code starts a new line after the comment.
 - Compiler errors in C# variables and C# blocks point at the template's path, line, and column, because the generated code maps them back with `#line`. An error in the code AnglePlates wraps around a C# variable, such as a `Span<char>` value it can't convert to a string, points at the whole C# variable. A UTF-8 template compiles your C# twice, once in `Render` and once in `RenderAsync`, so you may see the same error twice at the same spot.
-- The generated render methods already declare `model`, `Model`, `writer`, and a `__anglePlatesValue<N>` variable for each C# variable, and `RenderAsync` adds `cancellationToken`, so don't reuse those names for locals in your C# blocks.
+- The generated render methods already declare `model`, `Model`, and `writer`, and `RenderAsync` adds `cancellationToken`, so don't reuse those names for locals in your C# blocks.
+- A `dynamic` C# variable is bound at run time, and today that only works for strings and `IFormattable` values like numbers. A `dynamic` `bool`, array, or custom class throws `RuntimeBinderException`, so cast it first: `[[ (object)value ]]`. With `#model dynamic`, every member you write is `dynamic` too, so `[[ model.IsActive ]]` needs the same cast.
 - `RenderAsync` is an async method, and your C# blocks go into it, so UTF-8 templates pick up the usual async rules. With C# 11 or 12, a ref struct local such as a `Span<char>` in a C# block reports `CS9058`. From C# 13, it's fine unless the local is still in use after a flush check, which reports `CS4007`. A `lock` or `unsafe` block that contains a write right after a C# block reports `CS1996` or `CS4004`, because that write awaits. Text templates have none of these rules, so if you need one of these constructs, use `#generate Text`.
 - Two templates that generate the same class name in the same namespace cause C# compiler errors, the same as two hand-written classes would.
-- Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, or `#using`. An explicit file with no directives reports `SLAP008`. Each error stops that template from generating, but your other templates still generate. An invalid `AnglePlateBaseAccessModifier` and a C# version below 11 are the exceptions: they report `SLAP009` and `SLAP010` and stop everything. See [diagnostics](docs/diagnostics.md).
+- Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, `#encode`, or `#using`. An explicit file with no directives reports `SLAP008`. Each error stops that template from generating, but your other templates still generate. An invalid `AnglePlateBaseAccessModifier` and a C# version below 11 are the exceptions: they report `SLAP009` and `SLAP010` and stop everything. See [diagnostics](docs/diagnostics.md).
 
 For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
 

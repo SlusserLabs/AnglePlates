@@ -12,7 +12,8 @@ internal static class GeneratedSources
     [
         "SlusserLabs.AnglePlates.TemplateOptions.g.cs",
         "SlusserLabs.AnglePlates.TextTemplate.g.cs",
-        "SlusserLabs.AnglePlates.Utf8Template.g.cs"
+        "SlusserLabs.AnglePlates.Utf8Template.g.cs",
+        "SlusserLabs.AnglePlates.TemplateExtensions.g.cs"
     ];
 
     public static bool IsSupportType(GeneratedSourceResult source)
