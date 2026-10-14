@@ -6,7 +6,7 @@ param(
 
     [string] $PackageDirectory = "artifacts/package",
 
-    # Skips the Native AOT consumer on a machine without the native toolchain; the run reports it as not run
+    # Skips the Native AOT publish on a machine without the native toolchain; the JIT run and the AOT canary still run, and the run reports the publish as not run
     [switch] $SkipNativeAot,
 
     # Keeps the validation folder, with a binlog for every consumer build, at this path instead of deleting a temporary one
@@ -89,19 +89,90 @@ if ($ExpectedCommit) {
 
 # The main consumer runs first with the package paths; each smaller consumer under tests/AnglePlates.PackageConsumers
 # needs its own project layout, so it runs from its own folder and checks its own results. Pack names a library that's
-# packed into a local feed for the consumer to restore, and NativeAot consumers also publish and run a native executable.
+# packed into a local feed for the consumer to restore. Incremental consumers rebuild after the script edits and then
+# deletes a template. ExpectedErrors consumers must fail to build with the errors in their ExpectedErrors.txt, and
+# BuildErrors holds one such project per case. NativeAot consumers also run the AOT canary and publish and run a native
+# executable. tests/AnglePlates.PackageTests/README.md describes what each one checks.
 $consumers = @(
     @{ Name = 'AnglePlates.PackageTests'; Source = 'tests/AnglePlates.PackageTests'; Project = 'AnglePlates.PackageTests.csproj'; Arguments = $packageArguments },
-    @{ Name = 'RemoveDefault'; Source = 'tests/AnglePlates.PackageConsumers/RemoveDefault'; Project = 'RemoveDefault.csproj'; Arguments = @() },
+    @{ Name = 'RemoveDefault'; Source = 'tests/AnglePlates.PackageConsumers/RemoveDefault'; Project = 'RemoveDefault.csproj'; Incremental = $true; Arguments = @('initial') },
     @{ Name = 'DirectoryBuildPropsRemove'; Source = 'tests/AnglePlates.PackageConsumers/DirectoryBuildPropsRemove'; Project = 'DirectoryBuildPropsRemove.csproj'; Arguments = @() },
     @{ Name = 'DirectoryBuildTargetsRemove'; Source = 'tests/AnglePlates.PackageConsumers/DirectoryBuildTargetsRemove'; Project = 'DirectoryBuildTargetsRemove.csproj'; Arguments = @() },
     @{ Name = 'LibraryChain'; Source = 'tests/AnglePlates.PackageConsumers/LibraryChain'; Project = 'App/App.csproj'; Arguments = @() },
     @{ Name = 'SharedTemplates'; Source = 'tests/AnglePlates.PackageConsumers/SharedTemplates'; Project = 'App/App.csproj'; Arguments = @() },
     @{ Name = 'PackagedLibrary'; Source = 'tests/AnglePlates.PackageConsumers/PackagedLibrary'; Project = 'App/App.csproj'; Pack = 'Library/Library.csproj'; PackageId = 'PackagedLibrary.Library'; Arguments = @() },
+    @{ Name = 'NoPrivateAssets'; Source = 'tests/AnglePlates.PackageConsumers/NoPrivateAssets'; Project = 'App/App.csproj'; Arguments = @() },
+    @{ Name = 'CentralPackageManagement'; Source = 'tests/AnglePlates.PackageConsumers/CentralPackageManagement'; Project = 'CentralPackageManagement.csproj'; Arguments = @() },
+    @{ Name = 'DefaultNames'; Source = 'tests/AnglePlates.PackageConsumers/DefaultNames'; Project = 'DefaultNames.csproj'; Arguments = @() },
     @{ Name = 'ScannerParity'; Source = 'tests/AnglePlates.PackageConsumers/ScannerParity'; Project = 'ScannerParity.csproj'; Arguments = @() },
     @{ Name = 'AspNetCore'; Source = 'tests/AnglePlates.PackageConsumers/AspNetCore'; Project = 'AspNetCore.csproj'; Arguments = @() },
+    @{ Name = 'UnsupportedFramework'; Source = 'tests/AnglePlates.PackageConsumers/UnsupportedFramework'; Project = 'UnsupportedFramework.csproj'; ExpectedErrors = 'Exact' },
+    @{ Name = 'BuildErrors'; Source = 'tests/AnglePlates.PackageConsumers/BuildErrors'; BuildErrors = $true },
     @{ Name = 'NativeAot'; Source = 'tests/AnglePlates.PackageConsumers/NativeAot'; Project = 'NativeAot.csproj'; NativeAot = $true; Arguments = @('JIT') }
 )
+
+# Turns MSBuild's error and warning lines into the form ExpectedErrors.txt uses: paths relative to the project folder with
+# '/' separators, and no trailing project path. Each line appears once, although MSBuild repeats errors in its summary.
+function Get-BuildDiagnostics([string[]] $Output, [string] $ProjectRoot) {
+    $root = $ProjectRoot.Replace('\', '/').TrimEnd('/') + '/'
+    $Output |
+        Where-Object { $_ -match '\b(error|warning) [A-Za-z]+[0-9]+:' } |
+        ForEach-Object {
+            $line = ($_ -replace '\s+\[[^\]]+\]\s*$', '').Trim().Replace('\', '/')
+            if ($line.StartsWith($root, $pathComparison)) {
+                $line = $line.Substring($root.Length)
+            }
+
+            $line
+        } |
+        Select-Object -Unique
+}
+
+# The part of a diagnostic line from its severity on, so a location that moves with the generated code doesn't matter
+function Get-DiagnosticMessage([string] $Line) {
+    $Line -replace '^.*?\b(?=(error|warning) [A-Za-z]+[0-9]+:)', ''
+}
+
+# Restores and builds a project that must fail. Every line in ExpectedErrors.txt has to appear, either as a whole
+# normalized line or, for a line that starts with 'error' or 'warning', as a message at any location. -Exact also fails
+# on any error or warning the file doesn't list.
+function Assert-BuildFails([string] $Name, [string] $ProjectPath, [string] $LogPrefix, [string[]] $BuildArguments, [switch] $Exact) {
+    $projectRoot = Split-Path -Parent $ProjectPath
+    $expectedPath = Join-Path $projectRoot 'ExpectedErrors.txt'
+    if (-not (Test-Path -LiteralPath $expectedPath)) {
+        throw "$Name has no ExpectedErrors.txt."
+    }
+
+    $expected = @(Get-Content -LiteralPath $expectedPath | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+    & dotnet restore $ProjectPath --configfile $nugetConfigPath --packages $packageCache -p:AnglePlatesPackageVersion=$Version "-bl:$LogPrefix.restore.binlog"
+    if ($LASTEXITCODE -ne 0) {
+        throw "The isolated package-consumer restore failed for $Name."
+    }
+
+    $output = @(& dotnet build $ProjectPath --no-restore -tl:off -p:AnglePlatesPackageVersion=$Version "-bl:$LogPrefix.build.binlog" @BuildArguments 2>&1 | ForEach-Object { "$_" })
+    $exitCode = $LASTEXITCODE
+    $actual = @(Get-BuildDiagnostics $output $projectRoot)
+    $actualMessages = @($actual | ForEach-Object { Get-DiagnosticMessage $_ })
+    $missing = @($expected | Where-Object { $_ -cnotin $actual -and -not ($_ -cmatch '^(error|warning) ' -and $_ -cin $actualMessages) })
+    $unexpected = if ($Exact) { @($actual | Where-Object { $_ -cnotin $expected -and (Get-DiagnosticMessage $_) -cnotin $expected }) } else { @() }
+    if ($exitCode -eq 0 -or $missing.Count -gt 0 -or $unexpected.Count -gt 0) {
+        $report = @("The build of $Name was expected to fail with the errors in its ExpectedErrors.txt, but it exited with $exitCode.")
+        $report += $missing | ForEach-Object { "Missing: $_" }
+        $report += $unexpected | ForEach-Object { "Unexpected: $_" }
+        $report += $actual | ForEach-Object { "Reported: $_" }
+        throw ($report -join [Environment]::NewLine)
+    }
+
+    Write-Host "$Name failed to build as expected with $($actual.Count) diagnostic lines."
+}
+
+# Builds and runs a consumer that's already restored, then checks its exit code
+function Invoke-Consumer([string] $Name, [string] $ProjectPath, [string] $LogName, [string[]] $Arguments) {
+    & dotnet run --project $ProjectPath --no-restore -p:AnglePlatesPackageVersion=$Version "-bl:$LogName.binlog" -- @($Arguments)
+    if ($LASTEXITCODE -ne 0) {
+        throw "The isolated package-consumer validation failed for $Name."
+    }
+}
 
 # One configuration serves every consumer. Package source mapping keeps AnglePlates on its own source and each packed
 # consumer library on the consumer feed; everything else, such as the Native AOT compiler and runtime packs, comes from nuget.org.
@@ -166,16 +237,32 @@ try {
     Write-Host "Validating SlusserLabs.AnglePlates $Version with .NET SDK $sdk in '$validationRoot'."
 
     foreach ($consumer in $consumers) {
-        if ($consumer.NativeAot -and $SkipNativeAot) {
-            $notRun += $consumer.Name
-            continue
-        }
-
         $consumerRoot = Join-Path (Join-Path $validationRoot 'consumers') $consumer.Name
-        $projectPath = Join-Path $consumerRoot $consumer.Project
         $logPrefix = Join-Path $logDirectory $consumer.Name
         New-Item -ItemType Directory -Path $consumerRoot | Out-Null
         Copy-Item -Path (Join-Path $repositoryRoot "$($consumer.Source)/*") -Destination $consumerRoot -Recurse
+
+        if ($consumer.BuildErrors) {
+            # Each case folder is a project named after the folder, with optional extra build arguments, one per line
+            $cases = @(Get-ChildItem -LiteralPath $consumerRoot -Directory | Sort-Object Name)
+            if ($cases.Count -eq 0) {
+                throw "$($consumer.Name) has no cases."
+            }
+
+            foreach ($case in $cases) {
+                $argumentsPath = Join-Path $case.FullName 'BuildArguments.txt'
+                $buildArguments = if (Test-Path -LiteralPath $argumentsPath) { @(Get-Content -LiteralPath $argumentsPath | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() }) } else { @() }
+                Assert-BuildFails "$($consumer.Name)/$($case.Name)" (Join-Path $case.FullName "$($case.Name).csproj") "$logPrefix.$($case.Name)" $buildArguments
+            }
+
+            continue
+        }
+
+        $projectPath = Join-Path $consumerRoot $consumer.Project
+        if ($consumer.ExpectedErrors) {
+            Assert-BuildFails $consumer.Name $projectPath $logPrefix @() -Exact:($consumer.ExpectedErrors -eq 'Exact')
+            continue
+        }
 
         if ($consumer.Pack) {
             # The app restores the library from the consumer feed, next to the AnglePlates package
@@ -202,12 +289,36 @@ try {
             throw "The isolated package-consumer restore failed for $($consumer.Name)."
         }
 
-        & dotnet run --project $projectPath --no-restore -p:AnglePlatesPackageVersion=$Version "-bl:$logPrefix.run.binlog" -- @($consumer.Arguments)
-        if ($LASTEXITCODE -ne 0) {
-            throw "The isolated package-consumer validation failed for $($consumer.Name)."
+        if ($consumer.NativeAot) {
+            # The positive control: these must be on, or a publish without IL warnings wouldn't prove anything
+            $properties = & dotnet msbuild $projectPath -getProperty:EnableTrimAnalyzer -getProperty:EnableAotAnalyzer -getProperty:IlcTreatWarningsAsErrors -p:AnglePlatesPackageVersion=$Version
+            if ($LASTEXITCODE -ne 0) {
+                throw "The AOT properties of $($consumer.Name) couldn't be evaluated."
+            }
+
+            $evaluated = ($properties -join "`n" | ConvertFrom-Json).Properties
+            foreach ($property in 'EnableTrimAnalyzer', 'EnableAotAnalyzer', 'IlcTreatWarningsAsErrors') {
+                if ($evaluated.$property -ne 'true') {
+                    throw "$($consumer.Name) must evaluate $property to true, but it's '$($evaluated.$property)'."
+                }
+            }
         }
 
-        if ($consumer.NativeAot) {
+        Invoke-Consumer $consumer.Name $projectPath "$logPrefix.run" $consumer.Arguments
+
+        if ($consumer.Incremental) {
+            # Edit a template and rebuild in place, then delete it and rebuild again; each build must show the change
+            $templatePath = Join-Path $consumerRoot 'Emails/extra.html'
+            [System.IO.File]::WriteAllText($templatePath, "#type Extra`n#model string`n#namespace Consumers`n#generate Text`nEdited [[ model ]]!", [System.Text.UTF8Encoding]::new($false))
+            Invoke-Consumer $consumer.Name $projectPath "$logPrefix.edited" @('edited')
+            Remove-Item -LiteralPath $templatePath
+            Invoke-Consumer $consumer.Name $projectPath "$logPrefix.deleted" @('deleted')
+        }
+
+        if ($consumer.NativeAot -and $SkipNativeAot) {
+            $notRun += "$($consumer.Name) native publish"
+        }
+        elseif ($consumer.NativeAot) {
             # dotnet run never invokes the AOT compiler, so publish a native executable and run the same checks again
             $publishPath = Join-Path $consumerRoot 'native'
             & dotnet publish $projectPath --no-restore -c Release -r $runtimeIdentifier -o $publishPath -p:AnglePlatesPackageVersion=$Version "-bl:$logPrefix.publish.binlog"
@@ -228,6 +339,18 @@ try {
             if ($LASTEXITCODE -ne 0) {
                 throw "The native executable failed validation for $($consumer.Name)."
             }
+        }
+
+        if ($consumer.NativeAot) {
+            # The AOT canary adds a template with a dynamic C# variable, and the analyzers have to stop its publish. It
+            # fails while compiling, before the native toolchain is needed, so it runs with -SkipNativeAot too.
+            $canaryPath = Join-Path $consumerRoot 'canary'
+            $canaryOutput = @(& dotnet publish $projectPath --no-restore -c Release -r $runtimeIdentifier -o $canaryPath -tl:off -p:AotCanary=true -p:AnglePlatesPackageVersion=$Version "-bl:$logPrefix.canary.binlog" 2>&1 | ForEach-Object { "$_" })
+            if ($LASTEXITCODE -eq 0 -or -not ($canaryOutput -match '\berror IL(2026|3050):')) {
+                throw "The AOT canary publish for $($consumer.Name) was expected to fail with IL2026 or IL3050, but it exited with $LASTEXITCODE.$([Environment]::NewLine)$($canaryOutput -join [Environment]::NewLine)"
+            }
+
+            Write-Host "The AOT canary for $($consumer.Name) failed to publish as expected."
         }
     }
 }

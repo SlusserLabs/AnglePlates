@@ -40,12 +40,19 @@ internal static class Program
         using var nullable = new StringWriter(CultureInfo.InvariantCulture);
         new NullableTextTemplate(new TemplateOptions { NullVariable = "<none>" }).Render(null, nullable);
 
+        // The BOM template's byte order mark must not reach the output, and its non-ASCII literal must come out unchanged
+        const string expectedBom = "Grüße, Café ✓ &lt;AnglePlates&gt;!";
+        var bomUtf8 = new ArrayBufferWriter<byte>();
+        BomUtf8Template.Default.Render(model, bomUtf8);
+
         if (!string.Equals(text.ToString(), expected, StringComparison.Ordinal) ||
             !utf8.WrittenSpan.SequenceEqual(Encoding.UTF8.GetBytes(expected)) ||
             !streamed.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(expected)) ||
             !string.Equals(custom.ToString(), "Custom &lt;AnglePlates&gt;!", StringComparison.Ordinal) ||
             !string.Equals(explicitTemplate.ToString(), "Explicit &lt;AnglePlates&gt;!", StringComparison.Ordinal) ||
-            !string.Equals(nullable.ToString(), "Nullable &lt;none&gt;!", StringComparison.Ordinal))
+            !string.Equals(nullable.ToString(), "Nullable &lt;none&gt;!", StringComparison.Ordinal) ||
+            !string.Equals(BomTextTemplate.Default.RenderToString(model), expectedBom, StringComparison.Ordinal) ||
+            !bomUtf8.WrittenSpan.SequenceEqual(Encoding.UTF8.GetBytes(expectedBom)))
         {
             throw new InvalidOperationException("The package renderers did not produce the expected text and UTF-8 bytes.");
         }

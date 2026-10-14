@@ -1,0 +1,1 @@
+CSC : error SLAP010: AnglePlates requires C# 11 or later, but this project uses C# 10.0; set LangVersion to 11 or later (https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap010)

@@ -13,10 +13,7 @@
     <WarningsNotAsErrors>$(WarningsNotAsErrors);CS0436</WarningsNotAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" PrivateAssets="all" />
     <ProjectReference Include="..\Library\Library.csproj" />
   </ItemGroup>
 </Project>

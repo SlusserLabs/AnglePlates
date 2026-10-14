@@ -112,12 +112,14 @@ jobs:
       - name: Pack
         run: dotnet pack src/AnglePlates/AnglePlates.csproj -c Release --no-build -o artifacts/package -p:Version=${{ env.PACKAGE_VERSION }}
 
-      # Installs the Native AOT linker and zlib headers; validate-package.ps1 checks for them too
+      # Installs the Native AOT linker and zlib headers; validate-package.ps1 checks for them too. windows-latest
+      # runners already have the Visual Studio C++ workload, so the windows leg publishes natively without this step.
       - name: Install Native AOT prerequisites
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      # Runs every package consumer, including Native AOT, and keeps their binlogs for the failure upload
+      # Runs every consumer the script registers on every leg, including BuildErrors, ScannerParity, the Native AOT
+      # publish, and the AOT canary, and keeps their binlogs for the failure upload. Nothing passes -SkipNativeAot here.
       - name: Validate the package
         shell: pwsh
         run: |

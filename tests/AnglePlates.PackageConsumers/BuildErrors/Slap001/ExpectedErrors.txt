@@ -1,0 +1,1 @@
+Templates/2fa.html(1,1): error SLAP001: The file name gives the class name '2fa', which isn't a C# identifier; add a directive such as '#type MyTemplate' (https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap001)

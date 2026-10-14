@@ -9,14 +9,12 @@
     <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <!-- Drop the default Templates folder. Remove only affects items defined above it, so it goes first. -->
     <AnglePlate Remove="Templates\**\*" />
+    <!-- eng/validate-package.ps1 edits and then deletes Emails/extra.html between builds to check incremental rebuilds. -->
     <AnglePlate Include="Emails\**\*.html" />
   </ItemGroup>
 </Project>

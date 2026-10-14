@@ -17,6 +17,7 @@ internal static class EditorConfigValidator
         ["Explicit/explicit.html"] = "Explicit",
         ["Templates/package.html"] = "Explicit",
         ["Templates/nullable.html"] = "Discovered",
+        ["Templates/bom.html"] = "Discovered",
         ["Templates/README.md"] = "Discovered",
         ["Templates/empty.txt"] = "Discovered"
     };

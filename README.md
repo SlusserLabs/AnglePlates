@@ -42,9 +42,9 @@ AnglePlates is a development dependency, so `dotnet package add` marks the refer
 </PackageReference>
 ```
 
-The template discovery files only apply to the project that references AnglePlates, so a project that references yours doesn't pick them up. Keep `PrivateAssets` anyway if you pack your library, because without it `dotnet pack` lists AnglePlates as a dependency of your package.
+The template discovery files only apply to the project that references AnglePlates, so a project that references yours doesn't pick up its templates. Keep `PrivateAssets` anyway. Without it, the generator itself still reaches projects that reference yours and adds its own copy of the support types to each one, which shows up as `CS0436` warnings when your support types are public. And if you pack your library, `dotnet pack` lists AnglePlates as a dependency of your package.
 
-AnglePlates needs .NET 10 or later and C# 11 or later. A .NET 10 project gets a newer C# version by default, so you only have to think about this if your project sets `LangVersion`. Set it below 11 and the build reports `SLAP010` instead of a wall of errors inside generated files. Target an older framework and you'll get ordinary compiler errors about missing types; AnglePlates doesn't check for that one.
+AnglePlates needs .NET 10 or later and C# 11 or later. A .NET 10 project gets a newer C# version by default, so you only have to think about this if your project sets `LangVersion`. Set it below 11 and the build reports `SLAP010` instead of a wall of errors inside generated files. .NET 10 is the oldest framework I test, and AnglePlates doesn't check yours. A .NET 8 project fails to build with a `CS0234` error because it has no `System.IO.Pipelines`. .NET 9 compiles today, but it isn't tested or supported. [Supported frameworks](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/development.md#supported-frameworks) has the details.
 
 You don't need any other packages. Everything the generated code uses ships with .NET 10, including `System.IO.Pipelines` for `RenderAsync`.
 

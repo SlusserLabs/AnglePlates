@@ -33,7 +33,7 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Discovered template | A possible template that comes only from the default item. If it doesn't start with a known directive, the generator skips it without an error. A first line that looks like a misspelled directive gets the `SLAP011` warning. |
 | Explicit template | A possible template that the project adds with its own `AnglePlate` `Include`, wildcards included. If it doesn't start with a known directive, the generator reports `SLAP008`. A file that's both discovered and explicit counts as explicit. Say "discovered" and "explicit," not "automatic" and "manual." |
 | Generator setting | A compiler-visible MSBuild property that the generator reads, such as `AnglePlateBaseAccessModifier`. A missing or empty value uses the default, and an invalid value reports `SLAP009`. |
-| Compatibility floor | The oldest consumer framework and C# version AnglePlates supports: .NET 10 and C# 11. The generator reports `SLAP010` below C# 11; an older framework fails with ordinary compiler errors. |
+| Compatibility floor | The oldest consumer framework and C# version AnglePlates supports: .NET 10 and C# 11. The generator reports `SLAP010` below C# 11. It doesn't check the framework: .NET 8 fails with a `CS0234` error for `System.IO.Pipelines`, and .NET 9 compiles but isn't supported. |
 
 ## Generated code
 

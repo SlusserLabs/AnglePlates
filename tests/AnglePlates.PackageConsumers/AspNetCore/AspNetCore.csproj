@@ -9,6 +9,7 @@
     <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The exact reference that dotnet package add writes for a development dependency; the other consumers use the one-line form. -->
     <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

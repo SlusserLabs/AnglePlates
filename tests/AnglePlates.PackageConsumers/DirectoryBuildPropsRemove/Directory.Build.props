@@ -1,8 +1,11 @@
 <Project>
-  <!-- Directory.Build.props is imported before the package props, so this Remove runs before the default item exists and has no effect -->
+  <!-- Directory.Build.props is imported before the package props, and MSBuild evaluates every property before any item, so this switch turns the default Templates folder off -->
+  <PropertyGroup>
+    <EnableDefaultAnglePlateItems>false</EnableDefaultAnglePlateItems>
+  </PropertyGroup>
+
+  <!-- This Remove runs before the project file includes Emails, so it has no effect and the welcome template still generates -->
   <ItemGroup>
-    <!-- Drop the default Templates folder. Remove only affects items defined above it, so it goes first. -->
-    <AnglePlate Remove="Templates\**\*" />
-    <AnglePlate Include="Emails\**\*.html" />
+    <AnglePlate Remove="Emails\welcome.html" />
   </ItemGroup>
 </Project>

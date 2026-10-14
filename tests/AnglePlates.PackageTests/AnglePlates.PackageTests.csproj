@@ -11,10 +11,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- PrivateAssets keeps the generator out of projects that reference this one. -->
-    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <!-- Every file an Include matches has to be a template, so match only .html. -->
