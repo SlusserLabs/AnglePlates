@@ -36,6 +36,7 @@ On a snapshot failure, inspect every generated-source and diagnostic diff, inclu
 - `SurfaceTests` covers `ThrowIfNull(writer)` in `Render` and `RenderAsync` (a faulted `ValueTask`), sealed template classes, and which base-class helpers are `private protected`.
 - `ChildTemplateTests` renders a parent whose hand-written partial half creates its child with the parent's options, and `RenderToStringTests` covers `RenderToString`.
 - `ModelTests` renders struct, tuple, array, and nested generic models.
+- `ReadmeExampleTests` renders the README's greeting and order examples and checks the exact output the README shows. `Templates/Readme` holds verbatim copies of the README's templates, and `Readme` holds the order template's hand-written half and the models, in the README's `MyApp` namespaces. In `README.md`, a `<!-- sample: <path> -->` comment right before a fenced block names its copy, relative to the test project. The drift test compares each marked block with its copy after turning CRLF into LF on both sides, and it expects the copy to end with exactly one line break, which a fenced block can't show. It also fails if a marker goes missing.
 - `WriteFailureTests` covers a custom encoder and writers that throw. [ProbeEncoder](../tests/AnglePlates.Runtime.Tests/Infrastructure/ProbeEncoder.cs) is the custom encoder; `TextEncoder` has pointer-based abstract members, which is why this project enables unsafe code.
 
 `RenderAsyncTests` covers the UTF-8 `RenderAsync` method. [CountingPipeWriter](../tests/AnglePlates.Runtime.Tests/Infrastructure/CountingPipeWriter.cs) records the bytes written before each flush. When it doesn't report unflushed bytes, every flush check flushes, so its flush count is the number of checks plus the final flush; the tests use that to show checks only at the first write after each C# block, through brace-less and nested C#, comments and empty blocks between a block and its write, child templates rendered from a loop, and blocks and literals that end on a line break. With unflushed bytes reported, the tests check the 16 KB threshold and a small page that flushes only at the end. `OnFlush` lets a test cancel the token mid-render or return a flush result that reports a completed reader or a canceled flush. Other cases cover a token canceled before the render, a real `Pipe` whose reader already completed, a real `Pipe` whose backpressure holds the render until the reader catches up, and `CancelPendingFlush` on a render that's waiting under backpressure. A reviewed snapshot in `TemplateSnapshotTests` shows the generated `RenderAsync`, and compiler-error tests in `LineMappingTests` pin the template locations for a ref struct local in a C# block under C# 11 (`CS9058`) and C# 13 (`CS4007`), an await inside `lock` (`CS1996`) and `unsafe` (`CS4004`), and ordinary errors that both render methods report at the same location.
@@ -48,25 +49,23 @@ The `NativeAot` consumer turns on `IsAotCompatible` and `PublishAot` with `Treat
 
 ## Coverage
 
-Coverage is run by the maintainer in Visual Studio 2026. The repository has no coverage scripts, configuration, or CI gate. From the command line, the default Microsoft code coverage settings pick up the generator and the `GeneratedTests.<id>` assemblies that `AnglePlates.Tests` emits, but not the `AnglePlates.Runtime.Tests` module; that one needs the setting described below. Nobody has checked yet whether Visual Studio 2026's defaults include it.
+CI fails a leg when coverage drops below 90% line or branch. The `windows` and `ubuntu` legs both check the generator and the emitted code. Each test project runs with the Microsoft collector that TUnit brings along (`--coverage --coverage-output-format cobertura`), its own `code-coverage.settings.xml` passed through `--coverage-settings`, and writes `TestResults/generator.cobertura.xml` or `TestResults/runtime.cobertura.xml`. A short `pwsh` step in `ci.yml` reads the `SlusserLabs.AnglePlates` module from the first report and the `AnglePlates.Runtime.Tests` module from the second. The reports go into the `failure-<leg>` artifact when a leg fails. Before every stable release, the maintainer checks both modules for 100% in Visual Studio 2026 or with `--coverage`, with the accepted gap below as the only exception; previews need only the CI gate.
 
-The results hold up to three kinds of modules. `SlusserLabs.AnglePlates` is the generator. Each `SlusserLabs.AnglePlates.GeneratedTests.<id>` module is one compilation an `AnglePlates.Tests` test emitted, with its own copy of the four support types and the template classes. A single module covers only what its test ran. These modules aren't the emitted-code measure; `AnglePlates.Runtime.Tests` is.
+The two settings files exist because of the collector's defaults:
 
-`AnglePlates.Runtime.Tests` is the third kind, and it measures emitted code as one module. Its test, model, and helper classes each carry `[ExcludeFromCodeCoverage]`, and the assembly deliberately doesn't, so what's left is the support types and the template classes. The Microsoft collector leaves the test assembly out by default. To see this module from the command line, pass a settings file with `<IncludeTestAssembly>true</IncludeTestAssembly>` under its `Configuration` element through `--coverage-settings`.
+- [AnglePlates.Tests/code-coverage.settings.xml](../tests/AnglePlates.Tests/code-coverage.settings.xml) instruments only `SlusserLabs.AnglePlates.dll`. Without it, the collector also instruments every `GeneratedTests.<id>` assembly the tests write to disk, and on Linux it does that while a test is still writing or loading the file, so those tests fail with `BadImageFormatException` or `UnauthorizedAccessException`.
+- [AnglePlates.Runtime.Tests/code-coverage.settings.xml](../tests/AnglePlates.Runtime.Tests/code-coverage.settings.xml) turns on `IncludeTestAssembly`, because the collector leaves the test assembly out by default. It also turns off `EnableStaticManagedInstrumentation`. With static instrumentation on, a Linux TUnit test host that covers its own assembly writes the report and then crashes with exit code 134 (`COMException`: "Unable to get nested type properties"); a one-test TUnit project does the same with collector versions 18.10.0 and 18.12.0. Dynamic instrumentation alone avoids the crash and measured the same line and branch rates on Windows and Linux. Nobody has checked yet whether Visual Studio 2026's defaults include this module.
 
-A command-line run on 2026-10-13 with the same collector (`dotnet run --project tests/AnglePlates.Tests -- --coverage --coverage-output-format cobertura`) measured:
+With the collector's default settings plus `IncludeTestAssembly`, the results hold up to three kinds of modules. `SlusserLabs.AnglePlates` is the generator. Each `SlusserLabs.AnglePlates.GeneratedTests.<id>` module is one compilation an `AnglePlates.Tests` test emitted, with its own copy of the four support types and the template classes. A single module covers only what its test ran. These modules aren't the emitted-code measure; `AnglePlates.Runtime.Tests` is.
 
-| Code | Line | Branch |
+`AnglePlates.Runtime.Tests` is the third kind, and it measures emitted code as one module. Its test, model, and helper classes each carry `[ExcludeFromCodeCoverage]`, and the assembly deliberately doesn't, so what's left is the support types and the template classes. Its settings file sets `<IncludeTestAssembly>true</IncludeTestAssembly>` directly under `<Configuration>`. Source-generated helpers, such as a `[GeneratedRegex]` matcher, don't inherit `[ExcludeFromCodeCoverage]` from the class that declares them, so test code in this project avoids them.
+
+Running CI's test commands locally on Windows on 2026-10-13 measured the following; both modules measured the same in the Linux container:
+
+| Module | Line | Branch |
 |---|---|---|
-| Generator | 99.8% | 99.4% |
-
-A second run that day, `dotnet test --project tests/AnglePlates.Runtime.Tests --coverage --coverage-settings <file> --coverage-output-format cobertura`, used a settings file with `<IncludeTestAssembly>true</IncludeTestAssembly>` directly under `<Configuration>` and measured:
-
-| Code | Line | Branch |
-|---|---|---|
-| `AnglePlates.Runtime.Tests` support types | 100% | 100% |
-| `AnglePlates.Runtime.Tests` template classes | 94.8% | 92.2% |
-| `AnglePlates.Runtime.Tests` module | 95.1% | 93.1% |
+| `SlusserLabs.AnglePlates` (generator) | 99.8% | 99.5% |
+| `AnglePlates.Runtime.Tests` (emitted code) | 95.4% | 93.4% |
 
 The template-class gaps in `AnglePlates.Runtime.Tests` are mostly `Render` on templates that only `RenderAsyncTests` uses, plus a few branches the compiler adds around `dynamic` calls and `foreach` loops in those fixtures.
 

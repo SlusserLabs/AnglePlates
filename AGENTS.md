@@ -42,7 +42,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - Avoid unrelated formatting and changes
 - Use the line endings `.editorconfig` defines for each file you create or edit; if it defines none, match the file's existing line endings
 - Add repository assets and processes only for the user's workflow; never persist agent-only verification helpers, scripts, reports, or tooling
-- The user runs coverage in Visual Studio 2026; do not add coverage scripts, configuration, dedicated packages, or CI gates unless explicitly requested
+- CI fails below 90% line or branch coverage for `SlusserLabs.AnglePlates` and `AnglePlates.Runtime.Tests` on the `windows` and `ubuntu` legs, using the TUnit-supplied Microsoft collector, Cobertura reports, and each test project's `code-coverage.settings.xml`; before every stable release, the user checks for 100% in Visual Studio 2026 or with `--coverage`. Do not add other coverage scripts, configuration, packages, or gates
 - Correct spelling errors without changing meaning
 - Do not include or reference publicly available code unless explicitly requested
 - In Markdown, wrap language keywords and type names in backticks

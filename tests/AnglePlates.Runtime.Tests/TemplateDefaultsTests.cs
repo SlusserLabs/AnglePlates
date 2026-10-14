@@ -130,5 +130,9 @@ public sealed class TemplateDefaultsTests
         yield return ("AsyncSmallPageUtf8Template", () => new AsyncSmallPageUtf8Template().Options, () => AsyncSmallPageUtf8Template.Default.Options, "Html");
         yield return ("AsyncThresholdUtf8Template", () => new AsyncThresholdUtf8Template().Options, () => AsyncThresholdUtf8Template.Default.Options, "Html");
         yield return ("AsyncWriteOverloadsUtf8Template", () => new AsyncWriteOverloadsUtf8Template().Options, () => AsyncWriteOverloadsUtf8Template.Default.Options, "Html");
+        yield return ("MyApp.GreetingTextTemplate", () => new MyApp.Templates.GreetingTextTemplate().Options, () => MyApp.Templates.GreetingTextTemplate.Default.Options, "Html");
+        yield return ("MyApp.GreetingUtf8Template", () => new MyApp.Templates.GreetingUtf8Template().Options, () => MyApp.Templates.GreetingUtf8Template.Default.Options, "Html");
+        yield return ("MyApp.OrderLineTextTemplate", () => new MyApp.Templates.OrderLineTextTemplate().Options, () => MyApp.Templates.OrderLineTextTemplate.Default.Options, "Html");
+        yield return ("MyApp.OrderTextTemplate", () => new MyApp.Templates.OrderTextTemplate().Options, () => MyApp.Templates.OrderTextTemplate.Default.Options, "Html");
     }
 }

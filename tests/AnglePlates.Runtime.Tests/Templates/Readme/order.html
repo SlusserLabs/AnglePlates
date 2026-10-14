@@ -1,0 +1,10 @@
+#generate Text
+#type Order
+#model MyApp.OrderModel
+#namespace MyApp.Templates
+<h1>Order [[ model.Number ]]</h1>
+<ul>
+[% foreach (var line in model.Lines) { -%]
+[% Line.Render(line, writer); -%]
+[% } -%]
+</ul>

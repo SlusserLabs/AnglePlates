@@ -53,6 +53,7 @@ You don't need any other packages. Everything the generated code uses ships with
 
 A template starts with a directive section followed by a body containing literal text, C# variables, and C# blocks. For example, `Templates/greeting.html`:
 
+<!-- sample: Templates/Readme/greeting.html -->
 ```text
 #type Greeting
 #model MyApp.GreetingModel
@@ -242,6 +243,7 @@ A template that isn't HTML can say so with `#encode`. A template with `#encode n
 
 There's no include syntax, because you don't need one. A compiled template is just a class, so a C# block can render another template into the same `writer` and hand it any object it likes. Here's an order that renders a child template for each line, starting with `Templates/order-line.html`:
 
+<!-- sample: Templates/Readme/order-line.html -->
 ```text
 #generate Text
 #type OrderLine
@@ -252,6 +254,7 @@ There's no include syntax, because you don't need one. A compiled template is ju
 
 And the parent, `Templates/order.html`, which passes each `OrderLineModel` from its own model to the child:
 
+<!-- sample: Templates/Readme/order.html -->
 ```text
 #generate Text
 #type Order
@@ -267,6 +270,7 @@ And the parent, `Templates/order.html`, which passes each `OrderLineModel` from 
 
 `Line` comes from your own half of the parent class. Compiled templates are `partial`, so you can add helper members to them:
 
+<!-- sample: Readme/OrderTextTemplate.cs -->
 ```csharp
 namespace MyApp.Templates;
 

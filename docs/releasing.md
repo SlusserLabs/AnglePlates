@@ -37,14 +37,14 @@ A successful pack doesn't prove the package works. Only the validation script do
 
 | Leg | Runner | SDK | Runs |
 | --- | --- | --- | --- |
-| `windows` | `windows-latest` | `global.json` | Build, tests, sample, pack, and package validation |
-| `ubuntu` | `ubuntu-latest` | `global.json` | Build, tests, sample, pack, and package validation |
+| `windows` | `windows-latest` | `global.json` | Build, tests with the coverage gate, sample, pack, and package validation |
+| `ubuntu` | `ubuntu-latest` | `global.json` | Build, tests with the coverage gate, sample, pack, and package validation |
 | `latest-sdk` | `ubuntu-latest` | Newest `10.0.x` | Build, pack, and package validation |
 | `sdk-floor` | `ubuntu-latest` | Exactly `10.0.100` for the consumers | Build, pack, and package validation with `-SdkVersion 10.0.100` |
 
-Every leg builds the solution in Release with `-warnaserror` and the CI version, then packs that build. The full legs also run the tests and the sample. The Linux legs install clang and the zlib headers first, so Native AOT validation runs on both operating systems. The validation keeps its folder in `$RUNNER_TEMP/validation`, and the script prints which SDK the consumers used.
+Every leg builds the solution in Release with `-warnaserror` and the CI version, then packs that build. The full legs also run the tests and the sample. They run the tests with coverage on, and the leg fails if the generator or the emitted code drops below 90% line or branch coverage. [Coverage](testing.md#coverage) explains how it's measured. The 100% check before a stable release is manual. The Linux legs install clang and the zlib headers first, so Native AOT validation runs on both operating systems. The validation keeps its folder in `$RUNNER_TEMP/validation`, and the script prints which SDK the consumers used.
 
-When a leg fails, it uploads a `failure-<leg>` artifact with any `*.received.*` snapshot files, the test results, and the consumer binlogs. The `ubuntu` leg uploads the package pair as `ci-package`. That name is deliberately not `package`, because a workflow that calls `ci.yml` shares its run, and artifact names have to be unique within a run.
+When a leg fails, it uploads a `failure-<leg>` artifact with any `*.received.*` snapshot files, the test results and Cobertura coverage reports, and the consumer binlogs. The `ubuntu` leg uploads the package pair as `ci-package`. That name is deliberately not `package`, because a workflow that calls `ci.yml` shares its run, and artifact names have to be unique within a run.
 
 The actions are pinned to full commit SHAs with the version in a comment next to each one.
 

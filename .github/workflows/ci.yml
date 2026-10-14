@@ -62,10 +62,46 @@ jobs:
       - name: Build
         run: dotnet build AnglePlates.slnx -c Release --no-restore -warnaserror -p:Version=${{ env.PACKAGE_VERSION }}
 
-      # Runs every test project in the solution through Microsoft.Testing.Platform
-      - name: Test
+      # Runs the generator tests with the coverage collector that comes with TUnit; the settings file instruments only the generator
+      - name: Test the generator
         if: matrix.full
-        run: dotnet test --solution AnglePlates.slnx -c Release --no-build --results-directory TestResults
+        run: dotnet test --project tests/AnglePlates.Tests -c Release --no-build --results-directory TestResults --coverage --coverage-output-format cobertura --coverage-output generator.cobertura.xml --coverage-settings tests/AnglePlates.Tests/code-coverage.settings.xml
+
+      # Runs the emitted-code tests with coverage; the settings file includes the test assembly, which holds the compiled templates
+      - name: Test the emitted code
+        if: matrix.full
+        run: dotnet test --project tests/AnglePlates.Runtime.Tests -c Release --no-build --results-directory TestResults --coverage --coverage-output-format cobertura --coverage-output runtime.cobertura.xml --coverage-settings tests/AnglePlates.Runtime.Tests/code-coverage.settings.xml
+
+      # Fails the leg when the generator or the emitted code drops below 90% line or branch coverage
+      - name: Coverage gate
+        if: matrix.full
+        shell: pwsh
+        run: |
+          $threshold = 0.90
+          # Each report gates one named module, and any other module in it is ignored
+          $gates = @(
+              @{ Report = 'TestResults/generator.cobertura.xml'; Module = 'SlusserLabs.AnglePlates' }
+              @{ Report = 'TestResults/runtime.cobertura.xml'; Module = 'AnglePlates.Runtime.Tests' }
+          )
+          $failed = $false
+          foreach ($gate in $gates) {
+              $package = ([xml](Get-Content -Raw $gate.Report)).coverage.packages.package | Where-Object name -eq $gate.Module
+              if (-not $package) {
+                  Write-Host "::error::$($gate.Report) has no $($gate.Module) module"
+                  $failed = $true
+                  continue
+              }
+              foreach ($rate in 'line-rate', 'branch-rate') {
+                  # Cobertura writes rates with a dot, so parse them with the invariant culture
+                  $value = [double]::Parse($package.$rate, [cultureinfo]::InvariantCulture)
+                  Write-Host ('{0} {1}: {2:P2}' -f $gate.Module, $rate, $value)
+                  if ($value -lt $threshold) {
+                      Write-Host ('::error::{0} {1} is {2:P2}, below {3:P0}' -f $gate.Module, $rate, $value, $threshold)
+                      $failed = $true
+                  }
+              }
+          }
+          if ($failed) { exit 1 }
 
       # Runs the sample, which fails the step with a nonzero exit code
       - name: Run the sample
@@ -89,7 +125,7 @@ jobs:
           $sdk = '${{ matrix.name }}' -eq 'sdk-floor' ? @('-SdkVersion', '10.0.100') : @()
           ./eng/validate-package.ps1 -Version $env:PACKAGE_VERSION -KeepOutput "$env:RUNNER_TEMP/validation" @sdk
 
-      # Uploads snapshot mismatches, test results, and consumer binlogs when any step fails
+      # Uploads snapshot mismatches, test results with the Cobertura reports, and consumer binlogs when any step fails
       - name: Upload failure details
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
