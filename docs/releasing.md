@@ -82,7 +82,7 @@ A few details came from my AssemblyInfo package, which learned them the hard way
 
 - The publish jobs push only `*.nupkg`. `dotnet nuget push` sends the matching `.snupkg` along on its own, and a second explicit push of the `.snupkg` fails as a duplicate.
 - Nothing uses `--skip-duplicate`, so pushing a version that's already there fails the run.
-- Only the publish jobs get `id-token: write`, and they don't check out or build anything. They download `release-package` and push it.
+- Only the publish jobs and the `verify-nuget-login` check get `id-token: write`, and none of them checks out or builds anything. The publish jobs download `release-package` and push it, and the login check only gets a key.
 - `NuGet/login` runs right before the push, because the key it returns lasts an hour.
 - Shell steps capture a command's output in a variable before they test it, instead of piping into `grep` under `pipefail`.
 

@@ -345,7 +345,8 @@ public sealed class ConversionTests
     {
         object model = DynamicModel(custom ? new CustomValue("<custom>") : new byte[] { 1 });
 
-        await TemplateOutput.AssertRendersAsync<object>(new ConversionDynamicModelTextTemplate(), new ConversionDynamicModelUtf8Template(), model, expected);
+        // The shared instances use the same options as new ones
+        await TemplateOutput.AssertRendersAsync<object>(ConversionDynamicModelTextTemplate.Default, ConversionDynamicModelUtf8Template.Default, model, expected);
     }
 
     private static ExpandoObject DynamicModel(object member)

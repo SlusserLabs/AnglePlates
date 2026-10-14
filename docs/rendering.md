@@ -156,7 +156,7 @@ They land in `obj/<configuration>/<framework>/generated/SlusserLabs.AnglePlates/
 
 ## Editing and debugging
 
-The generated code wraps each C# variable and C# block in a `#line` directive that points at the template's path, line, and column. That mapping is what puts compiler errors on the right template line, and the compiler writes the same mapping into the PDB, so the debugger's sequence points for your C# point at the template file too. Literal text isn't mapped. A step over a literal write lands in the generated file.
+The generated code wraps each C# variable and C# block in a `#line` directive that points at the template's path, line, and column. That mapping is what puts compiler errors on the right template line, and the compiler writes the same mapping into the PDB, so the debugger's sequence points for your C# point at the template file too. Most literal writes aren't mapped, so a step over one lands in the generated file. The exception is in `RenderAsync`: the literal write right after a C# block also checks whether to flush, and it maps to its template text, so a step over that one stays in the template.
 
 > [!NOTE]
 > Whether Visual Studio binds a breakpoint you set directly in a template file is something I check by hand, so this page doesn't promise it.

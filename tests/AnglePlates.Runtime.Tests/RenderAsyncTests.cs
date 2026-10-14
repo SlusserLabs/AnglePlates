@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.Linq;
@@ -44,6 +45,33 @@ public sealed class RenderAsyncTests
         await Assert.That(Convert.ToHexString(writer.WrittenSpan)).IsEqualTo(Convert.ToHexString(rendered));
         await Assert.That(writer.FlushedLengths.Count).IsEqualTo(flushes);
         await Assert.That(writer.FlushedLengths[^1]).IsEqualTo(rendered.Length);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(RenderCases))]
+    public async Task Render_AsyncFixture_WritesSameBytesAsRenderAsync(string template, string model, string expected)
+    {
+        // The other tests here call only one render method on most fixtures, so this runs both to completion
+        var expectedHex = Convert.ToHexString(Encoding.UTF8.GetBytes(expected));
+
+        await Assert.That(Convert.ToHexString(TemplateOutput.RenderUtf8(Create(template), model))).IsEqualTo(expectedHex);
+        await Assert.That(Convert.ToHexString(await TemplateOutput.RenderPipeAsync(Create(template), model))).IsEqualTo(expectedHex);
+    }
+
+    public static IEnumerable<(string template, string model, string expected)> RenderCases()
+    {
+        yield return ("backpressure", "a", new string('a', 100));
+        yield return ("threshold", "a", new string('a', 40));
+        yield return ("small-page", "<value>", "x0x1x2!");
+        yield return ("cancel-loop", "<value>", "x0x1x2x3x4");
+        yield return ("nested-loop", "<value>", "xxxxxxxxxend");
+        yield return ("no-blocks", "<value>", "no blocks");
+        yield return ("before-variable", "<value>", "before &lt;value&gt;");
+        yield return ("parent", "abc", "<a><b><c>end");
+        yield return ("child", "<value>", "<&lt;value&gt;>");
+
+        // An empty model takes the other branch of both if statements
+        yield return ("if-else", string.Empty, "b");
     }
 
     [Test]
@@ -158,6 +186,24 @@ public sealed class RenderAsyncTests
     }
 
     [Test]
+    public async Task RenderAsync_DynamicWriteUnderBackpressure_WaitsForReader()
+    {
+        // A dynamic C# variable after a block awaits a WriteAsync the runtime binder picks, and a 20,000-byte value makes that write flush and wait
+        var pipe = new Pipe(new PipeOptions(pauseWriterThreshold: 4096, resumeWriterThreshold: 2048, useSynchronizationContext: false));
+
+        var render = new ConversionDynamicAfterBlockUtf8Template().RenderAsync(new string('a', 20000), pipe.Writer).AsTask();
+
+        await Assert.That(render.IsCompleted).IsFalse();
+        var reading = ReadAllAsync(pipe.Reader);
+        await render;
+        await pipe.Writer.CompleteAsync();
+        var bytes = await reading;
+
+        await Assert.That(bytes.Length).IsEqualTo(20000);
+        await Assert.That(bytes.All(value => value == (byte)'a')).IsTrue();
+    }
+
+    [Test]
     public async Task RenderAsync_CancelPendingFlushUnderBackpressure_ThrowsOperationCanceled()
     {
         var pipe = new Pipe(new PipeOptions(pauseWriterThreshold: 4096, resumeWriterThreshold: 2048, useSynchronizationContext: false));
@@ -189,6 +235,14 @@ public sealed class RenderAsyncTests
             "block-end-crlf" => new AsyncBlockEndCrlfUtf8Template(),
             "block-then-blank-lines" => new AsyncBlockThenBlankLinesUtf8Template(),
             "before-variable" => new AsyncBeforeVariableUtf8Template(),
+            "backpressure" => new AsyncBackpressureUtf8Template(),
+            "threshold" => new AsyncThresholdUtf8Template(),
+            "small-page" => new AsyncSmallPageUtf8Template(),
+            "cancel-loop" => new AsyncCancelLoopUtf8Template(),
+            "nested-loop" => new AsyncNestedLoopUtf8Template(),
+            "no-blocks" => new AsyncNoBlocksUtf8Template(),
+            "parent" => new AsyncParentUtf8Template(),
+            "child" => new AsyncChildUtf8Template(),
             _ => throw new ArgumentOutOfRangeException(nameof(template), template, null),
         };
     }

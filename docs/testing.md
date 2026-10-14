@@ -153,7 +153,7 @@ CI fails the `windows` or `ubuntu` leg when either module drops below 90% line o
 | `SlusserLabs.AnglePlates` | The generator | `TestResults/generator.cobertura.xml` |
 | `AnglePlates.Runtime.Tests` | The emitted support types and template classes | `TestResults/runtime.cobertura.xml` |
 
-Each test project runs with the Microsoft collector that TUnit brings along (`--coverage --coverage-output-format cobertura`) and its own `code-coverage.settings.xml`, and a short `pwsh` step in `ci.yml` reads the two modules. The reports go into the `failure-<leg>` artifact when a leg fails. Before every stable release, I check both modules for 100% in Visual Studio 2026 or with `--coverage`, with the one accepted gap below as the only exception. Previews need only the CI gate.
+Each test project runs with the Microsoft collector that TUnit brings along (`--coverage --coverage-output-format cobertura`) and its own `code-coverage.settings.xml`, and a short `pwsh` step in `ci.yml` reads the two modules. The reports go into the `failure-<leg>` artifact when a leg fails. Before every stable release, I check both modules for 100% in Visual Studio 2026 or with `--coverage`, with the two accepted gaps below as the only exceptions. Previews need only the CI gate.
 
 The two settings files exist because of the collector's defaults:
 
@@ -163,3 +163,7 @@ The two settings files exist because of the collector's defaults:
 `AnglePlates.Runtime.Tests` measures emitted code as one module because its test, model, and helper classes each carry `[ExcludeFromCodeCoverage]`, and the assembly deliberately doesn't. What's left is the support types and the template classes. Source-generated helpers such as a `[GeneratedRegex]` matcher don't inherit that attribute, so test code in that project avoids them. `AnglePlates.Tests` excludes its whole assembly, and the `GeneratedTests.<id>` modules it emits each cover only what one test ran, so they aren't the emitted-code measure.
 
 The generator has one accepted gap: the `switch` default arms that throw `UnexpectedValue.Exception` for an unknown `DirectiveKind` or `TokenType`, in `DirectiveKindExtensions.GetName`, `DirectiveReader`, and `TemplateClassWriter.WriteRenderMethod`. Every enum value is handled, so no template can reach them. `UnexpectedValueTests` covers the helper itself.
+
+The emitted code has one accepted gap too, and the compiler wrote it. When `RenderAsync` awaits a `dynamic` C# variable's flush check, as in `Templates/Conversion/dynamic-after-block.html`, the compiler adds a branch for an awaiter that implements `INotifyCompletion` but not `ICriticalNotifyCompletion`. The runtime binder always picks a `WriteAsync` overload that returns a `ValueTask`, whose awaiter implements both, so that branch never runs. `RenderAsync_DynamicWriteUnderBackpressure_WaitsForReader` covers the rest of that await.
+
+Every other generated member in the test templates should run in some test. `Render_AsyncFixture_WritesSameBytesAsRenderAsync` runs both render methods of the `RenderAsync` fixtures that other tests call only one way, so a new fixture there belongs in its cases too.

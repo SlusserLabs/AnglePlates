@@ -856,7 +856,7 @@ Most consumers use the one-line form `<PackageReference Include="SlusserLabs.Ang
 | --- | --- | --- |
 | Generator line and branch coverage | CI, every PR and every release run, Windows and Ubuntu | Fails below **90%** line or branch. |
 | Emitted-code line and branch coverage | Same | Fails below **90%** line or branch. |
-| Both modules | Manual, before every **stable** release | Target 100% line and branch (per AGENTS.md), with at most the one documented exception. Measured in Visual Studio 2026 or with `--coverage`. The result goes in the release-prep PR. Previews need only the CI gate. |
+| Both modules | Manual, before every **stable** release | Target 100% line and branch (per AGENTS.md), with at most the exceptions documented in docs/testing.md (one in the generator, one compiler-generated branch in emitted code). Measured in Visual Studio 2026 or with `--coverage`. The result goes in the release-prep PR. Previews need only the CI gate. |
 | Package | Every stable release | Every packaged behavior has a consumer row. The consumer table is the checklist. |
 
 How CI measures it:
