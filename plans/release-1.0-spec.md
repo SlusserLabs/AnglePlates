@@ -894,9 +894,13 @@ Files touched in Phase 5, as one commit: the csproj pack items, `samples/HelloWo
 </PropertyGroup>
 
 <ItemGroup Condition="'$(EnableDefaultAnglePlateItems)' == 'true'">
-  <AnglePlate Include="Templates\**\*" _AnglePlateSource="Discovered" />
+  <AnglePlate Include="Templates\**\*">
+    <_AnglePlateSource>Discovered</_AnglePlateSource>
+  </AnglePlate>
 </ItemGroup>
 ```
+
+The metadata is a child element because MSBuild rejects a metadata attribute whose name starts with `_` (MSB4066).
 
 MSBuild evaluates every property before any item, so the switch works from `Directory.Build.props` too, where a `Remove` silently doesn't. The README leads with the property and keeps `Remove` for leaving out individual files. Every element in the props and targets gets a comment. `EditorConfigValidator` updates its expected-tag table.
 

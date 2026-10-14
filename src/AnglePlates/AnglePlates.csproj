@@ -10,11 +10,12 @@
   <!-- Package metadata shown on nuget.org -->
   <PropertyGroup>
     <Title>AnglePlates</Title>
-    <Description>Compile-time templates with generated text and UTF-8 renderers.</Description>
+    <Description>Text templates that compile into plain C# classes at build time. There's no runtime package and no reflection, so your templates work with Native AOT.</Description>
     <Authors>Jacob Slusser</Authors>
-    <Copyright>SlusserLabs, Jacob Slusser, and/or affiliate. All rights reserved.</Copyright>
-    <PackageTags>templates;source-generator;roslyn;html;utf8</PackageTags>
+    <Copyright>Copyright (c) 2026 SlusserLabs, Jacob Slusser. All rights reserved.</Copyright>
+    <PackageTags>templates;template-engine;text-templates;source-generator;roslyn;codegen;html;utf8;aot;trimming</PackageTags>
     <PackageProjectUrl>https://github.com/SlusserLabs/AnglePlates</PackageProjectUrl>
+    <PackageReleaseNotes>https://github.com/SlusserLabs/AnglePlates/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -55,8 +56,9 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
     <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
-    <None Update="buildTransitive\SlusserLabs.AnglePlates.props" Pack="true" PackagePath="buildTransitive\SlusserLabs.AnglePlates.props" />
-    <None Update="buildTransitive\SlusserLabs.AnglePlates.targets" Pack="true" PackagePath="buildTransitive\SlusserLabs.AnglePlates.targets" />
+    <!-- build/ applies the props and targets only to the project that references AnglePlates, where the generator runs -->
+    <None Update="build\SlusserLabs.AnglePlates.props" Pack="true" PackagePath="build\SlusserLabs.AnglePlates.props" />
+    <None Update="build\SlusserLabs.AnglePlates.targets" Pack="true" PackagePath="build\SlusserLabs.AnglePlates.targets" />
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>

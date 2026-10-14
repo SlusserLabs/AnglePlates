@@ -5,10 +5,13 @@ using System.Text.Json;
 
 namespace SlusserLabs.AnglePlates.PackageTests;
 
-// Fails when restore gives this project compile or runtime assets from the AnglePlates package
+// Fails when restore gives this project compile or runtime assets from the AnglePlates package, or build assets other than the props and targets under build/
 internal static class ConsumerAssetsValidator
 {
     private const string _packageId = "SlusserLabs.AnglePlates";
+
+    // Sorted ordinally, the way Validate sorts what restore recorded
+    private static readonly string[] _expectedBuildAssets = { $"build/{_packageId}.props", $"build/{_packageId}.targets" };
 
     public static void Validate()
     {
@@ -36,6 +39,21 @@ internal static class ConsumerAssetsValidator
             if (unexpected.Length > 0)
             {
                 throw new InvalidDataException($"{library.Name} has {string.Join(", ", unexpected)} assets in {assetsPath}; the package must only bring analyzer and build assets.");
+            }
+
+            // NuGet lists the files from both of its build folders under one "build" kind, so the paths show they come from build/
+            var buildAssets = Array.Empty<string>();
+            if (library.Value.TryGetProperty("build", out var build))
+            {
+                buildAssets = build.EnumerateObject()
+                    .Select(asset => asset.Name)
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .ToArray();
+            }
+
+            if (!buildAssets.SequenceEqual(_expectedBuildAssets, StringComparer.Ordinal))
+            {
+                throw new InvalidDataException($"{library.Name} has build assets {string.Join(", ", buildAssets)} in {assetsPath}; expected {string.Join(", ", _expectedBuildAssets)}.");
             }
         }
     }

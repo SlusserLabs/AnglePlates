@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
 
@@ -34,8 +35,8 @@ internal static class PackageValidator
             "icon.png",
             $"{_analyzerDirectory}/{_assemblyName}.dll",
             $"{_analyzerDirectory}/{_assemblyName}.xml",
-            $"buildTransitive/{_packageId}.props",
-            $"buildTransitive/{_packageId}.targets"
+            $"build/{_packageId}.props",
+            $"build/{_packageId}.targets"
         };
 
         foreach (var requiredEntry in requiredEntries)
@@ -71,6 +72,8 @@ internal static class PackageValidator
         RequireValue(metadata, "readme", "README.md");
         RequireValue(metadata, "icon", "icon.png");
         RequireValue(metadata, "developmentDependency", "true");
+        RequireNotEmpty(metadata, "description");
+        RequireNotEmpty(metadata, "tags");
         Require(!metadata.Descendants().Any(element => element.Name.LocalName == "dependency"), "The analyzer-only package must not declare consumer dependencies.");
 
         var repository = metadata.Descendants().Single(element => element.Name.LocalName == "repository");
@@ -90,6 +93,11 @@ internal static class PackageValidator
 
         var documentation = XDocument.Load(new MemoryStream(ReadEntry(package, $"{_analyzerDirectory}/{_assemblyName}.xml")));
         Require(documentation.Descendants("member").Any(), "The analyzer XML documentation is empty.");
+
+        // nuget.org shows the README and icon on the package page, so check them the way it renders them
+        var readme = Encoding.UTF8.GetString(ReadEntry(package, "README.md"));
+        var pageProblems = ReadmeValidator.Validate(readme).Concat(IconValidator.Validate(ReadEntry(package, "icon.png"))).ToArray();
+        Require(pageProblems.Length == 0, $"The package page content has problems:{Environment.NewLine}{string.Join(Environment.NewLine, pageProblems)}");
     }
 
     private static bool IsRuntimeAsset(string path)
@@ -117,6 +125,12 @@ internal static class PackageValidator
     {
         var actual = metadata.Elements().Single(element => element.Name.LocalName == name).Value;
         Require(string.Equals(actual, expected, StringComparison.Ordinal), $"Expected {name} '{expected}', but found '{actual}'.");
+    }
+
+    private static void RequireNotEmpty(XElement metadata, string name)
+    {
+        var value = metadata.Elements().SingleOrDefault(element => element.Name.LocalName == name)?.Value;
+        Require(!string.IsNullOrWhiteSpace(value), $"The package {name} is empty.");
     }
 
     private static void ValidateSymbols(byte[] assemblyBytes, byte[] pdbBytes, string repositoryCommit)

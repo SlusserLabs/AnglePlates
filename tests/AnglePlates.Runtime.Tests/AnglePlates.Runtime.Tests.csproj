@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Load the generator the way a NuGet consumer does: props first, then the analyzer reference, then the targets -->
-  <Import Project="..\..\src\AnglePlates\buildTransitive\SlusserLabs.AnglePlates.props" />
+  <Import Project="..\..\src\AnglePlates\build\SlusserLabs.AnglePlates.props" />
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -17,5 +17,5 @@
     <PackageReference Include="TUnit" Version="1.65.0" />
     <ProjectReference Include="..\..\src\AnglePlates\AnglePlates.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
-  <Import Project="..\..\src\AnglePlates\buildTransitive\SlusserLabs.AnglePlates.targets" />
+  <Import Project="..\..\src\AnglePlates\build\SlusserLabs.AnglePlates.targets" />
 </Project>

@@ -28,7 +28,6 @@ Templates are compiled into your project instead of shipped as separate files. T
 ## Installation
 
 ```shell
-# TODO publish the package
 dotnet package add SlusserLabs.AnglePlates
 ```
 
@@ -37,13 +36,13 @@ The source generator runs when you compile your application. The compiled templa
 AnglePlates is a development dependency, so `dotnet package add` marks the reference private for you. If you write the `PackageReference` by hand, add the `PrivateAssets` and `IncludeAssets` lines yourself:
 
 ```xml
-<PackageReference Include="SlusserLabs.AnglePlates" Version="0.1.0-alpha">
+<PackageReference Include="SlusserLabs.AnglePlates" Version="1.0.0">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
 ```
 
-Without them, a project that references yours picks up the template discovery files but not the generator, and the files in its `Templates` folder become inputs that nothing reads.
+The template discovery files only apply to the project that references AnglePlates, so a project that references yours doesn't pick them up. Keep `PrivateAssets` anyway if you pack your library, because without it `dotnet pack` lists AnglePlates as a dependency of your package.
 
 AnglePlates needs .NET 10 or later and C# 11 or later. A .NET 10 project gets a newer C# version by default, so you only have to think about this if your project sets `LangVersion`. Set it below 11 and the build reports `SLAP010` instead of a wall of errors inside generated files. Target an older framework and you'll get ordinary compiler errors about missing types; AnglePlates doesn't check for that one.
 
@@ -322,18 +321,24 @@ Both templates use `#generate Text` because `writer` is a `TextWriter` in a text
 
 Put your templates in a `Templates` folder in your project and you're done. Every file in that folder and its subfolders is checked, whatever its extension. A file that starts with a directive becomes a template. Anything else, like a `README.md` or a `.gitkeep`, is skipped.
 
-Want your templates somewhere else? Add or remove `AnglePlate` items in your project file:
+Want your templates somewhere else? Turn off the default folder with `EnableDefaultAnglePlateItems` and add your own `AnglePlate` items:
 
 ```xml
-<ItemGroup>
-  <!-- Turn off the default Templates folder. Put this first. -->
-  <AnglePlate Remove="Templates\**\*" />
+<PropertyGroup>
+  <!-- Turn off the default Templates folder. -->
+  <EnableDefaultAnglePlateItems>false</EnableDefaultAnglePlateItems>
+</PropertyGroup>
 
+<ItemGroup>
   <!-- Add your own templates. -->
   <AnglePlate Include="Emails\**\*.html" />
   <AnglePlate Include="..\Shared\receipt.html" />
 </ItemGroup>
 ```
+
+The property works in your project file or in `Directory.Build.props`, so you can turn the folder off for a whole repository. If your `Templates` folder belongs to some other tool, set it to `false` too.
+
+To leave out just a few files and keep the rest of the folder, remove them in your project file: `<AnglePlate Remove="Templates\drafts\**\*" />`. A `Remove` in `Directory.Build.props` does nothing, because it runs before AnglePlates adds the folder.
 
 Files you add with `Include` have to be templates. If one doesn't start with a directive, the build reports `SLAP008`, so keep your wildcards narrow.
 
@@ -357,7 +362,7 @@ The property takes `public` or `internal`, in any case and with or without surro
 
 Compiled templates are plain C# with no reflection, so they publish with Native AOT and trimming. The package tests publish a native app with the AOT analyzers on and every warning treated as an error. It builds without a single IL warning and writes the same bytes as the JIT build. That app covers text and UTF-8 templates, `Render` and `RenderAsync`, public and internal templates, a child template rendered from a C# block, and C# variables that are enums, `[Flags]` enums, nullable value types, numbers, dates, and an object whose `ToString` returns `null`. So far the native publish has run on Linux x64.
 
-Native AOT already trims the whole app, and any support type your app doesn't use gets trimmed away with everything else. [Performance](docs/performance.md) records how much the templates add to the native app's size.
+Native AOT already trims the whole app, and any support type your app doesn't use gets trimmed away with everything else. [Performance](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/performance.md) records how much the templates add to the native app's size.
 
 Two things are up to you:
 
@@ -374,13 +379,13 @@ Two things are up to you:
 - The generated render methods already declare `model`, `Model`, and `writer`, and `RenderAsync` adds `cancellationToken`, so don't reuse those names for locals in your C# blocks.
 - `RenderAsync` is an async method, and your C# blocks go into it, so UTF-8 templates pick up the usual async rules. With C# 11 or 12, a ref struct local such as a `Span<char>` in a C# block reports `CS9058`. From C# 13, it's fine unless the local is still in use after a flush check, which reports `CS4007`. A `lock` or `unsafe` block that contains a write right after a C# block reports `CS1996` or `CS4004`, because that write awaits. Text templates have none of these rules, so if you need one of these constructs, use `#generate Text`.
 - Two templates that generate the same class name in the same namespace cause C# compiler errors, the same as two hand-written classes would.
-- Template mistakes are build errors with `SLAP` IDs, and each one stops only its own template from generating. An invalid `AnglePlateBaseAccessModifier` (`SLAP009`) and a C# version below 11 (`SLAP010`) stop everything. [Diagnostics](docs/diagnostics.md) lists every rule and how to fix it.
+- Template mistakes are build errors with `SLAP` IDs, and each one stops only its own template from generating. An invalid `AnglePlateBaseAccessModifier` (`SLAP009`) and a C# version below 11 (`SLAP010`) stop everything. [Diagnostics](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md) lists every rule and how to fix it.
 
-For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
+For an application model and a loop, see the [HelloWorld sample](https://github.com/SlusserLabs/AnglePlates/blob/main/samples/HelloWorld/README.md).
 
 ## Develop AnglePlates
 
-Want to change AnglePlates itself? [Developing AnglePlates](docs/development.md) walks through how the generator works and how to build, test, and validate the package.
+Want to change AnglePlates itself? [Developing AnglePlates](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/development.md) walks through how the generator works and how to build, test, and validate the package.
 
 ## AI disclosure
 

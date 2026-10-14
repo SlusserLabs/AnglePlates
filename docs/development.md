@@ -40,7 +40,7 @@ The sample sets `EmitCompilerGeneratedFiles`, so after a build you can read the 
 | `Directives` | `DirectiveReader`, the `TemplateDirectives` it produces, `DirectiveSpellCheck` for `SLAP011`, and the `DirectiveKind` and `GenerationTarget` enums. |
 | `Emit` | `TemplateClassWriter`, which writes template classes, and `SupportTypes`, which holds the support types' source. |
 | `Diagnostics` | `DiagnosticDescriptors`, `TemplateError`, `TemplateDiagnostic`, and `UnexpectedValue`, the one helper that throws for an enum value a switch doesn't handle. |
-| `buildTransitive` | The MSBuild files described in [How MSBuild hands over templates](#how-msbuild-hands-over-templates). |
+| `build` | The MSBuild files described in [How MSBuild hands over templates](#how-msbuild-hands-over-templates). |
 
 Each file holds one type. Every type is in the `SlusserLabs.AnglePlates` namespace, whatever its folder, which is a deliberate exception to the usual rule that folders mirror namespaces. The folders are there to help you find things. In a project this small, sub-namespaces would only add `using` lines to almost every file.
 
@@ -165,9 +165,9 @@ Every project gets all four support types, whatever its templates generate. .NET
 
 ## How MSBuild hands over templates
 
-The generator only sees what MSBuild gives it, and two files in `src/AnglePlates/buildTransitive` decide that.
+The generator only sees what MSBuild gives it, and two files in `src/AnglePlates/build` decide that. The package ships them in its `build` folder, so NuGet imports them only into the project that references AnglePlates. Templates compile only where the generator runs, so a project further down the reference chain has no use for them. Before 1.0 they shipped in `buildTransitive`, which also imported them into projects that referenced the consumer, and those projects got template discovery without a generator to read the files.
 
-`SlusserLabs.AnglePlates.props` loads before the consumer's project body. It defines the default `AnglePlate` item for `Templates\**\*`, sets `AnglePlateBaseAccessModifier` to `internal` when the project leaves it empty (matching the generator's own default), and makes the property and the `AnglePlate` metadata visible to the compiler. Because it loads first, a consumer's `Remove` in the project file can drop the default item.
+`SlusserLabs.AnglePlates.props` loads before the consumer's project body. It sets `AnglePlateBaseAccessModifier` to `internal` and `EnableDefaultAnglePlateItems` to `true` when the project leaves them empty (matching the generator's own default for the first), defines the default `AnglePlate` item for `Templates\**\*` when `EnableDefaultAnglePlateItems` is `true`, and makes the access modifier, `RootNamespace`, and the `AnglePlate` metadata visible to the compiler. MSBuild evaluates every property before any item, so setting `EnableDefaultAnglePlateItems` to `false` turns off the default item from the project file or from `Directory.Build.props`. A `Remove` only works after the item exists, so it works in the project file and `Directory.Build.targets` but not in `Directory.Build.props`.
 
 `SlusserLabs.AnglePlates.targets` runs a target just before the compiler's editorconfig is written. It adds each `AnglePlate` item to `AdditionalFiles` once, using full paths so two spellings of one file count as one, and tags it `Discovered` or `Explicit`. The generator uses that tag to tell its files from other tools' files and to decide whether a file without directives is skipped quietly or reported as `SLAP008`.
 
@@ -196,7 +196,7 @@ dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -
 
 The script needs PowerShell 7.4 or later. It builds every consumer in one validation folder with an empty package cache and one generated `NuGet.config`. That configuration uses package source mapping, so AnglePlates comes only from `artifacts/package`, a library that a consumer packs comes only from the validation folder's own feed, and everything else (the Native AOT compiler and runtime packs, mostly) comes from nuget.org. The validation folder also gets a copy of the repository's `global.json`, and every `dotnet` command runs from there, so the consumers use the same SDK the repository does. The script prints that SDK version before it starts.
 
-It runs the [package validation project](../tests/AnglePlates.PackageTests/README.md) first, which installs the package, renders templates, and checks the package's contents, metadata, and the assets the consumer gets. Then it runs each consumer in `tests/AnglePlates.PackageConsumers`. Those consumers check that `Remove` works in the project file and `Directory.Build.targets`, that it doesn't work in `Directory.Build.props`, that discovery stops at the project that references AnglePlates, whether that's a project reference or a NuGet package, that two projects using AnglePlates get only `CS0436` warnings, that an ASP.NET Core app streams the right bytes and stops rendering when the client disconnects, and that generated code publishes under Native AOT. A new consumer has to be registered in the script, or it never runs. The [package validation README](../tests/AnglePlates.PackageTests/README.md) lists what each consumer checks.
+It runs the [package validation project](../tests/AnglePlates.PackageTests/README.md) first, which installs the package, renders templates, and checks the package's contents, metadata, and the assets the consumer gets. The README is the package page on nuget.org, which doesn't resolve relative paths, so the validation project also fails on any README link or image that isn't an absolute `https://` URL or a `#anchor`, on images from hosts nuget.org doesn't trust, and on leftover `# TODO` or `TODO:` lines. It checks that `icon.png` is a square PNG between 128 and 512 px and no bigger than 100 KB. Then it runs each consumer in `tests/AnglePlates.PackageConsumers`. Those consumers check that `Remove` works in the project file and `Directory.Build.targets`, that it doesn't work in `Directory.Build.props`, that discovery stops at the project that references AnglePlates, whether that's a project reference or a NuGet package, that two projects using AnglePlates get only `CS0436` warnings, that an ASP.NET Core app streams the right bytes and stops rendering when the client disconnects, and that generated code publishes under Native AOT. A new consumer has to be registered in the script, or it never runs. The [package validation README](../tests/AnglePlates.PackageTests/README.md) lists what each consumer checks.
 
 Two consumers need more than the default steps, and the script handles both:
 
@@ -223,6 +223,16 @@ docker run --rm -v "${PWD}:/repo:ro" mcr.microsoft.com/dotnet/sdk:10.0-noble-aot
 ```
 
 The package itself stays analyzer-only: it's a development dependency with no runtime assets or dependencies, and its analyzer and XML documentation live under `analyzers/dotnet/cs/netstandard2.0`. Changing that contract needs compatibility testing first.
+
+## Updating the icon
+
+`icon.svg` at the repository root is the source for the package icon. It's hand-editable: every face is one flat-colored polygon, and the colors live in its `<style>` block. The package never ships the SVG, because NuGet icons have to be PNG or JPEG. It ships `icon.png`, a 256x256 render. After you change the SVG, render it again from the repository root:
+
+```powershell
+uv run --with resvg-py==0.5.0 python -c "import resvg_py; open('icon.png','wb').write(bytes(resvg_py.svg_to_bytes(svg_path='icon.svg', width=256, height=256)))"
+```
+
+Look at the result at 128 and 32 px on both light and dark backgrounds before you commit it. Package lists and search results show the icon small, and detail that reads fine at 256 px can turn to mush at 32. Package validation fails if the PNG isn't square, is outside 128 to 512 px, or is over 100 KB.
 
 ## Measuring performance
 

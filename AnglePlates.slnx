@@ -11,6 +11,7 @@
     <File Path="global.json" />
     <File Path="README.md" />
     <File Path="icon.png" />
+    <File Path="icon.svg" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AnglePlates/AnglePlates.csproj" />

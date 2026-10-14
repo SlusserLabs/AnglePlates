@@ -28,7 +28,7 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Term | Meaning |
 | --- | --- |
 | `AnglePlate` item | An MSBuild item that names a possible template. In prose, write "add an `AnglePlate` item." |
-| Default item | The `AnglePlate` item for `Templates\**\*` that the package props file defines. A project removes it with `<AnglePlate Remove="Templates\**\*" />`. |
+| Default item | The `AnglePlate` item for `Templates\**\*` that the package props file defines. A project turns it off by setting `EnableDefaultAnglePlateItems` to `false`, or leaves out single files with `<AnglePlate Remove="Templates\draft.html" />` in its project file. |
 | Template discovery | The build step that adds each `AnglePlate` item to the compiler's `AdditionalFiles` once and tags it as discovered or explicit. The generator ignores untagged `AdditionalFiles`, then checks the content of the tagged ones for directives. |
 | Discovered template | A possible template that comes only from the default item. If it doesn't start with a known directive, the generator skips it without an error. A first line that looks like a misspelled directive gets the `SLAP011` warning. |
 | Explicit template | A possible template that the project adds with its own `AnglePlate` `Include`, wildcards included. If it doesn't start with a known directive, the generator reports `SLAP008`. A file that's both discovered and explicit counts as explicit. Say "discovered" and "explicit," not "automatic" and "manual." |

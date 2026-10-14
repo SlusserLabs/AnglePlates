@@ -1,3 +1,4 @@
+<!-- Loads after the consumer's project file, so it sees every AnglePlate Include and Remove the project made -->
 <Project>
 
   <!-- Adds each AnglePlate item to AdditionalFiles once, tagged so the generator can tell it from other tools' files.
@@ -6,18 +7,28 @@
   <Target Name="CollectAnglePlateTemplates" BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun">
     <!-- Full paths make different spellings of one file match; a file that's also listed explicitly counts as explicit -->
     <ItemGroup>
+      <!-- Files the project listed itself, which must be templates (SLAP008 otherwise) -->
       <_AnglePlateExplicit Include="@(AnglePlate->'%(FullPath)')" Condition="'%(AnglePlate._AnglePlateSource)' != 'Discovered'" />
+      <!-- Files from the default Templates folder, which are skipped quietly when they have no directives -->
       <_AnglePlateDiscovered Include="@(AnglePlate->'%(FullPath)')" Condition="'%(AnglePlate._AnglePlateSource)' == 'Discovered'" />
+      <!-- A file in both lists stays explicit -->
       <_AnglePlateDiscovered Remove="@(_AnglePlateExplicit)" />
     </ItemGroup>
+    <!-- One copy of each explicit file, even when two Includes match it -->
     <RemoveDuplicates Inputs="@(_AnglePlateExplicit)">
+      <!-- The distinct explicit files -->
       <Output TaskParameter="Filtered" ItemName="_AnglePlateExplicitDistinct" />
     </RemoveDuplicates>
+    <!-- One copy of each discovered file -->
     <RemoveDuplicates Inputs="@(_AnglePlateDiscovered)">
+      <!-- The distinct discovered files -->
       <Output TaskParameter="Filtered" ItemName="_AnglePlateDiscoveredDistinct" />
     </RemoveDuplicates>
+    <!-- Hands the files to the compiler with the tag the generator reads -->
     <ItemGroup>
+      <!-- Explicit files report SLAP008 when they have no directives -->
       <AdditionalFiles Include="@(_AnglePlateExplicitDistinct)" AnglePlate="Explicit" />
+      <!-- Discovered files without directives are skipped -->
       <AdditionalFiles Include="@(_AnglePlateDiscoveredDistinct)" AnglePlate="Discovered" />
     </ItemGroup>
   </Target>
