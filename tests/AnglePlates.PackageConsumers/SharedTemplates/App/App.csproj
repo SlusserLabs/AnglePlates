@@ -8,15 +8,12 @@
     <LangVersion>11.0</LangVersion>
     <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
 
-    <!-- The library's public support types collide with this project's copies. The README promises CS0436 warnings and nothing else. -->
+    <!-- The library's public support types collide with this project's copies. docs/configuration.md promises CS0436 warnings and nothing else. -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsNotAsErrors>$(WarningsNotAsErrors);CS0436</WarningsNotAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" PrivateAssets="all" />
     <ProjectReference Include="..\Library\Library.csproj" />
   </ItemGroup>
 </Project>

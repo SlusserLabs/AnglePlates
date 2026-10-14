@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 
@@ -16,142 +16,167 @@ namespace SlusserLabs.AnglePlates;
 /// <summary>
 /// Generates rendering classes from template additional files.
 /// </summary>
-[Generator]
-public class TemplateGenerator : IIncrementalGenerator
+[Generator(LanguageNames.CSharp)]
+public sealed class TemplateGenerator : IIncrementalGenerator
 {
+    // Step names for WithTrackingName; the incremental tests read the same constants
+    internal const string AnglePlateFilesStep = "AnglePlateFiles";
+    internal const string TemplateFilesStep = "TemplateFiles";
+    internal const string TemplateResultsStep = "TemplateResults";
+    internal const string DuplicateTemplatesStep = "DuplicateTemplates";
+
     private const string _defaultAccessModifier = "internal";
     private const string _projectDirKey = "build_property.ProjectDir";
+    private const string _rootNamespaceKey = "build_property.RootNamespace";
     private const string _baseAccessModifierProperty = "AnglePlateBaseAccessModifier";
+    private const string _propsImportedKey = "build_property.AnglePlatePropsImported";
     private const string _anglePlateMetadataKey = "build_metadata.AdditionalFiles.AnglePlate";
     private static readonly GenerationTarget[] _generationTargets = [GenerationTarget.Text, GenerationTarget.Utf8];
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // 1. Read MSBuild properties from the global options
-        var baseAccessModifier = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
-            GeneratorSetting.ReadChoice(
-                options.GlobalOptions, _baseAccessModifierProperty, _defaultAccessModifier, TemplateTranspilerOptions.ExpectedAccessModifier, "public", "internal"));
+        // Caching rule: every value passed between steps must compare by value, so it's a string, an enum, a record of
+        // those, or an EquatableArray. Nothing may hold a Compilation, SyntaxTree, or SourceText, because those never
+        // compare equal between runs and would re-run every step after them.
 
-        // Below C# 11, generated code would fail with a wall of errors inside generated files, so SLAP010 replaces them
+        // 1. Read the project-wide settings, which decide whether anything is generated
+        var projectSettings = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) => (
+            IsEnabled: IsPropsImported(options.GlobalOptions),
+            AccessModifier: GeneratorSetting.ReadChoice(
+                options.GlobalOptions, _baseAccessModifierProperty, _defaultAccessModifier, DirectiveReader.ExpectedAccessModifier, "public", "internal")));
         var languageVersion = context.ParseOptionsProvider.Select(static (options, cancellationToken) => ((CSharpParseOptions)options).LanguageVersion);
-        var settings = baseAccessModifier.Combine(languageVersion);
+        var settings = projectSettings.Combine(languageVersion)
+            .Select(static (pair, cancellationToken) => new GeneratorSettings(pair.Left.IsEnabled, pair.Left.AccessModifier, pair.Right));
 
-        var projectDir = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
-            options.GlobalOptions.TryGetValue(_projectDirKey, out var value) ? value : string.Empty);
+        // 2. Read the project values every template needs
+        var templateContext = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) => new TemplateContext(
+            options.GlobalOptions.TryGetValue(_projectDirKey, out var projectDir) ? projectDir : string.Empty,
+            options.GlobalOptions.TryGetValue(_rootNamespaceKey, out var rootNamespace) ? rootNamespace : string.Empty));
 
-        // 2. Keep only the additional files AnglePlates added, before reading any text, so other tools' files are never read
+        // 3. Keep only the additional files AnglePlates added, before reading any text, so other tools' files are never read
         var anglePlateFiles = context.AdditionalTextsProvider
             .Combine(context.AnalyzerConfigOptionsProvider)
-            .Select(static (tuple, cancellationToken) => (Text: tuple.Left, Origin: GetOrigin(tuple.Right.GetOptions(tuple.Left))))
+            .Select(static (pair, cancellationToken) => (Text: pair.Left, Origin: GetOrigin(pair.Right.GetOptions(pair.Left))))
             .Where(static file => file.Origin != TemplateOrigin.None)
-            .WithTrackingName("AnglePlateFiles");
+            .WithTrackingName(AnglePlateFilesStep);
 
-        // 3. Read each file; paths become relative to the project folder for stable class docs and hint names
+        // 4. Read each file's text
         var templateFiles = anglePlateFiles
-            .Combine(projectDir)
-            .Select(static (tuple, cancellationToken) =>
-            {
-                var ((additionalText, origin), projDir) = tuple;
-                var content = additionalText.GetText(cancellationToken)?.ToString() ?? string.Empty;
+            .Select(static (file, cancellationToken) =>
+                new TemplateFile(file.Text.Path, file.Text.GetText(cancellationToken)?.ToString() ?? string.Empty, file.Origin))
+            .WithTrackingName(TemplateFilesStep);
 
-                return new TemplateFile(additionalText.Path, TemplatePath.GetRelativePath(additionalText.Path, projDir), content, origin);
-            })
-            .WithTrackingName("TemplateFiles");
-
-        // 4. Parse and transpile each template on its own, so editing one leaves the others cached. A future setting that
-        // changes how every template parses belongs in this step's input.
+        // 5. Parse and write each template on its own, so editing one leaves the others cached. A project value that
+        // changes how every template is read, such as RootNamespace, belongs in TemplateContext.
         var templateResults = templateFiles
-            .Select(static (template, cancellationToken) => ProcessTemplate(template, cancellationToken))
-            .WithTrackingName("TemplateResults");
-        var allResults = templateResults.Collect();
+            .Combine(templateContext)
+            .Select(static (pair, cancellationToken) => ProcessTemplate(pair.Left, pair.Right, cancellationToken))
+            .WithTrackingName(TemplateResultsStep);
 
-        // Identical templates share a hint name, so they're numbered together below. This is empty in almost every
-        // project and stays cached, so the per-template output can skip the shared names without depending on the others.
-        var duplicates = allResults
+        // 6. Find the templates that declare the same class, ignoring case, because they share a hint name and are numbered
+        // together. This is empty in almost every project and stays cached, so the per-template output can skip the shared
+        // names without depending on the other templates.
+        var duplicates = templateResults
+            .Collect()
             .Select(static (results, cancellationToken) => FindDuplicates(results))
-            .WithTrackingName("DuplicateTemplates");
+            .WithTrackingName(DuplicateTemplatesStep);
         var duplicatePrefixes = duplicates.Select(static (duplicate, cancellationToken) => duplicate.Prefixes);
 
-        // 5. Generate the support types. Trimming removes the ones an app doesn't use. A class with the wrong accessibility
-        // isn't a safe fallback, and code for an older C# version can't compile, so either problem generates nothing at all.
-        context.RegisterSourceOutput(settings, static (ctx, data) =>
-        {
-            var (accessModifier, langVersion) = data;
-            if (langVersion < LanguageVersion.CSharp11)
-            {
-                ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedLanguageVersion, Location.None, langVersion.ToDisplayString()));
-            }
-
-            if (!accessModifier.IsValid)
-            {
-                ctx.ReportDiagnostic(accessModifier.CreateDiagnostic());
-            }
-
-            if (!CanGenerate(data))
-            {
-                return;
-            }
-
-            ctx.AddSource("TemplateOptions.g.cs", Boilerplate.TemplateOptions(accessModifier.Value));
-            ctx.AddSource("TextTemplate.g.cs", Boilerplate.TextTemplate(accessModifier.Value));
-            ctx.AddSource("Utf8Template.g.cs", Boilerplate.Utf8Template(accessModifier.Value));
-        });
-
-        // 6. Report each template's diagnostics and add its sources on their own, so the driver keeps the generated trees
-        // of templates that didn't change
-        context.RegisterSourceOutput(templateResults.Combine(duplicatePrefixes).Combine(settings), static (ctx, data) =>
-        {
-            var ((result, sharedPrefixes), generatorSettings) = data;
-            if (!CanGenerate(generatorSettings))
-            {
-                return;
-            }
-
-            foreach (var diagnostic in result.Diagnostics)
-            {
-                ctx.ReportDiagnostic(diagnostic.ToDiagnostic());
-            }
-
-            foreach (var source in result.Sources)
-            {
-                if (!sharedPrefixes.Contains(source.HintPrefix))
-                {
-                    ctx.AddSource($"{source.HintPrefix}.g.cs", source.Source);
-                }
-            }
-        });
-
-        // 7. Number the sources of identical templates, which are already sorted so the numbers don't depend on file order
-        context.RegisterSourceOutput(duplicates.Combine(settings), static (ctx, data) =>
-        {
-            var (duplicate, generatorSettings) = data;
-            if (!CanGenerate(generatorSettings))
-            {
-                return;
-            }
-
-            var hintNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-            foreach (var source in duplicate.Sources)
-            {
-                ctx.AddSource(CreateHintName(source.HintPrefix, hintNameCounts), source.Source);
-            }
-        });
+        // 7. Add the outputs
+        context.RegisterSourceOutput(settings, AddSupportTypes);
+        context.RegisterSourceOutput(templateResults.Combine(duplicatePrefixes).Combine(settings), AddTemplateSources);
+        context.RegisterSourceOutput(duplicates.Combine(settings), AddNumberedSources);
     }
 
-    // The support types report why generation stopped; the template outputs only skip their sources
-    private static bool CanGenerate((GeneratorSetting AccessModifier, LanguageVersion LanguageVersion) settings)
+    // Every project that imports the package props gets all four support types, and trimming removes the ones an app doesn't
+    // use. A class with the wrong accessibility isn't a safe fallback, and code for an older C# version can't compile, so either
+    // problem generates nothing at all. A project without the package props gets no support types and no diagnostics.
+    private static void AddSupportTypes(SourceProductionContext context, GeneratorSettings settings)
     {
-        return settings.AccessModifier.IsValid && settings.LanguageVersion >= LanguageVersion.CSharp11;
+        if (!settings.IsEnabled)
+        {
+            return;
+        }
+
+        if (!settings.IsLanguageVersionSupported)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.LanguageVersionTooOld, Location.None, settings.LanguageVersion.ToDisplayString()));
+        }
+
+        if (!settings.AccessModifier.IsValid)
+        {
+            context.ReportDiagnostic(settings.AccessModifier.CreateDiagnostic());
+        }
+
+        if (!settings.CanGenerate)
+        {
+            return;
+        }
+
+        var accessModifier = settings.AccessModifier.Value;
+        context.AddSource("SlusserLabs.AnglePlates.TemplateOptions.g.cs", SupportTypes.TemplateOptions(accessModifier));
+        context.AddSource("SlusserLabs.AnglePlates.TextTemplate.g.cs", SupportTypes.TextTemplate(accessModifier));
+        context.AddSource("SlusserLabs.AnglePlates.Utf8Template.g.cs", SupportTypes.Utf8Template(accessModifier));
+        context.AddSource("SlusserLabs.AnglePlates.TemplateExtensions.g.cs", SupportTypes.TemplateExtensions(accessModifier));
+    }
+
+    // Reports one template's diagnostics and adds its sources on their own, so the driver keeps the generated trees of
+    // templates that didn't change. Sources with a shared hint name are left to AddNumberedSources.
+    private static void AddTemplateSources(SourceProductionContext context, ((TemplateResult Result, EquatableArray<string> SharedPrefixes) Template, GeneratorSettings Settings) data)
+    {
+        var ((result, sharedPrefixes), settings) = data;
+        if (!settings.CanGenerate)
+        {
+            return;
+        }
+
+        foreach (var diagnostic in result.Diagnostics)
+        {
+            context.ReportDiagnostic(diagnostic.ToDiagnostic());
+        }
+
+        // A public class can't derive from internal support types, so SLAP005 replaces the compiler's accessibility errors
+        if (result.PublicAccess is not null && !settings.HasPublicSupportTypes)
+        {
+            context.ReportDiagnostic(result.PublicAccess.ToDiagnostic());
+            return;
+        }
+
+        foreach (var source in result.Sources)
+        {
+            if (!sharedPrefixes.Contains(source.HintPrefix, StringComparer.OrdinalIgnoreCase))
+            {
+                context.AddSource($"{source.HintPrefix}.g.cs", source.Source);
+            }
+        }
+    }
+
+    // Numbers the sources that share a hint name. FindDuplicates already sorted them, so the numbers don't depend on file order.
+    private static void AddNumberedSources(SourceProductionContext context, (DuplicateTemplates Duplicates, GeneratorSettings Settings) data)
+    {
+        var (duplicates, settings) = data;
+        if (!settings.CanGenerate)
+        {
+            return;
+        }
+
+        // Roslyn compares hint names ignoring case, so names that differ only by case are numbered too
+        var hintNameCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // AddTemplateSources reports SLAP005 for a public class that internal support types can't hold
+        foreach (var source in duplicates.Sources.Where(source => !source.IsPublic || settings.HasPublicSupportTypes))
+        {
+            context.AddSource(CreateHintName(source.HintPrefix, hintNameCounts), source.Source);
+        }
     }
 
     // Finds the sources whose hint names collide, in the order that numbers them
     private static DuplicateTemplates FindDuplicates(ImmutableArray<TemplateResult> results)
     {
         var prefixes = results.SelectMany(result => result.Sources)
-            .GroupBy(source => source.HintPrefix, StringComparer.Ordinal)
+            .GroupBy(source => source.HintPrefix, StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
+            .Select(group => group.Select(source => source.HintPrefix).OrderBy(prefix => prefix, StringComparer.Ordinal).First())
             .OrderBy(prefix => prefix, StringComparer.Ordinal)
             .ToArray();
         if (prefixes.Length == 0)
@@ -162,10 +187,17 @@ public class TemplateGenerator : IIncrementalGenerator
         // Sort so hint name suffixes don't depend on the order MSBuild lists the files
         var sources = results.OrderBy(result => result.Path, StringComparer.Ordinal).ThenBy(result => result.Content, StringComparer.Ordinal)
             .SelectMany(result => result.Sources)
-            .Where(source => prefixes.Contains(source.HintPrefix, StringComparer.Ordinal))
+            .Where(source => prefixes.Contains(source.HintPrefix, StringComparer.OrdinalIgnoreCase))
             .ToArray();
 
         return new DuplicateTemplates(prefixes, sources);
+    }
+
+    // The package props set AnglePlatePropsImported to true. A project that reaches the generator through a library
+    // referenced without PrivateAssets doesn't get the props, so it can't have templates and the generator skips it.
+    private static bool IsPropsImported(AnalyzerConfigOptions globalOptions)
+    {
+        return globalOptions.TryGetValue(_propsImportedKey, out var value) && string.Equals(value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
     }
 
     // Reads the AnglePlate metadata the targets file puts on each additional file it adds; any other file isn't a template
@@ -184,61 +216,71 @@ public class TemplateGenerator : IIncrementalGenerator
         return string.Equals(value, nameof(TemplateOrigin.Explicit), StringComparison.OrdinalIgnoreCase) ? TemplateOrigin.Explicit : TemplateOrigin.None;
     }
 
-    // Parses, validates, and transpiles one template into plain values the driver can compare with the previous run
-    private static TemplateResult ProcessTemplate(TemplateFile template, CancellationToken cancellationToken)
+    // Parses, validates, and writes one template into plain values the driver can compare with the previous run
+    private static TemplateResult ProcessTemplate(TemplateFile template, TemplateContext templateContext, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var parserOptions = TemplateParserOptions.Default;
-        var parseResult = new TemplateParser(parserOptions).Parse(template.Content.AsSpan());
-        var directiveTokens = parseResult.Tokens.Where(token => token.Type == TokenType.Directive).ToList();
+        var parsed = TemplateParser.Parse(template.Content, cancellationToken);
         var lines = SourceText.From(template.Content, Encoding.UTF8).Lines;
         var diagnostics = new List<TemplateDiagnostic>();
         var sources = new List<GeneratedTemplate>();
 
+        // A misspelled directive either ends the directive section or keeps the file from being a template, so the first
+        // line after the directives, or the first line of a file without any, gets checked for one
+        var lineStart = parsed.Directives.Count == 0 ? 0 : parsed.BodyStart;
+        var checkedLine = TextSpan.FromBounds(lineStart, TemplateSyntax.LineEnd(template.Content, lineStart));
+        var lineText = template.Content.Substring(checkedLine.Start, checkedLine.Length);
+        var intended = DirectiveSpellCheck.FindIntendedDirective(lineText, out var misspelled);
+        if (intended is not null)
+        {
+            diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.PossibleMisspelledDirective, template.Path, lines, checkedLine, misspelled, intended));
+        }
+
         // A file is a template when it starts with a known directive. The default folder picks up notes and other
         // files, so those are skipped quietly, but a file the project added explicitly was meant to be a template.
-        if (directiveTokens.Count == 0)
+        if (parsed.Directives.Count == 0)
         {
             if (template.Origin == TemplateOrigin.Explicit)
             {
-                diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.NoDirectives, template.Path, lines, lines[0].Span, template.Path));
+                diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.NotATemplate, template.Path, lines, lines[0].Span));
             }
 
             return new TemplateResult(template, diagnostics, sources);
         }
 
-        var transpilerOptions = TemplateTranspilerOptions.Create(
-            template.Path, template.Content.AsSpan(), directiveTokens, parseResult.DirectiveSectionEnd, parserOptions.Whitespace);
+        // Paths relative to the project folder keep class docs and file headers the same on every machine, and they're
+        // what #type and #namespace are derived from
+        var relativePath = TemplatePath.GetRelativePath(template.Path, templateContext.ProjectDirectory);
 
         // Errors skip only this template
-        if (transpilerOptions.Errors.Count > 0 || parseResult.Errors.Count > 0)
+        var errors = new List<TemplateError>();
+        var directives = DirectiveReader.Read(parsed, relativePath, templateContext, errors);
+        errors.AddRange(parsed.Errors);
+        if (directives is null || errors.Count > 0)
         {
-            foreach (var error in transpilerOptions.Errors)
+            foreach (var error in errors)
             {
                 diagnostics.Add(CreateDiagnostic(error.Descriptor, template.Path, lines, error.Span, error.Arguments));
             }
 
-            foreach (var error in parseResult.Errors)
-            {
-                var span = new TextSpan(error.Start, error.Length);
-                diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.UnclosedBlock, template.Path, lines, span, error.ClosingDelimiter));
-            }
-
             return new TemplateResult(template, diagnostics, sources);
         }
 
+        var isPublic = string.Equals(directives.AccessModifier, "public", StringComparison.Ordinal);
         foreach (var target in _generationTargets)
         {
-            if ((transpilerOptions.GenerationTarget & target) != 0)
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((directives.GenerationTarget & target) != 0)
             {
-                var source = TemplateTranspiler.Transpile(
-                    template.RelativePath, template.Path, lines, transpilerOptions, target, template.Content.AsSpan(), parseResult.Tokens);
-                sources.Add(new GeneratedTemplate(CreateHintPrefix(template.RelativePath, transpilerOptions, target), source));
+                var source = TemplateClassWriter.Write(relativePath, template.Path, lines, parsed, directives, target);
+                sources.Add(new GeneratedTemplate(CreateHintPrefix(directives, target), source, isPublic));
             }
         }
 
-        return new TemplateResult(template, diagnostics, sources);
+        var publicAccess = isPublic
+            ? CreateDiagnostic(DiagnosticDescriptors.PublicTemplateNeedsPublicSupportTypes, template.Path, lines, directives.AccessSpan)
+            : null;
+
+        return new TemplateResult(template, diagnostics, sources, publicAccess);
     }
 
     private static TemplateDiagnostic CreateDiagnostic(
@@ -247,98 +289,23 @@ public class TemplateGenerator : IIncrementalGenerator
         return new TemplateDiagnostic(descriptor, path, span, lines.GetLinePositionSpan(span), new EquatableArray<string>(arguments));
     }
 
-    private static string CreateHintPrefix(string path, TemplateTranspilerOptions options, GenerationTarget generationTarget)
+    // Names the source after the class it declares, such as MyApp.Templates.GreetingTextTemplate. The namespace uses each
+    // identifier's value, so a verbatim '@' or a Unicode escape never reaches the file name.
+    private static string CreateHintPrefix(TemplateDirectives directives, GenerationTarget target)
     {
-        // Length prefixes keep paths and declared names from producing ambiguous identities
-        var identity = new StringBuilder();
-        foreach (var component in new[] { path, options.Namespace!, options.Type!, generationTarget.ToString() })
-        {
-            identity.Append(component.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(component);
-        }
+        var identifiers = SyntaxFactory.ParseName(directives.Namespace).DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
+            .Select(identifier => identifier.Identifier.ValueText);
 
-        using var hash = SHA256.Create();
-        var digest = hash.ComputeHash(Encoding.UTF8.GetBytes(identity.ToString()));
-        var hex = new StringBuilder(digest.Length * 2);
-        foreach (var value in digest)
-        {
-            hex.Append(value.ToString("x2", CultureInfo.InvariantCulture));
-        }
-
-        return $"{generationTarget}Template.{hex}";
+        return $"{string.Join(".", identifiers)}.{directives.Type}{target}Template";
     }
 
+    // The second file with a name gets .2, the third .3, and so on, so AddSource doesn't throw on a repeated name
     private static string CreateHintName(string prefix, Dictionary<string, int> counts)
     {
-        // Identical identities, such as duplicate templates, get a numeric suffix so AddSource doesn't throw
         counts.TryGetValue(prefix, out int count);
         counts[prefix] = count + 1;
-        var suffix = count == 0 ? string.Empty : $".{count.ToString(CultureInfo.InvariantCulture)}";
+        var suffix = count == 0 ? string.Empty : $".{(count + 1).ToString(CultureInfo.InvariantCulture)}";
 
         return $"{prefix}{suffix}.g.cs";
-    }
-
-    private sealed record TemplateFile
-    {
-        public TemplateFile(string path, string relativePath, string content, TemplateOrigin origin)
-        {
-            Path = path;
-            RelativePath = relativePath;
-            Content = content;
-            Origin = origin;
-        }
-
-        public string Path { get; }
-
-        public string RelativePath { get; }
-
-        public string Content { get; }
-
-        public TemplateOrigin Origin { get; }
-    }
-
-    // One template's diagnostics and sources; Path and Content are kept as the sort keys for numbering identical templates
-    private sealed record TemplateResult
-    {
-        public TemplateResult(TemplateFile template, List<TemplateDiagnostic> diagnostics, List<GeneratedTemplate> sources)
-        {
-            Path = template.Path;
-            Content = template.Content;
-            Diagnostics = new EquatableArray<TemplateDiagnostic>([.. diagnostics]);
-            Sources = new EquatableArray<GeneratedTemplate>([.. sources]);
-        }
-
-        public string Path { get; }
-
-        public string Content { get; }
-
-        public EquatableArray<TemplateDiagnostic> Diagnostics { get; }
-
-        public EquatableArray<GeneratedTemplate> Sources { get; }
-    }
-
-    private sealed record DuplicateTemplates
-    {
-        public DuplicateTemplates(string[] prefixes, GeneratedTemplate[] sources)
-        {
-            Prefixes = new EquatableArray<string>(prefixes);
-            Sources = new EquatableArray<GeneratedTemplate>(sources);
-        }
-
-        public EquatableArray<string> Prefixes { get; }
-
-        public EquatableArray<GeneratedTemplate> Sources { get; }
-    }
-
-    private sealed record GeneratedTemplate
-    {
-        public GeneratedTemplate(string hintPrefix, string source)
-        {
-            HintPrefix = hintPrefix;
-            Source = source;
-        }
-
-        public string HintPrefix { get; }
-
-        public string Source { get; }
     }
 }

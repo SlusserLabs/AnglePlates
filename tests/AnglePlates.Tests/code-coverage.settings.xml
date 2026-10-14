@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CI passes this file to this project's test run through the coverage-settings option.
+  Only the generator is instrumented. On Linux, the collector otherwise instruments each GeneratedTests assembly the
+  tests write to disk while the test still writes or loads it, and those tests fail with BadImageFormatException or
+  UnauthorizedAccessException.
+-->
+<Configuration>
+  <CodeCoverage>
+    <ModulePaths>
+      <Include>
+        <ModulePath>.*SlusserLabs\.AnglePlates\.dll$</ModulePath>
+      </Include>
+    </ModulePaths>
+  </CodeCoverage>
+</Configuration>

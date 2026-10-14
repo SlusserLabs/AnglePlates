@@ -1,0 +1,5 @@
+#type NestedGenericModel
+#model Dictionary<string, List<int>>
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+#using System.Collections.Generic
+[% foreach (var pair in model) { %][[ pair.Key ]]=[[ pair.Value.Count ]];[% } %]

@@ -1,0 +1,8 @@
+#model SlusserLabs.AnglePlates.Samples.HelloWorld.ViewModels.HelloWorldViewModel
+#generate Text
+#encode none
+Subject: [[ model.Title ]]
+
+[% foreach (var paragraph in model.Paragraphs) { -%]
+- [[ paragraph ]]
+[% } -%]

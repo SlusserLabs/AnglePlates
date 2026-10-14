@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- A global reference applies to every project under this folder and is private to each one, so no project file names AnglePlates. -->
+    <GlobalPackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" />
+  </ItemGroup>
+</Project>

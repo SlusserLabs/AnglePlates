@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CI passes this file to this project's test run through the coverage-settings option.
+  The compiled templates and their support types live in this test assembly, so its coverage is the emitted code's
+  coverage. The Microsoft collector leaves the test assembly out unless IncludeTestAssembly is on.
+  Static instrumentation is off because, with it on, the Linux test host writes the report and then crashes with exit
+  code 134 ("Unable to get nested type properties"). Dynamic instrumentation alone reports the same numbers.
+-->
+<Configuration>
+  <IncludeTestAssembly>true</IncludeTestAssembly>
+  <CodeCoverage>
+    <EnableStaticManagedInstrumentation>False</EnableStaticManagedInstrumentation>
+  </CodeCoverage>
+</Configuration>

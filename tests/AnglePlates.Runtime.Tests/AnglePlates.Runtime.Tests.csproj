@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Load the generator the way a NuGet consumer does: props first, then the analyzer reference, then the targets -->
+  <Import Project="..\..\src\AnglePlates\build\SlusserLabs.AnglePlates.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SlusserLabs.AnglePlates.Runtime.Tests</RootNamespace>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- ProbeEncoder overrides the pointer-based TextEncoder members -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)GeneratedFiles</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TUnit" Version="1.65.0" />
+    <ProjectReference Include="..\..\src\AnglePlates\AnglePlates.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Import Project="..\..\src\AnglePlates\build\SlusserLabs.AnglePlates.targets" />
+</Project>

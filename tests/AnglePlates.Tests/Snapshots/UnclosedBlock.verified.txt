@@ -1,0 +1,18 @@
+﻿{
+  Diagnostics: [
+    {
+      Location: Templates\example.html: (4,7)-(4,9),
+      Message: Template block is missing its closing delimiter ']]',
+      Severity: Error,
+      Descriptor: {
+        Id: SLAP004,
+        Title: Unclosed template block,
+        HelpLink: https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap004,
+        MessageFormat: Template block is missing its closing delimiter '{0}',
+        Category: SlusserLabs.AnglePlates,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}

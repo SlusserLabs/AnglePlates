@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- A file added with Include has to be a template -->
+    <AnglePlate Include="Notes\notes.txt" />
+  </ItemGroup>
+</Project>

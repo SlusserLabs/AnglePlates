@@ -8,7 +8,7 @@ using SlusserLabs.AnglePlates.Benchmarks.Templates;
 
 namespace SlusserLabs.AnglePlates.Benchmarks;
 
-// One C# variable holding plain ASCII, text that needs HTML encoding, or a value past the 32K-character rental cap,
+// One C# variable holding plain ASCII, text that needs HTML encoding, or a 100,000-character plain value,
 // with encoding on and off
 [MemoryDiagnoser]
 [CategoriesColumn]

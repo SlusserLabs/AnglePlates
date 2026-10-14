@@ -1,0 +1,1 @@
+Templates/unclosed.html(4,7): error SLAP004: Template block is missing its closing delimiter ']]' (https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap004)

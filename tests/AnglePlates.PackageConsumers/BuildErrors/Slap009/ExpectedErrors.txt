@@ -1,0 +1,1 @@
+CSC : error SLAP009: MSBuild property 'AnglePlateBaseAccessModifier' has invalid value 'private'; expected 'public' or 'internal' (https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap009)

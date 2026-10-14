@@ -1,9 +1,12 @@
 #type Report
 #model NativeAot.ReportModel
 #namespace NativeAot.Templates
+#using NativeAot.Children
 #access public
 <h1>[[ model.Title ]]</h1>
 <p>[[ model.Permissions ]] [[ model.Missing ]]|[[ model.Total ]] [[ model.Ratio ]] [[ model.Generated ]]</p>
+<p>Café ✓ 東京 [[ model.Stamp ]] [[ model.Id ]]</p>
+<pre>[[ model.Notes ]]</pre>
 <ul>
 [% foreach (var line in model.Lines) { -%]
 [% Lines.Render(line, writer); -%]

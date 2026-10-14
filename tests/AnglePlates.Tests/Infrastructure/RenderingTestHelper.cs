@@ -2,12 +2,16 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.IO.Pipelines;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using TUnit.Assertions;
+using TUnit.Assertions.Extensions;
 
 namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 
+// Loads a generated assembly and renders its templates through the text, UTF-8, and pipe paths
 internal static class RenderingTestHelper
 {
     public static TemplateAdditionalText Template(
@@ -19,8 +23,16 @@ internal static class RenderingTestHelper
     public static (string text, byte[] bytes) Render(Compilation compilation, string? model = "<value>", string type = "Consumer.Example", string? nullVariable = null)
     {
         using var generated = GeneratedAssembly.Load(compilation);
-        var options = Activator.CreateInstance(generated.Assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions", throwOnError: true)!)!;
-        options.GetType().GetProperty("NullVariable")!.SetValue(options, nullVariable);
+
+        // Without a NullVariable the templates use their own default options, which is the preset #encode picked.
+        // Reflection can still call the init accessor.
+        object? options = null;
+        if (nullVariable is not null)
+        {
+            options = Activator.CreateInstance(generated.Assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions", throwOnError: true)!)!;
+            options.GetType().GetProperty("NullVariable")!.SetValue(options, nullVariable);
+        }
+
         using var writer = new StringWriter();
         var buffer = new ArrayBufferWriter<byte>();
         Render(generated, type + "TextTemplate", model, writer, options);
@@ -34,6 +46,15 @@ internal static class RenderingTestHelper
         }
 
         return (writer.ToString(), buffer.WrittenSpan.ToArray());
+    }
+
+    // Checks both rendering paths against the same expected text
+    public static async Task AssertRendersAsync(Compilation compilation, string type, string expected)
+    {
+        var (text, bytes) = Render(compilation, type: type);
+
+        await Assert.That(text).IsEqualTo(expected);
+        await Assert.That(bytes).IsEquivalentTo(Encoding.UTF8.GetBytes(expected));
     }
 
     public static void Render(GeneratedAssembly generated, string typeName, string? model, object writer, object? options = null)

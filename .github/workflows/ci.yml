@@ -1,0 +1,149 @@
+# Builds, tests, packs, and validates AnglePlates on every pull request and push to main.
+# Other workflows can reuse it through workflow_call, so a release can require the same checks before it packs.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request cancels the older CI run. When another workflow calls this one,
+# github.event_name is the caller's event, so a release run that reuses it is never cancelled halfway.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+jobs:
+  validate:
+    name: ${{ matrix.name }}
+    strategy:
+      # Every leg reports its own result, even when another leg fails
+      fail-fast: false
+      matrix:
+        include:
+          # Full legs: build, test, run the sample, pack, and validate the package with the global.json SDK
+          - { name: windows, os: windows-latest, full: true, sdk: '' }
+          - { name: ubuntu, os: ubuntu-latest, full: true, sdk: '' }
+          # Package validation with the newest 10.0 SDK, which global.json's latestFeature roll-forward picks
+          - { name: latest-sdk, os: ubuntu-latest, full: false, sdk: '10.0.x' }
+          # Package validation with the oldest supported SDK, pinned through -SdkVersion
+          - { name: sdk-floor, os: ubuntu-latest, full: false, sdk: '10.0.100' }
+    runs-on: ${{ matrix.os }}
+    env:
+      DOTNET_NOLOGO: true
+      PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}.${{ github.run_attempt }}
+    steps:
+      # Gets the repository at the commit under test
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Installs the SDK that global.json asks for
+      - name: Set up the global.json SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Adds the newest 10.0 SDK for latest-sdk, or exactly 10.0.100 for sdk-floor
+      - name: Set up the extra SDK
+        if: matrix.sdk != ''
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ matrix.sdk }}
+
+      # Restores every project in the solution
+      - name: Restore
+        run: dotnet restore AnglePlates.slnx
+
+      # Builds in Release with the CI version, failing on any warning
+      - name: Build
+        run: dotnet build AnglePlates.slnx -c Release --no-restore -warnaserror -p:Version=${{ env.PACKAGE_VERSION }}
+
+      # Runs the generator tests with the coverage collector that comes with TUnit; the settings file instruments only the generator
+      - name: Test the generator
+        if: matrix.full
+        run: dotnet test --project tests/AnglePlates.Tests -c Release --no-build --results-directory TestResults --coverage --coverage-output-format cobertura --coverage-output generator.cobertura.xml --coverage-settings tests/AnglePlates.Tests/code-coverage.settings.xml
+
+      # Runs the emitted-code tests with coverage; the settings file includes the test assembly, which holds the compiled templates
+      - name: Test the emitted code
+        if: matrix.full
+        run: dotnet test --project tests/AnglePlates.Runtime.Tests -c Release --no-build --results-directory TestResults --coverage --coverage-output-format cobertura --coverage-output runtime.cobertura.xml --coverage-settings tests/AnglePlates.Runtime.Tests/code-coverage.settings.xml
+
+      # Fails the leg when the generator or the emitted code drops below 90% line or branch coverage
+      - name: Coverage gate
+        if: matrix.full
+        shell: pwsh
+        run: |
+          $threshold = 0.90
+          # Each report gates one named module, and any other module in it is ignored
+          $gates = @(
+              @{ Report = 'TestResults/generator.cobertura.xml'; Module = 'SlusserLabs.AnglePlates' }
+              @{ Report = 'TestResults/runtime.cobertura.xml'; Module = 'AnglePlates.Runtime.Tests' }
+          )
+          $failed = $false
+          foreach ($gate in $gates) {
+              $package = ([xml](Get-Content -Raw $gate.Report)).coverage.packages.package | Where-Object name -eq $gate.Module
+              if (-not $package) {
+                  Write-Host "::error::$($gate.Report) has no $($gate.Module) module"
+                  $failed = $true
+                  continue
+              }
+              foreach ($rate in 'line-rate', 'branch-rate') {
+                  # Cobertura writes rates with a dot, so parse them with the invariant culture
+                  $value = [double]::Parse($package.$rate, [cultureinfo]::InvariantCulture)
+                  Write-Host ('{0} {1}: {2:P2}' -f $gate.Module, $rate, $value)
+                  if ($value -lt $threshold) {
+                      Write-Host ('::error::{0} {1} is {2:P2}, below {3:P0}' -f $gate.Module, $rate, $value, $threshold)
+                      $failed = $true
+                  }
+              }
+          }
+          if ($failed) { exit 1 }
+
+      # Runs the sample, which fails the step with a nonzero exit code
+      - name: Run the sample
+        if: matrix.full
+        run: dotnet run --project samples/HelloWorld -c Release --no-build --no-launch-profile
+
+      # Packs the .nupkg and .snupkg pair from the build above
+      - name: Pack
+        run: dotnet pack src/AnglePlates/AnglePlates.csproj -c Release --no-build -o artifacts/package -p:Version=${{ env.PACKAGE_VERSION }}
+
+      # Installs the Native AOT linker and zlib headers; validate-package.ps1 checks for them too. windows-latest
+      # runners already have the Visual Studio C++ workload, so the windows leg publishes natively without this step.
+      - name: Install Native AOT prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # Runs every consumer the script registers on every leg, including BuildErrors, ScannerParity, the Native AOT
+      # publish, and the AOT canary, and keeps their binlogs for the failure upload. Nothing passes -SkipNativeAot here.
+      - name: Validate the package
+        shell: pwsh
+        run: |
+          # The latest-sdk leg uses the newest SDK on the runner; the sdk-floor leg pins 10.0.100.
+          # Splat a hashtable: an array splat passes '-SdkVersion' as a plain positional value, not a parameter name.
+          $sdk = '${{ matrix.name }}' -eq 'sdk-floor' ? @{ SdkVersion = '10.0.100' } : @{}
+          ./eng/validate-package.ps1 -Version $env:PACKAGE_VERSION -KeepOutput "$env:RUNNER_TEMP/validation" @sdk
+
+      # Uploads snapshot mismatches, test results with the Cobertura reports, and consumer binlogs when any step fails
+      - name: Upload failure details
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failure-${{ matrix.name }}
+          if-no-files-found: ignore
+          path: |
+            **/*.received.*
+            TestResults/**
+            ${{ runner.temp }}/validation/**/*.binlog
+
+      # Keeps one validated package pair per run; the name avoids clashing with a calling workflow's artifacts in the same run
+      - name: Upload the package
+        if: matrix.name == 'ubuntu'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-package
+          path: artifacts/package/*

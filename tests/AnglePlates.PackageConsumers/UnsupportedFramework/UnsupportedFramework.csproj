@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Older than the .NET 10 that AnglePlates supports; eng/validate-package.ps1 expects this build to fail with exactly
+         ExpectedErrors.txt, apart from the SDK's NETSDK1138 end-of-support warning, which the script ignores -->
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <LangVersion>11.0</LangVersion>
+    <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

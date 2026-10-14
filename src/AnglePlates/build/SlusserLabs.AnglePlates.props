@@ -1,0 +1,38 @@
+<!-- Loads before the consumer's project file, so everything here is a default the project can override -->
+<Project>
+
+  <!-- Defaults for the AnglePlates properties; MSBuild evaluates every property before any item -->
+  <PropertyGroup>
+    <!-- Tells the generator this project imported these props. A project that only gets the analyzer, through a library
+         referenced without PrivateAssets, can't have templates, so the generator adds nothing there. -->
+    <AnglePlatePropsImported>true</AnglePlatePropsImported>
+
+    <!-- Access modifier of the generated support types: public or internal -->
+    <AnglePlateBaseAccessModifier Condition="'$(AnglePlateBaseAccessModifier)' == ''">internal</AnglePlateBaseAccessModifier>
+
+    <!-- Set to false to turn off the default Templates folder, from the project file or Directory.Build.props -->
+    <EnableDefaultAnglePlateItems Condition="'$(EnableDefaultAnglePlateItems)' == ''">true</EnableDefaultAnglePlateItems>
+  </PropertyGroup>
+
+  <!-- The default Templates folder, skipped when EnableDefaultAnglePlateItems is false -->
+  <ItemGroup Condition="'$(EnableDefaultAnglePlateItems)' == 'true'">
+    <!-- Every file under Templates is checked; drop single files with <AnglePlate Remove="Templates\draft.html" /> -->
+    <AnglePlate Include="Templates\**\*">
+      <!-- Marks the item as the default, which the targets tag Discovered; MSBuild doesn't allow a metadata attribute that starts with _ -->
+      <_AnglePlateSource>Discovered</_AnglePlateSource>
+    </AnglePlate>
+  </ItemGroup>
+
+  <!-- What the generator can read through the compiler's editorconfig -->
+  <ItemGroup>
+    <!-- The marker without which the generator emits nothing -->
+    <CompilerVisibleProperty Include="AnglePlatePropsImported" />
+    <!-- The support types' access modifier, which the generator validates and reports as SLAP009 when it's wrong -->
+    <CompilerVisibleProperty Include="AnglePlateBaseAccessModifier" />
+    <!-- A template without #namespace gets RootNamespace plus its folders -->
+    <CompilerVisibleProperty Include="RootNamespace" />
+    <!-- The Discovered or Explicit tag that the targets put on each template's AdditionalFiles item -->
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="AnglePlate" />
+  </ItemGroup>
+
+</Project>

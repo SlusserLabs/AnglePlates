@@ -1,0 +1,6 @@
+#type AsyncForeachIf
+#model string
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+#generate Utf8
+#using System
+[% foreach (var c in model) { %][% if (c == 'a') { %]A[% } %][% } %]!

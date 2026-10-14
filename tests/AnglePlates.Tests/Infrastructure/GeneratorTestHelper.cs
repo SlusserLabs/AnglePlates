@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -11,6 +12,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 
+// Runs the generator against an in-memory compilation and fails when the output doesn't compile as expected
 internal static class GeneratorTestHelper
 {
     private static readonly Lazy<ImmutableArray<MetadataReference>> _references = new(CreateReferences);
@@ -50,6 +52,11 @@ internal static class GeneratorTestHelper
         return Run(CreateCompilation(), CreateDriver(templates));
     }
 
+    public static GeneratorTestResult Run(AnalyzerConfigOptionsProvider optionsProvider, params AdditionalText[] templates)
+    {
+        return Run(CreateCompilation(), CreateDriver(templates, optionsProvider));
+    }
+
     public static GeneratorTestResult Run(
         Compilation compilation,
         GeneratorDriver driver,
@@ -69,17 +76,25 @@ internal static class GeneratorTestHelper
         // Emit catches errors that syntax and declaration diagnostics alone can miss
         using var assembly = new MemoryStream();
         var emitResult = output.Emit(assembly, cancellationToken: cancellationToken);
-        var errors = emitResult.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
-            .Select(ExpectedCompilerDiagnostic.FromDiagnostic).ToArray();
+        var errors = emitResult.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         var expectedErrors = (expectedCompilationErrors ?? []).ToArray();
-        if (!errors.SequenceEqual(expectedErrors))
+        if (errors.Length != expectedErrors.Length || !expectedErrors.Zip(errors, (expected, actual) => expected.Matches(actual)).All(matches => matches))
         {
             throw new InvalidOperationException("Generated consumer diagnostics did not match the expected errors." + Environment.NewLine +
                 "Expected:" + Environment.NewLine + string.Join(Environment.NewLine, expectedErrors.AsEnumerable()) + Environment.NewLine +
-                "Actual:" + Environment.NewLine + string.Join(Environment.NewLine, errors.AsEnumerable()));
+                "Actual:" + Environment.NewLine + string.Join(Environment.NewLine, errors.Select(Describe)));
         }
 
         return new GeneratorTestResult(driver, output, runResult);
+    }
+
+    private static string Describe(Diagnostic diagnostic)
+    {
+        var lineSpan = diagnostic.Location.GetLineSpan();
+        var mapped = diagnostic.Location.GetMappedLineSpan();
+        var mapping = mapped.HasMappedPath ? $" mapped to {mapped.Path}{mapped.Span}" : string.Empty;
+
+        return $"{diagnostic.Id} {diagnostic.GetMessage(CultureInfo.InvariantCulture)} in {Path.GetFileName(lineSpan.Path)}{lineSpan.Span}{mapping}";
     }
 
     private static ImmutableArray<MetadataReference> CreateReferences()
@@ -89,8 +104,12 @@ internal static class GeneratorTestHelper
             throw new InvalidOperationException("The test host did not provide its platform assemblies.");
         }
 
-        // Host references qualify this .NET 10 consumer only, not an older framework compatibility floor
+        // Only the shared framework, so generated code can't quietly depend on the test's own packages. These references
+        // qualify a .NET 10 consumer only, not an older framework compatibility floor.
+        var frameworkDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location);
+
         return paths.Split(Path.PathSeparator)
+            .Where(path => string.Equals(Path.GetDirectoryName(path), frameworkDirectory, StringComparison.OrdinalIgnoreCase))
             .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
             .ToImmutableArray();
     }

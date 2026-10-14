@@ -8,18 +8,29 @@
     <LangVersion>11.0</LangVersion>
     <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
 
-    <!-- The trim and AOT analyzers run on every build, and any warning, IL or otherwise, fails the build and the publish. -->
+    <!--
+      The trim and AOT analyzers run on every build, and any warning, IL or otherwise, fails the build and the publish.
+      eng/validate-package.ps1 checks that EnableTrimAnalyzer, EnableAotAnalyzer, and IlcTreatWarningsAsErrors come out true.
+    -->
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
-    <!-- The report template is public, so the support types are too; the line template stays internal. -->
+    <!--
+      Documentation diagnostics run on the generated files too, so a bad cref in the support types fails this build.
+      CS1591 is off only because this consumer's own public models have no docs; AnglePlates.Tests checks the generated docs.
+    -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- The report template is public, so the support types are too; the other templates stay internal. -->
     <AnglePlateBaseAccessModifier>public</AnglePlateBaseAccessModifier>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The canary template uses dynamic, so its build must fail with IL2026 or IL3050; it's only in the -p:AotCanary=true build. -->
+    <AnglePlate Remove="Templates\canary.html" Condition="'$(AotCanary)' != 'true'" />
   </ItemGroup>
 </Project>

@@ -4,6 +4,7 @@ using System.IO;
 
 namespace Consumers;
 
+// Checks that Directory.Build.props can turn the default items off but can't remove a single template
 internal static class Program
 {
     private static int Main()
@@ -13,9 +14,10 @@ internal static class Program
         using var writer = new StringWriter(CultureInfo.InvariantCulture);
         WelcomeTextTemplate.Default.Render("<consumer>", writer);
 
-        if (!hasDefault || !string.Equals(writer.ToString(), "Welcome &lt;consumer&gt;!", StringComparison.Ordinal))
+        // EnableDefaultAnglePlateItems turns the Templates folder off, and the Remove of the welcome template does nothing
+        if (hasDefault || !string.Equals(writer.ToString(), "Welcome &lt;consumer&gt;!", StringComparison.Ordinal))
         {
-            Console.Error.WriteLine("DirectoryBuildPropsRemove failed: expected the default Templates class to be kept and the Emails template to render.");
+            Console.Error.WriteLine("DirectoryBuildPropsRemove failed: expected no default Templates class and the Emails template to render despite the Remove.");
             return 1;
         }
 

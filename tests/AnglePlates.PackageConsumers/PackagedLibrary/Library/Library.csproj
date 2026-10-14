@@ -15,9 +15,6 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- PrivateAssets keeps AnglePlates out of this package's dependencies. -->
-    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="SlusserLabs.AnglePlates" Version="$(AnglePlatesPackageVersion)" PrivateAssets="all" />
   </ItemGroup>
 </Project>
