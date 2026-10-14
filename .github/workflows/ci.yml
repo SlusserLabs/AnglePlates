@@ -123,8 +123,9 @@ jobs:
       - name: Validate the package
         shell: pwsh
         run: |
-          # The latest-sdk leg uses the newest SDK on the runner; the sdk-floor leg pins 10.0.100
-          $sdk = '${{ matrix.name }}' -eq 'sdk-floor' ? @('-SdkVersion', '10.0.100') : @()
+          # The latest-sdk leg uses the newest SDK on the runner; the sdk-floor leg pins 10.0.100.
+          # Splat a hashtable: an array splat passes '-SdkVersion' as a plain positional value, not a parameter name.
+          $sdk = '${{ matrix.name }}' -eq 'sdk-floor' ? @{ SdkVersion = '10.0.100' } : @{}
           ./eng/validate-package.ps1 -Version $env:PACKAGE_VERSION -KeepOutput "$env:RUNNER_TEMP/validation" @sdk
 
       # Uploads snapshot mismatches, test results with the Cobertura reports, and consumer binlogs when any step fails
