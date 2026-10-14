@@ -1063,8 +1063,8 @@ Then:
    - Clears `VersionSuffix` for the release commit.
    - Updates the README for the stable release: the install line, the NuGet and CI badges, and the absolute icon URL now that the repo is public.
    - Deletes `plans/` and runs the 100% coverage check.
-2. **The owner tags `v1.0.0`** on the merged commit and creates and publishes a GitHub Release from it, with the CHANGELOG section as its notes.
-3. **The owner sets `NUGET_ORG_PUBLISH_ENABLED` to `true`** and **approves the `nuget-org` deployment.**
+2. **The owner sets `NUGET_ORG_PUBLISH_ENABLED` to `true`** first, because `publish-nuget`'s `if` reads the variable during the run that the Release starts.
+3. **The owner tags `v1.0.0`** on the merged commit, creates and publishes a GitHub Release from it with the CHANGELOG section as its notes, and **approves the `nuget-org` deployment.**
 4. After publishing:
    - Set the variable back to `false`.
    - Verify that the help links resolve, Source Link opens the right commit, and the README renders on nuget.org with its icon and links.
@@ -1506,7 +1506,7 @@ This is where the owner provides everything in [19](#19-owner-only-tasks-and-rem
 - The nuget.org policy, which the owner creates.
 - The stable preflight (lines 7-13) and, if the owner asks, the login-only check (line 14).
 - The release-prep PR ([12.7](#127-stable-release-to-nugetorg)).
-- **The owner tags `v1.0.0`, publishes the GitHub Release, flips the variable, and approves the deployment.**
+- **The owner flips the variable, tags `v1.0.0`, publishes the GitHub Release, and approves the deployment.**
 
 **Accept when:**
 
@@ -1554,7 +1554,7 @@ The AI disclosure and the copyright string are settled ([2](#2-decision-log)). E
 
 10. Make the repo public. Then set up the `nuget-org` environment, the `NUGET_ORG_PUBLISH_ENABLED` variable (`false`), rulesets, private vulnerability reporting, and the social preview.
 11. Create the nuget.org trusted-publishing policy.
-12. Tag `v1.0.0`, publish the GitHub Release, set `NUGET_ORG_PUBLISH_ENABLED` to `true`, approve the `nuget-org` deployment, then set the variable back to `false`.
+12. Set `NUGET_ORG_PUBLISH_ENABLED` to `true`, tag `v1.0.0`, publish the GitHub Release, approve the `nuget-org` deployment, then set the variable back to `false`.
 
 ## Appendix A. Draft icon SVG
 
