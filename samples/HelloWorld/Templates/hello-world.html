@@ -1,6 +1,5 @@
-#type HelloWorld
 #model SlusserLabs.AnglePlates.Samples.HelloWorld.ViewModels.HelloWorldViewModel
-#namespace SlusserLabs.AnglePlates.Samples.HelloWorld.Templates
+[* #type and #namespace come from the file name and folder, so this becomes HelloWorldTextTemplate and HelloWorldUtf8Template -*]
 <!DOCTYPE html>
 <html>
 <head>
@@ -8,10 +7,8 @@
 </head>
 <body>
     <h1>[[ model.Title ]]</h1>
-    [%- foreach (var p in model.Paragraphs) { %]
-    <p>[[ p ]]</p>
-    [%- } -%]
+    [%- foreach (var paragraph in model.Paragraphs) { %]
+    <p>[[ paragraph ]]</p>
+    [%- } %]
 </body>
 </html>
-[*- Comment -*]
-#not directive

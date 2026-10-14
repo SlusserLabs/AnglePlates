@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Diagnostics reference
+    url: https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md
+    about: What each SLAP diagnostic means and how to fix it.
+  - name: Security report
+    url: https://github.com/SlusserLabs/AnglePlates/security/advisories/new
+    about: Report a vulnerability privately instead of opening an issue.

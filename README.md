@@ -200,7 +200,7 @@ Template mistakes are build errors with `SLAP` IDs, plus one warning (`SLAP011`)
 
 ## Contributing
 
-Want to change AnglePlates itself? [Developing AnglePlates](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/development.md) walks through how the generator works and how to build, test, and validate the package. For a small working app, see the [HelloWorld sample](https://github.com/SlusserLabs/AnglePlates/blob/main/samples/HelloWorld/README.md).
+Want to change AnglePlates itself? Start with [CONTRIBUTING.md](https://github.com/SlusserLabs/AnglePlates/blob/main/CONTRIBUTING.md). [Developing AnglePlates](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/development.md) walks through how the generator works and how to build, test, and validate the package. For a small working app, see the [HelloWorld sample](https://github.com/SlusserLabs/AnglePlates/blob/main/samples/HelloWorld/README.md).
 
 ## AI Disclosure
 

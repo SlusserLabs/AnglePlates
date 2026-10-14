@@ -2,7 +2,7 @@
 
 AnglePlates turns template files into C# classes while the consumer's project compiles. It's a Roslyn incremental source generator plus a pair of MSBuild files, packed as an analyzer-only NuGet package. Because the compiled templates and their support types are emitted into the consumer's assembly, the consumer never ships AnglePlates itself.
 
-This guide is for engineers who want to change AnglePlates. It follows one template from text to generated class, then shows how the generator coordinates many templates, how MSBuild hands templates to the generator, and how to build, test, and validate a change. The [README](../README.md) covers what consumers see, the [lexicon](lexicon.md) defines the project's terms, and the [roadmap](roadmap.md) lists known defects and planned work.
+This guide is for engineers who want to change AnglePlates. It follows one template from text to generated class, then shows how the generator coordinates many templates, how MSBuild hands templates to the generator, and how to build, test, and validate a change. The [README](../README.md) covers what consumers see, the [lexicon](lexicon.md) defines the project's terms, [Testing AnglePlates](testing.md) covers the test projects, and [Releasing AnglePlates](releasing.md) covers versions, CI, and publishing. Known defects and planned work live in GitHub issues.
 
 ## Set up the repository
 
@@ -11,10 +11,10 @@ Use a stable .NET 10 SDK. [global.json](../global.json) sets a 10.0.100 minimum,
 `AnglePlates.slnx` holds five projects:
 
 - `src/AnglePlates`, the generator. It targets `netstandard2.0` and Roslyn 4.14.0 so that it loads in the .NET 10 SDK's compiler, which is the oldest host a supported consumer can use. Its assembly name, package ID, and root namespace are all `SlusserLabs.AnglePlates`.
-- `samples/HelloWorld`, a console app that uses the generator from source and checks that `Render` on both renderers and `RenderAsync` produce the same output.
+- `samples/HelloWorld`, a console app that uses the generator from source. It writes an HTML page to the console and builds a plain-text email with `RenderToString`.
 - `tests/AnglePlates.Tests`, the TUnit project that tests the generator with in-memory compilations.
 - `tests/AnglePlates.Runtime.Tests`, a TUnit project that loads the generator the same way the sample does, compiles the real templates in its `Templates` folder, and tests the emitted classes as ordinary typed C#.
-- `benchmarks/AnglePlates.Benchmarks`, a BenchmarkDotNet app that uses the generator from source. It's in the solution so changes to emitted code keep it compiling, but nothing runs it automatically. [Performance](performance.md) explains how to run it and holds the recorded baseline.
+- `benchmarks/AnglePlates.Benchmarks`, a BenchmarkDotNet app that uses the generator from source. It's in the solution so changes to emitted code keep it compiling, but nothing runs it automatically. [Benchmarks](#benchmarks) explains how to run it.
 
 Consumers need .NET 10 and C# 11 or later. Generated code uses .NET 10 APIs and C# 11 syntax freely, without `#if` branches for anything older.
 
@@ -147,6 +147,7 @@ flowchart TD
     P[TemplateContext: project folder, RootNamespace] --> D
     D --> E[Template sources and diagnostics]
     D -->|collect| G[DuplicateTemplates]
+    G -->|shared hint names to skip| E
     G --> N[Numbered sources]
     S[GeneratorSettings: base access modifier, C# version] --> H[Support types]
     S --> E
@@ -198,7 +199,7 @@ dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -
 
 The script needs PowerShell 7.4 or later. It builds every consumer in one validation folder with an empty package cache and one generated `NuGet.config`. That configuration uses package source mapping, so AnglePlates comes only from `artifacts/package`, a library that a consumer packs comes only from the validation folder's own feed, and everything else (the Native AOT compiler and runtime packs, mostly) comes from nuget.org. The validation folder also gets a copy of the repository's `global.json`, and every `dotnet` command runs from there, so the consumers use the same SDK the repository does. The script prints that SDK version before it starts.
 
-It runs the [package validation project](../tests/AnglePlates.PackageTests/README.md) first, which installs the package, renders templates, and checks the package's contents, metadata, and the assets the consumer gets. The README is the package page on nuget.org, which doesn't resolve relative paths, so the validation project also fails on any README link or image that isn't an absolute `https://` URL or a `#anchor`, on images from hosts nuget.org doesn't trust, and on leftover `# TODO` or `TODO:` lines. It checks that `icon.png` is a square PNG between 128 and 512 px and no bigger than 100 KB. Then it runs each consumer in `tests/AnglePlates.PackageConsumers`. They cover discovery and its switches, project and package chains, central package management, derived names, the scanner, ASP.NET Core streaming, builds that must fail, an older framework, and Native AOT. A new consumer has to be registered in the script, or it never runs. The [package validation README](../tests/AnglePlates.PackageTests/README.md) has the one table of what each consumer checks.
+It runs the [package validation project](../tests/AnglePlates.PackageTests/README.md) first, which installs the package, renders templates, and checks the package's contents, metadata, and the assets the consumer gets. The README is the package page on nuget.org, which doesn't resolve relative paths, so the validation project also fails on any README link or image that isn't an absolute `https://` URL or a `#anchor`, on images from hosts nuget.org doesn't trust, and on any line that starts with a leftover to-do marker. It checks that `icon.png` is a square PNG between 128 and 512 px and no bigger than 100 KB. Then it runs each consumer in `tests/AnglePlates.PackageConsumers`. They cover discovery and its switches, project and package chains, central package management, derived names, the scanner, ASP.NET Core streaming, builds that must fail, an older framework, and Native AOT. A new consumer has to be registered in the script, or it never runs. The [package validation README](../tests/AnglePlates.PackageTests/README.md) has the one table of what each consumer checks.
 
 Most consumers just restore and `dotnet run`, and the program checks its own output. A few need more, and the script handles them:
 
@@ -220,7 +221,7 @@ The script takes a few options besides `-Version`:
 
 Native AOT needs a platform toolchain that the .NET SDK doesn't install: the Visual Studio "Desktop development with C++" workload on Windows, or clang and the zlib development headers on Linux. The script checks for it before running anything and stops with a message that names what's missing. Pass `-SkipNativeAot` to validate everything else; the script then warns that the native publish didn't run. The canary doesn't need the toolchain, because the analyzers stop it while it compiles. CI runs the native publish and the canary on both the `windows` and `ubuntu` legs, because `windows-latest` runners come with the C++ workload.
 
-Run the script on Linux as well as Windows, so `TemplatePath` and the MSBuild files see Unix paths. If you don't have a Linux machine, the `mcr.microsoft.com/dotnet/sdk:10.0-noble-aot` container has PowerShell, the SDK, and the Native AOT prerequisites. Mount the repository after packing on the host:
+CI runs this on Windows and Linux, so `TemplatePath` and the MSBuild files see both kinds of paths on every pull request. To try Linux before you push, use the `mcr.microsoft.com/dotnet/sdk:10.0-noble-aot` container, which has PowerShell, the SDK, and the Native AOT prerequisites. Pack on the host, then mount the repository:
 
 ```powershell
 docker run --rm -v "${PWD}:/repo:ro" mcr.microsoft.com/dotnet/sdk:10.0-noble-aot pwsh -File /repo/eng/validate-package.ps1 -Version 1.0.0-local.20261013.1
@@ -244,10 +245,28 @@ uv run --with resvg-py==0.5.0 python -c "import resvg_py; open('icon.png','wb').
 
 Look at the result at 128 and 32 px on both light and dark backgrounds before you commit it. Package lists and search results show the icon small, and detail that reads fine at 256 px can turn to mush at 32. Package validation fails if the PNG isn't square, is outside 128 to 512 px, or is over 100 KB.
 
-## Measuring performance
+## Benchmarks
 
-`benchmarks/AnglePlates.Benchmarks` compares compiled templates with hand-written code that produces the same output. Each benchmark's setup renders both and fails if they differ, so a change to emitted code can't quietly turn a comparison into nonsense. [Performance](performance.md) explains how to run the benchmarks and records the current numbers and Native AOT sizes. Measure before and after any change that's meant to make rendering faster, and don't claim a speedup the numbers don't show.
+`benchmarks/AnglePlates.Benchmarks` is a BenchmarkDotNet app that compares compiled templates with hand-written code that produces the same output. It loads the generator from source, like the sample, so it always measures your working tree. Run it in Release, and pass BenchmarkDotNet arguments after `--`:
+
+```powershell
+dotnet run -c Release --project benchmarks/AnglePlates.Benchmarks -- --filter *
+dotnet run -c Release --project benchmarks/AnglePlates.Benchmarks -- --filter *Table*
+```
+
+Adding `--runtimes net10.0 nativeaot10.0` runs a Native AOT job too, which needs the same native toolchain as the `NativeAot` package consumer. BenchmarkDotNet writes its reports to `BenchmarkDotNet.Artifacts`, which Git ignores.
+
+| Class | What it renders | Compared with |
+| --- | --- | --- |
+| `LiteralPageBenchmarks` | A 4 KB page of markup with two C# variables, to `TextWriter.Null`, a `StringWriter`, an `ArrayBufferWriter<byte>`, and a `Pipe`. | Nothing. The generated code is already a run of constant writes, which is what you'd write by hand. |
+| `TableBenchmarks` | A table of 10 or 1,000 rows, each with an `int`, a `string` that needs HTML encoding every fourth row, a `decimal`, an `int?` that's `null` every third row, an enum, a `DateTime`, and a `double`. It also compares `RenderAsync` to a `Pipe` with `Render` to the same `Pipe` followed by one flush. | Code that formats each value straight into the destination with the invariant culture and encodes strings with `HtmlEncoder.Default`. |
+| `ValueBenchmarks` | One C# variable holding 200 plain characters, 220 characters that need HTML encoding, or 100,000 plain characters, with encoding on and off. | Code that writes the value with or without `HtmlEncoder.Default`. |
+| `ManyVariablesBenchmarks` | A template with 3,000 C# variables, each a short string. | A loop that encodes and writes the same value 3,000 times. |
+
+The destinations are reused between operations, so the numbers measure rendering, not buffer growth. Every class with a hand-written comparison renders both in its setup and throws if the output differs, so a change to emitted code can't quietly turn a comparison into nonsense.
+
+The numbers don't live in the repository. Run the benchmarks before and after a change that's meant to make rendering faster, put both tables in the pull request, and don't claim a speedup the numbers don't show.
 
 ## Before you send a change
 
-Build the solution, run the tests that cover your change, and run the sample when generation or rendering changed. Update the README when consumer-facing behavior changes, and update this guide when the repository layout or workflow changes. Keep known defects and planned work in the [roadmap](roadmap.md) instead of describing them as if they already work.
+Build the solution, run the tests that cover your change, and run the sample when generation or rendering changed. Update the README when consumer-facing behavior changes, update this guide when the repository layout or workflow changes, and add a line to the `Unreleased` section of the [changelog](../CHANGELOG.md) for anything a consumer would notice. Known defects and planned work go in GitHub issues, not in the docs.

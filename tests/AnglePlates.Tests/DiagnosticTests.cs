@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -204,8 +203,10 @@ public sealed class DiagnosticTests
     public async Task Registry_EveryDescriptor_HasDocumentedHelpAnchor()
     {
         // Each rule's heading is exactly "## SLAPnnn", which GitHub turns into the #slapnnn anchor the help link names,
-        // and the next line repeats the descriptor's title in bold
-        var lines = File.ReadAllLines(RepositoryFile("docs/diagnostics.md"));
+        // and the next line repeats the descriptor's title in bold. DocumentationLinkTests uses the same anchor rules.
+        var path = RepositoryFiles.GetPath("docs/diagnostics.md");
+        var lines = File.ReadAllLines(path);
+        var anchors = MarkdownDocument.Load(path).Anchors;
         var descriptors = AllDescriptors();
 
         await Assert.That(descriptors.Length).IsEqualTo(11);
@@ -216,13 +217,14 @@ public sealed class DiagnosticTests
             await Assert.That(heading).IsGreaterThan(0);
             await Assert.That(lines[heading + 2]).IsEqualTo($"**{descriptor.Title}**");
             await Assert.That(descriptor.HelpLinkUri).IsEqualTo(HelpLink(descriptor.Id));
+            await Assert.That(anchors).Contains(new Uri(descriptor.HelpLinkUri).Fragment.TrimStart('#'));
         }
     }
 
     [Test]
     public async Task Registry_EveryDescriptor_IsInAnalyzerReleases()
     {
-        var unshipped = File.ReadAllText(RepositoryFile("src/AnglePlates/AnalyzerReleases.Unshipped.md"));
+        var unshipped = File.ReadAllText(RepositoryFiles.GetPath("src/AnglePlates/AnalyzerReleases.Unshipped.md"));
 
         foreach (var descriptor in AllDescriptors())
         {
@@ -288,11 +290,5 @@ public sealed class DiagnosticTests
             .Where(field => field.FieldType == typeof(DiagnosticDescriptor))
             .Select(field => (DiagnosticDescriptor)field.GetValue(null)!)
             .ToArray();
-    }
-
-    // Finds a repository file from this source file's location, which works for any build output folder
-    private static string RepositoryFile(string relativePath, [CallerFilePath] string sourcePath = "")
-    {
-        return Path.Combine(Path.GetDirectoryName(sourcePath)!, "..", "..", relativePath);
     }
 }

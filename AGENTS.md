@@ -6,10 +6,10 @@
 - When using `/humanizer`, treat the Author Voice section below as the user-provided writing sample described by the skill's Voice instructions
 - Explicit user instructions take precedence over skill guidelines
 - If a skill causes a permission request, pause, unfinished work, or departure from user intent, link the exact `SKILL.md`, quote the relevant instruction, and explain its application; distinguish requirements from interpretation
-- Use [README.md](README.md) as the short nuget.org overview for consumers, [docs/templates.md](docs/templates.md) for writing templates, [docs/rendering.md](docs/rendering.md) for using compiled templates, [docs/configuration.md](docs/configuration.md) for MSBuild items and properties, [docs/development.md](docs/development.md) for contributor setup and architecture, and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
+- Use [README.md](README.md) as the short nuget.org overview for consumers, [docs/templates.md](docs/templates.md) for writing templates, [docs/rendering.md](docs/rendering.md) for using compiled templates, [docs/configuration.md](docs/configuration.md) for MSBuild items and properties, [docs/development.md](docs/development.md) for contributor setup and architecture, [docs/releasing.md](docs/releasing.md) for versions, CI, and publishing, [CHANGELOG.md](CHANGELOG.md) for shipped changes, and GitHub issues for known defects and planned work; verify affected code before relying on historical findings
 - Update affected documentation when behavior or repository structure changes, including README files; keep implemented behavior separate from planned work
 - README links and images are absolute `https://` URLs, because the README is the nuget.org readme
-- Use [docs/lexicon.md](docs/lexicon.md) for project terminology, [docs/testing.md](docs/testing.md) for test helpers, snapshot review, and current regression coverage, [docs/diagnostics.md](docs/diagnostics.md) for diagnostic IDs, and [docs/releasing.md](docs/releasing.md#diagnostic-release-tracking) for diagnostic release tracking
+- Use [docs/lexicon.md](docs/lexicon.md) for project terminology, [docs/testing.md](docs/testing.md) for test layers, helpers, and conventions, [docs/diagnostics.md](docs/diagnostics.md) for diagnostic IDs, and [docs/releasing.md](docs/releasing.md#diagnostic-release-tracking) for diagnostic release tracking
 
 ## Skill Routing
 
@@ -32,11 +32,11 @@ Keep the writing conversational and technically specific. Use contractions, conc
 ## Current Repository
 
 - AnglePlates is a compile-time template engine using a Roslyn incremental source generator; [docs/development.md](docs/development.md) describes the projects, source files, generator pipeline, and MSBuild assets
-- Use `samples/HelloWorld/Templates/hello-world.html` as the current example
+- Use `samples/HelloWorld` as the current example: `Templates/hello-world.html` is a page rendered to `Console.Out`, and `Templates/welcome-email.txt` shows `#encode none` with `RenderToString`; byte-for-byte rendering checks belong in `tests/AnglePlates.Runtime.Tests`, not the sample
 - Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
 - Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target and Roslyn 4.14.0 unless a host-compatibility change is deliberate and tested
 - The sample, generated-compilation tests, and package tests run on .NET 10 with C# 11. Do not claim support for earlier frameworks or compiler hosts without testing them
-- Repository projects need no `System.IO.Pipelines` or other extra references, because .NET 9+ includes Pipelines in the base framework; do not add them back
+- Repository projects need no `System.IO.Pipelines` or other extra references, because .NET 10 includes `System.IO.Pipelines` in the base framework; do not add them back
 
 ## General Practices
 

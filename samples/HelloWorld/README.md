@@ -1,9 +1,7 @@
 # HelloWorld sample
 
-This console application renders [hello-world.html](Templates/hello-world.html) using a concrete [model](ViewModels/HelloWorldViewModel.cs). It renders to a caller-owned `StringWriter` and `ArrayBufferWriter<byte>`, renders again with `RenderAsync` to a `Pipe`, checks that all three produce the same bytes, then prints the HTML once.
+This console app renders two templates from one [model](ViewModels/HelloWorldViewModel.cs): [hello-world.html](Templates/hello-world.html), an HTML page written straight to `Console.Out`, and [welcome-email.txt](Templates/welcome-email.txt), a plain-text email that uses `#encode none` and comes back as a string from `RenderToString`. Neither template needs `#type` or `#namespace`; the class names and namespaces come from the file names and folders.
 
-From the repository root, run `dotnet run --project samples/HelloWorld --no-launch-profile` with a .NET 10 SDK. The project uses C# 11 with implicit imports disabled. It references the generator as an analyzer and explicitly imports its template-discovery assets, the props file at the top and the targets file at the bottom, so it evaluates in the same order as a NuGet consumer; this demonstrates development from source, not NuGet package installation.
+Run it from the repository root with `dotnet run --project samples/HelloWorld --no-launch-profile`. The project sets `EmitCompilerGeneratedFiles`, so after a build the generated classes are under `samples/HelloWorld/obj/GeneratedFiles`.
 
-`#model` names the model, and the optional `#type` and `#namespace` name the generated classes. Omitting `#generate` generates both compiled template types. `[[ C# variable ]]` encodes dynamic output, `[% statements %]` embeds trusted C#, and `[* comment *]` contributes no output. Delimiter-adjacent `-` characters trim neighboring whitespace. The final `#not directive` is intentional literal output because directives are recognized only at the start.
-
-This is a plain console application with no extra framework or package references. Its [entry point](Program.cs) demonstrates both `Render` methods and `RenderAsync`; callers own the output writers.
+The sample uses the generator from source, not from NuGet. That's why its [project file](HelloWorld.csproj) has a `ProjectReference` to the generator as an analyzer and imports the package's props and targets by hand, in the same order NuGet would. In your own project, `dotnet package add SlusserLabs.AnglePlates` does all of that for you.

@@ -14,6 +14,9 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Generation target | The kind of compiled template that `#generate` selects: `Text` or `Utf8`. Without the directive, AnglePlates generates both. |
 | C# variable | C# inside `[[ ... ]]`. Its value is converted to a string and passed through the configured encoder. The name matches the parser's `TokenType.Variable`. |
 | C# block | C# inside `[% ... %]`. It becomes part of the generated render method, so it holds statements and control flow instead of a value to write. |
+| Opener | The two characters that start a block: `[[`, `[%`, or `[*`. |
+| Closing delimiter | The two characters that end a block: `]]`, `%]`, or `*]`. Call it the closer for short. In C# variables and C# blocks, the C# block scanner decides which closer ends the block, so a closer inside a C# string or comment doesn't count. |
+| Trim marker | A `-` right inside an opener or closer, as in `[%-` or `-]]`. It removes all the spaces, tabs, and line breaks in the literal text on that side of the block. |
 | Escaped opener | A `[[`, `[%`, or `[*` in literal text that follows an odd number of backslashes. AnglePlates writes the opener as literal text, plus one backslash for each pair before it. |
 
 ## Output
@@ -33,6 +36,7 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Discovered template | A possible template that comes only from the default item. If it doesn't start with a known directive, the generator skips it without an error. A first line that looks like a misspelled directive gets the `SLAP011` warning. |
 | Explicit template | A possible template that the project adds with its own `AnglePlate` `Include`, wildcards included. If it doesn't start with a known directive, the generator reports `SLAP008`. A file that's both discovered and explicit counts as explicit. Say "discovered" and "explicit," not "automatic" and "manual." |
 | Generator setting | A compiler-visible MSBuild property that the generator reads, such as `AnglePlateBaseAccessModifier`. A missing or empty value uses the default, and an invalid value reports `SLAP009`. |
+| Preview | A prerelease package, versioned `X.Y.Z-preview.<n>`, that goes only to int.nugettest.org and never to nuget.org. A local pack (`X.Y.Z-local.<yyyyMMdd>.<n>`) isn't a preview; it never leaves your machine. [Releasing AnglePlates](releasing.md#versions) has the version table. |
 | Compatibility floor | The oldest consumer framework and C# version AnglePlates supports: .NET 10 and C# 11. The generator reports `SLAP010` below C# 11. It doesn't check the framework: .NET 8 fails with a `CS0234` error for `System.IO.Pipelines`, and .NET 9 technically works (it builds and renders the same output) but isn't tested on every change, so .NET 10 stays the supported floor. |
 
 ## Generated code

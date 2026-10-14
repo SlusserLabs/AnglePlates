@@ -1,74 +1,165 @@
 # Testing AnglePlates
 
-## Project and generator helpers
+AnglePlates has three kinds of code to prove: the generator, the C# it emits into a consumer's project, and the NuGet package that delivers both. Each one gets its own layer of tests, because a test that's good at one of them is blind to the others. This guide explains what each layer proves, how to write a test in each, and the rules for snapshots and coverage. [Developing AnglePlates](development.md) explains the code these tests exercise.
 
-`AnglePlates.Tests` is a nonpackable .NET 10 executable that uses TUnit 1.65.0, Roslyn 4.14.0, Verify.TUnit 31.27.0, Verify.SourceGenerators 2.5.0. `AnglePlates.Runtime.Tests`, described under [Runtime tests](#runtime-tests), is a second nonpackable .NET 10 executable that references only TUnit 1.65.0 and the generator as an analyzer. `global.json` selects Microsoft.Testing.Platform. Run the existing suite with `dotnet test --solution AnglePlates.slnx --no-build --no-restore` after restoring and building. Focused regressions now cover ordinary brackets, empty/unclosed blocks, trim flags, directive matching and line consumption, duplicate and invalid directive values with their locations, `#using` emission and name collisions, invalid-template isolation, readable hint names taken from the declared class, two pairs of clashing templates whose numbered hint names don't depend on file order, the same class declared by two templates (numbered names and compiler-reported duplicate members), classes that differ only by case (numbered names that compile), invariant-culture formatting of C# variables, `NullVariable` substitution for null C# variables of every type (including `dynamic` and objects whose `ToString` returns `null`), repeated C# variables in one block, compiler errors for unconvertible and stray C# variables such as `[[1, 2]]` and their `#line` locations in the template, `#line` locations for multi-line C# blocks, closers inside C# strings, character literals, and comments, balanced brackets in C# variables, `//` comments and `#if` lines inside blocks, a C# variable that ends in a `//` comment, broken C# such as an unterminated string whose `CS1010` error maps to the template line through `#line`, thousands of broken blocks in one template that each end at their own closer, template paths with quotes or line breaks, which can't appear in a `#line` directive and are escaped in the generated class documentation, escaped openers (backslash runs of one to four, trim markers, both line endings, and JavaScript, Bash, TOML, regex, and Markdown samples), `#encode` values in any casing and the preset each one picks, literal runs merged across comments, empty blocks, and escaped openers (a trim marker next to a merged run still trims only the literal beside it), `CS8852` for assigning `Default.Options.Encoder`, `RenderToString` inferring the model type, and generated sources that compile without warnings under `DocumentationMode.Diagnose` for both access modifiers. MSBuild option regressions cover untagged and unrecognized `AdditionalFiles`, which are ignored without being read, case-insensitive `AnglePlate` metadata values, discovered files without directives that are skipped, explicit files without directives that report `SLAP008` at the first line (a file Roslyn can't read counts as empty), `AnglePlateBaseAccessModifier` values that are missing, empty, padded, or differently cased, invalid values that report `SLAP009` and generate nothing, a missing `AnglePlatePropsImported` marker or any value but `true` (in any case and padding), which generates nothing and reports nothing even for broken templates and invalid settings, template names relative to Windows, UNC, and Unix project folders (including paths outside the folder, case-only prefix differences, and full-path fallbacks), and an edited untagged file that doesn't rerun the template steps. Accessibility regressions in `AccessibilityTests` cover the default `internal` support types and template classes, `SLAP005` for a `#access public` template on `internal` support types (including templates on the numbered hint-name path), `#access` values in any casing, and two-assembly compilations built with `CreateCompilation`'s `references` and `assemblyName`: a consumer with its own template that renders a referenced library's public template and gets only `CS0436` warnings, the `CS1503` error when that consumer passes its own `TemplateOptions` to the library's template, and the `CS0433` error in a consumer without AnglePlates that references two such libraries. `GeneratedAssembly.Load` accepts referenced assembly images and loads them into the same context so the consumer can run them. Incremental regressions in `IncrementalTests` cover editing one of two templates, an unrelated consumer source change, an edited untagged file, adding and removing a template, changing `AnglePlateBaseAccessModifier` to another valid value, to an invalid one, and back, removing the `AnglePlatePropsImported` marker and restoring it while the templates stay cached, reporting a cached template's diagnostics again, editing one of two identical templates without renumbering their hint names, a template's generation target changing while the support types keep their cached `SourceText`, raising the C# version from 10 to 11 so cached templates generate, changing the project folder, which rewrites the template without reading it again or regenerating the support types, changing `RootNamespace`, which reprocesses every template but not the support types, and reusing an unchanged template's generated `SourceText`. Compatibility regressions cover `SLAP010` for C# 9 and 10, with nothing generated and no other diagnostic, generation and rendering at C# 11, 12, `Latest`, and `Preview`, and `SLAP010` reported together with `SLAP009`. Every project that imports the package props gets all four support types, whatever its templates generate.
+| Layer | Where | What it proves |
+| --- | --- | --- |
+| Generator | `tests/AnglePlates.Tests` | Parsing, the C# block scanner, directives, diagnostics and where they land, `#line` mappings, hint names, MSBuild options, accessibility, C# versions, and incremental caching. It runs the generator against in-memory compilations. |
+| Emitted code | `tests/AnglePlates.Runtime.Tests` | How compiled templates behave: both targets, `Render`, `RenderAsync`, and `RenderToString`, encoding, nulls, value conversion, cancellation and flushing, child templates, and the README examples. It's plain typed C# against real template files. |
+| Package | `eng/validate-package.ps1`, `tests/AnglePlates.PackageTests`, and `tests/AnglePlates.PackageConsumers` | The packed `.nupkg`: its layout and metadata, analyzer loading, MSBuild discovery, real build errors, multi-project setups, Native AOT, and incremental rebuilds. |
 
-The tests are grouped by feature, one ordinary class per feature, with names in the form `{Method}_{Scenario}_{Outcome}`: `TemplateParserTests` for directive and body tokens, unclosed blocks, and cancellation, `CSharpBlockScannerTests` for where the lexer ends C# variables and C# blocks and for its brace and line-comment helpers, `BlockSyntaxTests` for rendered block syntax, including closers inside C# strings, comments, and brackets, `DirectiveReaderTests` for every directive, its defaults, derived `#type` and `#namespace` values, casing, duplicates, and values, `DirectiveSpellCheckTests` for the `SLAP011` table, `DiagnosticTests` for one test per registry rule plus the help-anchor check against `docs/diagnostics.md`, `LineMappingTests`, `HintNameTests`, `MSBuildOptionTests`, `AccessibilityTests`, `LanguageVersionTests`, `NameCollisionTests`, `IncrementalTests`, `TemplateOptionsTests`, `DocumentationModeTests`, `SupportTypesSnapshotTests`, and `TemplateSnapshotTests`. `EquatableArrayTests`, `TemplatePathTests`, `GeneratorSettingTests`, and `UnexpectedValueTests` call those internal helpers directly through `InternalsVisibleTo`. The emitted-code runtime tests live in [the runtime test project](#runtime-tests).
+Both test projects are TUnit executables on .NET 10, and `global.json` selects Microsoft.Testing.Platform. Restore and build first, then run them from the repository root:
 
-[GeneratorTestHelper](../tests/AnglePlates.Tests/Infrastructure/GeneratorTestHelper.cs) creates C# 11 consumer compilations with explicit imports. Their default references are only the assemblies in the .NET 10 shared framework folder, the folder that holds `typeof(object).Assembly`, so generated code can't quietly depend on the test project's own packages. [TemplateText](../tests/AnglePlates.Tests/Infrastructure/TemplateText.cs) builds template text around `#type`, `#model`, and `#namespace`, and `TestAnalyzerConfigOptionsProvider.WithAccessModifier`, `WithProjectDir`, and `WithRootNamespace` build the global options most tests need. Supply different references and language versions for compatibility cases; the default does not qualify older consumer frameworks. Supply in-memory `TemplateAdditionalText` instances and `TestAnalyzerConfigOptionsProvider` for global or per-file options.
+```powershell
+dotnet test --solution AnglePlates.slnx --no-build
+dotnet test --project tests/AnglePlates.Tests --no-build --treenode-filter "/*/*/BlockSyntaxTests/*"
+```
 
-The generator emits nothing unless the global options set `build_property.AnglePlatePropsImported` to `true`, the marker the package props add. `TestAnalyzerConfigOptionsProvider` adds it by default, like a project that imports the props. `TestAnalyzerConfigOptionsProvider.WithoutProps()`, or the constructor's `propsImported: false`, leaves it out, and `WithPropsImported(value)` sets another value.
+The test classes are grouped by feature, one ordinary class per feature, and test names follow `{Method}_{Scenario}_{Outcome}`.
 
-The generator only reads additional files that carry the `build_metadata.AdditionalFiles.AnglePlate` value that template discovery adds. To keep ordinary tests free of per-file options, `TestAnalyzerConfigOptionsProvider` tags any additional file without per-file options as `Discovered`, even when a test supplies only global options. Pass `TemplateAdditionalText.Explicit` as the `anglePlate` argument of `TemplateAdditionalText` or `RenderingTestHelper.Template` to make a file explicit, or `null` to leave it untagged. Per-file options replace the default tag entirely. `TemplateAdditionalText.GetTextCount` counts `GetText` calls, so a test can check that the generator never read a file. The pipeline steps that filter and read files are tracked as `AnglePlateFiles` and `TemplateFiles`. `TemplateResults` parses, validates, and writes each template, and `DuplicateTemplates` collects the sources of templates whose hint names collide. The tests read these names from the `internal const` fields on `TemplateGenerator`, such as `TemplateGenerator.TemplateResultsStep`.
+## Writing your first test
 
-`RenderingTestHelper.Template` wraps a body in the standard directives with a `string` model, and `RenderingTestHelper.Render` runs both renderers with an optional `NullVariable`. It also renders the UTF-8 class with `RenderAsync` to a `Pipe` without backpressure and fails if those bytes differ from `Render`, so every rendering case checks `RenderAsync` too. Use casts in the template body, such as `[[ (int?)null ]]`, to test other C# variable types.
+Most generator behavior is easiest to test by rendering a template and checking the exact output. `RenderingTestHelper.Template` wraps a body in directives that declare `Consumer.Example` with a `string` model, `GeneratorTestHelper.Run` runs the real generator and compiles the result, and `RenderingTestHelper.Render` runs both generated classes:
 
-`Run` executes the real generator, rejects generator exceptions and emits the resulting compilation before returning its driver, compilation and run result. Pass only templates to use the default compilation and driver, or pass your own when a test needs extra consumer sources, options, or a rerun. Successful cases permit no compiler errors. Negative compilation cases must supply exact `ExpectedCompilerDiagnostic` values in the order the compiler reports them, with invariant messages; do not derive expected values from the actual diagnostics. `ExpectedCompilerDiagnostic.Mapped` is for errors in template C#: it checks the `#line`-mapped template path and span exactly, and only the file name of the generated source. `Generated` is for errors in generated code outside a mapping and checks only the file name, and `Source` checks an exact span in a consumer source the test wrote. Leaving generated line numbers out means a cosmetic change to the emitted layout doesn't break these tests; the snapshot tests pin that layout instead. Assert generator diagnostics and locations separately from compiler errors. No broad error-acceptance switch is provided.
+```csharp
+[Test]
+[Arguments("[[ model ]]!", "&lt;value&gt;!")]
+[Arguments("[% var n = 2; %][[ n ]]", "2")]
+public async Task Variable_InBody_RendersEncodedValue(string body, string expected)
+{
+    var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+    var (text, bytes) = RenderingTestHelper.Render(result.Compilation);
 
-Use the returned driver with the original consumer compilation for reruns; update its additional texts or options through Roslyn driver methods. Tracked incremental steps are enabled. Assert both outputs and relevant reuse reasons when adding incremental tests. Roslyn 4.14 parses a new `SyntaxTree` for every generated source on each run, even when the output step is cached, so check reuse through `SourceText` identity and `TrackedOutputSteps` instead of tree identity. Do not reuse a compilation containing previously generated trees as the next input.
+    await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+    await Assert.That(text).IsEqualTo(expected);
+    await Assert.That(bytes).IsEquivalentTo(Encoding.UTF8.GetBytes(expected));
+}
+```
 
-`GeneratedAssembly.Load` gives the validated output a unique assembly identity, writes its sources, assembly, and portable PDB to a folder under `bin/<configuration>/net10.0/GeneratedAssemblies`, then loads the assembly from that path in a collectible context. Coverage tools only instrument assemblies loaded from disk whose PDB documents exist, so this is what lets them measure the emitted support types and template classes. `#line` directives inside the sources still point at the template paths. Each test session deletes the previous session's folder when it starts, so the last run's sources stay around for coverage results to display. Dispose the returned handle and release reflected objects when finished. The parser regressions execute both renderers and assert exact characters and bytes. `RenderingTestHelper.Render` creates templates without options unless a test asks for a `NullVariable`, so they use the preset their `#encode` directive picks.
+`Render` passes the model `"<value>"` unless you give it another one. It renders the text class to a `StringWriter`, the UTF-8 class to an `ArrayBufferWriter<byte>`, and the UTF-8 class again with `RenderAsync` to a `Pipe`, and it throws if `RenderAsync` wrote different bytes than `Render`. So a rendering test covers all three paths. To test another C# variable type, cast in the template, as in `[[ (int?)null ]]`.
 
-## Snapshot review
+A test of how compiled templates behave at run time goes in `AnglePlates.Runtime.Tests` instead. Add a template under its `Templates` folder, and the build turns it into a class you can call directly:
 
-[ModuleInitializer](../tests/AnglePlates.Tests/Infrastructure/ModuleInitializer.cs) initializes Verify.SourceGenerators once and directs Verify.TUnit artifacts into [Snapshots](../tests/AnglePlates.Tests/Snapshots). For snapshot tests, call `Run`, which validates the compilation, assert any diagnostics, and then verify `result.RunResult`. The support types have one reviewed snapshot in `SupportTypesSnapshotTests`, one set per base access modifier, so `TemplateSnapshotTests` leaves them out with `.IgnoreGeneratedResult(GeneratedSources.IsSupportType)`, which matches them by hint name. Don't add per-test copies of the support types.
+```csharp
+[Test]
+public async Task Render_StringModel_EncodesValue()
+{
+    var options = TestOptions.Create(encoded: true);
 
-Store reviewed `*.g.verified.cs` and `*.verified.txt` files in `Snapshots`; generated C# snapshots are excluded from compilation. Existing `.gitattributes` and `.editorconfig` settings preserve LF snapshot output while normal source files use CRLF. Unreviewed `*.received.*` output is ignored by Git.
+    await TemplateOutput.AssertRendersAsync(new VariableTextTemplate(options), new VariableUtf8Template(options), "<b>", "&lt;b&gt;");
+}
+```
 
-On a snapshot failure, inspect every generated-source and diagnostic diff, including both renderers. Accept only intentional changes using the comparison tool or by replacing the corresponding verified file after review, then rerun the affected cases. Never enable automatic acceptance. Verify.TUnit adds a parameterized test's arguments to its snapshot names. Snapshot equality does not replace runtime assertions. Reviewed snapshots cover both renderer sources (including an emitted `#using` import and `#line` mappings), a UTF-8 `RenderAsync` with its flush checks, a text renderer with escaped openers merged into one literal, a literal run merged across a comment, empty blocks, and an escaped opener in a `#encode none` template, the support types with `internal` and `public` access, the unclosed-block diagnostic, and the duplicate-directive and invalid-value diagnostics.
+Pick the generator layer when the question is "what does the generator do with this text?" and the runtime layer when it's "what does this compiled class do with this model?"
+
+## Generator test helpers
+
+[GeneratorTestHelper](../tests/AnglePlates.Tests/Infrastructure/GeneratorTestHelper.cs) creates C# 11 consumer compilations without implicit imports. Their references are only the assemblies in the .NET 10 shared framework folder, so generated code can't quietly depend on a package the test project happens to use. `Run` executes the real generator, fails on any generator exception, and fails on any compiler error you didn't list as expected. Pass only templates to get the default compilation and driver, or pass your own when a test needs extra consumer sources, other options, other references, or a different C# version.
+
+[TemplateText](../tests/AnglePlates.Tests/Infrastructure/TemplateText.cs) builds the same directive header for tests that write the whole file, with `HeaderWith` for other line breaks and `WithDirective` to swap or add one directive. `TemplateAdditionalText` is an in-memory template file. `GetTextCount` says how many times the generator read it, which is how a test proves a file was never opened.
+
+`TestAnalyzerConfigOptionsProvider` supplies the MSBuild values a real project would. A few rules matter when you use it:
+
+- The generator emits nothing unless `build_property.AnglePlatePropsImported` is `true`, the marker the package props set. The provider sets it by default. Use `WithoutProps()` or `WithPropsImported(value)` to test projects without it.
+- The generator only reads additional files that template discovery tagged. The provider tags every file without per-file options as `Discovered`. Pass `TemplateAdditionalText.Explicit` as the `anglePlate` argument to make a file explicit, or `null` to leave it untagged.
+- `WithAccessModifier`, `WithProjectDir`, and `WithRootNamespace` set the global options most tests need.
+
+`GeneratedAssembly.Load` writes the compiled output, its sources, and a portable PDB under `bin/<configuration>/net10.0/GeneratedAssemblies`, then loads it in a collectible context. Coverage tools only instrument assemblies loaded from disk, which is why it works this way. Dispose the handle when you're done. Each test session deletes the previous session's folder when it starts.
+
+## Compiler-error tests
+
+Some template mistakes aren't AnglePlates diagnostics. They're C# errors that the compiler reports at the template location through `#line`. A test for one passes every expected error to `Run`, in the order the compiler reports them, with the exact invariant message. Write the expected values by hand; never copy them from the actual diagnostics.
+
+```csharp
+var template = RenderingTestHelper.Template("#generate Text\r\n[[ missing ]]");
+var span = new LinePositionSpan(new LinePosition(5, 3), new LinePosition(5, 10));
+var error = ExpectedCompilerDiagnostic.Mapped(
+    "CS0103", "The name 'missing' does not exist in the current context", TemplateText.Path, span, "Consumer.ExampleTextTemplate.g.cs");
+
+GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), [error]);
+```
+
+`ExpectedCompilerDiagnostic` has three forms:
+
+- `Mapped` is for errors in template C#. It checks the template path and span exactly, and only the file name of the generated source.
+- `Generated` is for errors in generated code outside a `#line` mapping, and checks only the file name.
+- `Source` checks an exact span in a consumer source the test wrote.
+
+Leaving generated line numbers out means a cosmetic change to the emitted layout doesn't break these tests; the snapshots pin that layout instead. A UTF-8 class reports an error in template C# twice, once from `Render` and once from `RenderAsync`, so generate one target at a time when the order matters. Assert generator diagnostics separately, through `result.RunResult.Diagnostics`.
+
+## Snapshots
+
+A few reviewed snapshots pin what the generated code looks like. [ModuleInitializer](../tests/AnglePlates.Tests/Infrastructure/ModuleInitializer.cs) sets up Verify.SourceGenerators and stores the files in [Snapshots](../tests/AnglePlates.Tests/Snapshots). A snapshot test calls `Run`, which also checks that the output compiles, and verifies the run result:
+
+```csharp
+var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("[[ model ]]"));
+
+return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+```
+
+The support types have exactly one snapshot, in `SupportTypesSnapshotTests`, with one set for each base access modifier. Other snapshot tests leave them out with `IgnoreGeneratedResult(GeneratedSources.IsSupportType)`. Don't add per-test copies.
+
+**Review every changed snapshot by hand.** When one fails, read the whole diff, generated sources and diagnostics both, and accept it only if every change is one you meant to make. Accept it with your diff tool or by replacing the `.verified` file, then rerun the test. Never turn on automatic acceptance, and never feed generated output back in as generator input. A snapshot doesn't replace a rendering assertion; it shows the shape of the code, not what it writes.
+
+`.gitattributes` and `.editorconfig` keep the `*.verified.*` files LF while other sources are CRLF. Git ignores `*.received.*` files.
+
+## Incremental tests
+
+`IncrementalTests` checks that Roslyn can skip work when nothing relevant changed. Run the generator once, change one input through the driver, run it again with the same consumer compilation, and check which steps were reused:
+
+```csharp
+var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([first, second]));
+var after = GeneratorTestHelper.Run(compilation, before.Driver.ReplaceAdditionalText(second, edited));
+
+await Assert.That(after.StepReasons(TemplateGenerator.TemplateResultsStep))
+    .IsEquivalentTo(new[] { IncrementalStepRunReason.Cached, IncrementalStepRunReason.Modified });
+```
+
+The step names are `internal const` fields on `TemplateGenerator`, so tests and the generator can't drift apart. Roslyn 4.14 parses a new syntax tree for every generated source on every run, even when the output step is cached, so check reuse through `SourceText` identity and `TrackedOutputSteps`, not tree identity. Never pass a compilation that already holds generated trees as the next input.
 
 ## Runtime tests
 
-`tests/AnglePlates.Runtime.Tests` tests the emitted classes the way a consumer uses them. It imports the props from `src/AnglePlates/build`, references the generator project as an analyzer, and imports the targets, so every file in its `Templates` folder becomes a template class at build time. The tests construct those classes and call `Render` and `RenderAsync` directly, with no reflection; only the checks for sealed classes, `init` accessors, and `private protected` helpers read type metadata. [TemplateOutput](../tests/AnglePlates.Runtime.Tests/Infrastructure/TemplateOutput.cs) renders a template through the text target, the UTF-8 target, and `RenderAsync` to a `Pipe`, and `AssertRendersAsync` checks all three against one expected string. [TestOptions](../tests/AnglePlates.Runtime.Tests/Infrastructure/TestOptions.cs) is the one place that builds `TemplateOptions`.
+`tests/AnglePlates.Runtime.Tests` uses the generator the way a consumer does. It imports the props from `src/AnglePlates/build`, references the generator project as an analyzer, and imports the targets, so every file in its `Templates` folder becomes a template class at build time. Tests construct those classes and call them directly. Only the checks for sealed classes, `init` accessors, and `private protected` helpers read type metadata.
 
-- `ConversionTests` is the output-parity matrix: `int`, `long`, `double`, `decimal`, `float`, `DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `DateOnly`, `TimeOnly`, `bool`, `char`, an enum, a `[Flags]` enum, `int?`, a custom class, a class that implements `IFormattable`, a `byte[]`, a class whose `ToString` returns `null`, and `dynamic`, each with encoding on and off. The expected strings were captured from the pre-1.0 `Convert.ToString` conversion, and `Write<T>` reproduces them exactly. The same class pins the rest of the conversion contract: `[[ null ]]` and `[[ default ]]` write `NullVariable`, a type with an implicit conversion to `string` still uses `ToString()` as it did before 1.0, a value that implements both `IConvertible` and `IFormattable` uses `IConvertible` the way `Convert.ToString` does, whatever its static type, and `dynamic` values of any type (strings, numbers, `bool`, `byte[]`, and custom classes) convert at run time, both as a C# variable and as a member of a `#model dynamic` model. A `dynamic` value after a C# block binds the flushing `WriteAsync` at run time.
-- `OutputTests` covers lone surrogates, non-ASCII literals, `Write` and `WriteRaw` called from C# blocks, `[[ Model ]]`, `NullVariable`, long values, and the constructor's options.
-- `TemplateOptionsTests` covers the presets, `init`-only properties, and every `#encode` value, and `TemplateDefaultsTests` checks that every template in the project falls back to its preset, through the constructor and through `Default`.
-- `SurfaceTests` covers `ThrowIfNull(writer)` in `Render` and `RenderAsync` (a faulted `ValueTask`), sealed template classes, and which base-class helpers are `private protected`.
-- `ChildTemplateTests` renders a parent whose hand-written partial half creates its child with the parent's options, and `RenderToStringTests` covers `RenderToString`.
-- `ModelTests` renders struct, tuple, array, and nested generic models.
-- `ReadmeExampleTests` renders the greeting example from the README and the order example from [Writing templates](templates.md#child-templates), and checks the exact output they show. `Templates/Readme` holds verbatim copies of those templates, and `Readme` holds the order template's hand-written half and the models, in the documents' `MyApp` namespaces. The greeting has no `#namespace`, so its classes land in the test project's `Templates.Readme` namespace. In `README.md` and `docs/templates.md`, a `<!-- sample: <path> -->` comment right before a fenced block names its copy, relative to the test project. The drift test compares each marked block with its copy after turning CRLF into LF on both sides, and it expects the copy to end with exactly one line break, which a fenced block can't show. It also fails if a marker goes missing.
-- `WriteFailureTests` covers a custom encoder and writers that throw. [ProbeEncoder](../tests/AnglePlates.Runtime.Tests/Infrastructure/ProbeEncoder.cs) is the custom encoder; `TextEncoder` has pointer-based abstract members, which is why this project enables unsafe code.
+- [TemplateOutput](../tests/AnglePlates.Runtime.Tests/Infrastructure/TemplateOutput.cs) renders through the text target, the UTF-8 target, and `RenderAsync` to a `Pipe`. `AssertRendersAsync` checks all three against one expected string.
+- [TestOptions](../tests/AnglePlates.Runtime.Tests/Infrastructure/TestOptions.cs) is the one place that builds `TemplateOptions`.
+- [ProbeEncoder](../tests/AnglePlates.Runtime.Tests/Infrastructure/ProbeEncoder.cs) is a custom `TextEncoder`. Its base class has pointer-based abstract members, which is why this project allows unsafe code.
+- `ThrowingTextWriter` and `ThrowingBufferWriter` fail on write, for the tests that check what happens when the destination breaks.
 
-`RenderAsyncTests` covers the UTF-8 `RenderAsync` method. [CountingPipeWriter](../tests/AnglePlates.Runtime.Tests/Infrastructure/CountingPipeWriter.cs) records the bytes written before each flush. When it doesn't report unflushed bytes, every flush check flushes, so its flush count is the number of checks plus the final flush; the tests use that to show checks only at the first write after each C# block, through brace-less and nested C#, comments and empty blocks between a block and its write, child templates rendered from a loop, and blocks and literals that end on a line break. With unflushed bytes reported, the tests check the 16 KB threshold and a small page that flushes only at the end. `OnFlush` lets a test cancel the token mid-render or return a flush result that reports a completed reader or a canceled flush. Other cases cover a token canceled before the render, a real `Pipe` whose reader already completed, a real `Pipe` whose backpressure holds the render until the reader catches up, and `CancelPendingFlush` on a render that's waiting under backpressure. A reviewed snapshot in `TemplateSnapshotTests` shows the generated `RenderAsync`, and compiler-error tests in `LineMappingTests` pin the template locations for a ref struct local in a C# block under C# 11 (`CS9058`) and C# 13 (`CS4007`), an await inside `lock` (`CS1996`) and `unsafe` (`CS4004`), and ordinary errors that both render methods report at the same location.
+`ConversionTests` is the contract for how C# variables turn into text. It covers the common value types, enums, nullable values, custom classes, `IFormattable` and `IConvertible`, `null`, and `dynamic`, with encoding on and off, and the expected strings are exact. A change to the support types has to keep it passing.
+
+`ReadmeExampleTests` keeps the documentation honest. `Templates/Readme` holds copies of the templates in `README.md` and [Writing templates](templates.md#child-templates), and the tests render them and check the exact output the documents show. In those documents, a `<!-- sample: <path> -->` comment right before a fenced block names its copy, relative to the test project. The drift test compares each marked block with its copy after turning CRLF into LF, expects the copy to end with exactly one line break, and fails if a marker goes missing. If you edit one of those examples, edit its copy too.
+
+## `RenderAsync` helpers
+
+`RenderAsyncTests` covers flushing and cancellation in the UTF-8 `RenderAsync`. [CountingPipeWriter](../tests/AnglePlates.Runtime.Tests/Infrastructure/CountingPipeWriter.cs) records how many bytes had been written at each flush in `FlushedLengths`:
+
+- With `reportsUnflushedBytes: false`, every flush check flushes, so the flush count is the number of checks plus the final flush. That's how the tests show where the checks are.
+- With `reportsUnflushedBytes: true`, checks flush only past the 16 KB threshold, so the tests can check the threshold itself.
+- `OnFlush` lets a test cancel the token in the middle of a render, or return a flush result that reports a completed reader or a canceled flush.
+
+Cases that need real backpressure, a completed reader, or `CancelPendingFlush` use a real `Pipe`.
 
 ## Package consumers
 
-Both test projects load the generator from source, so they can't show that the packed analyzer works. `eng/validate-package.ps1` installs a freshly packed version into isolated consumers outside the solution; [Validating the package](development.md#validating-the-package) explains how to run it, and the [package validation README](../tests/AnglePlates.PackageTests/README.md) lists what each consumer checks. The consumers that build target `net10.0` with C# 11, so together they cover the compatibility floor. `BuildErrors` and `UnsupportedFramework` are the consumers that must fail: each project lists the errors it expects in `ExpectedErrors.txt`, and `UnsupportedFramework` targets `net8.0` to pin how an older framework fails.
-
-The `NativeAot` consumer turns on `IsAotCompatible` and `PublishAot` with `TreatWarningsAsErrors`, so any trim or AOT analyzer warning fails its build or publish. It also builds with `GenerateDocumentationFile`, so a bad XML doc comment in the generated sources, such as a `cref` that doesn't resolve, fails it too; `CS1591` is off only because the consumer's own models aren't documented. The script checks that the trim and AOT analyzers and `IlcTreatWarningsAsErrors` are on, then runs it twice: with `dotnet run` under the JIT, then as a native executable published for the machine's runtime identifier. Both runs compare the output with the same hard-coded text and bytes. The AOT canary then adds a `dynamic` template, and its publish must fail with `IL2026` or `IL3050`. The script stops before running anything if the native toolchain is missing, unless you pass `-SkipNativeAot`, which skips only the native publish.
+Both test projects load the generator from source, so neither can prove the packed analyzer works. `eng/validate-package.ps1` installs a freshly packed version into isolated consumers outside the solution, and each consumer checks its own results and exits nonzero on failure. [Validating the package](development.md#validating-the-package) explains how to run the script, and the [package validation README](../tests/AnglePlates.PackageTests/README.md) has the one table of what each consumer checks. A new consumer has to be registered in the script, or it never runs.
 
 ## Coverage
 
-CI fails a leg when coverage drops below 90% line or branch. The `windows` and `ubuntu` legs both check the generator and the emitted code. Each test project runs with the Microsoft collector that TUnit brings along (`--coverage --coverage-output-format cobertura`), its own `code-coverage.settings.xml` passed through `--coverage-settings`, and writes `TestResults/generator.cobertura.xml` or `TestResults/runtime.cobertura.xml`. A short `pwsh` step in `ci.yml` reads the `SlusserLabs.AnglePlates` module from the first report and the `AnglePlates.Runtime.Tests` module from the second. The reports go into the `failure-<leg>` artifact when a leg fails. Before every stable release, the maintainer checks both modules for 100% in Visual Studio 2026 or with `--coverage`, with the accepted gap below as the only exception; previews need only the CI gate.
+CI fails the `windows` or `ubuntu` leg when either module drops below 90% line or branch coverage:
+
+| Module | Measures | Report |
+| --- | --- | --- |
+| `SlusserLabs.AnglePlates` | The generator | `TestResults/generator.cobertura.xml` |
+| `AnglePlates.Runtime.Tests` | The emitted support types and template classes | `TestResults/runtime.cobertura.xml` |
+
+Each test project runs with the Microsoft collector that TUnit brings along (`--coverage --coverage-output-format cobertura`) and its own `code-coverage.settings.xml`, and a short `pwsh` step in `ci.yml` reads the two modules. The reports go into the `failure-<leg>` artifact when a leg fails. Before every stable release, I check both modules for 100% in Visual Studio 2026 or with `--coverage`, with the one accepted gap below as the only exception. Previews need only the CI gate.
 
 The two settings files exist because of the collector's defaults:
 
-- [AnglePlates.Tests/code-coverage.settings.xml](../tests/AnglePlates.Tests/code-coverage.settings.xml) instruments only `SlusserLabs.AnglePlates.dll`. Without it, the collector also instruments every `GeneratedTests.<id>` assembly the tests write to disk, and on Linux it does that while a test is still writing or loading the file, so those tests fail with `BadImageFormatException` or `UnauthorizedAccessException`.
-- [AnglePlates.Runtime.Tests/code-coverage.settings.xml](../tests/AnglePlates.Runtime.Tests/code-coverage.settings.xml) turns on `IncludeTestAssembly`, because the collector leaves the test assembly out by default. It also turns off `EnableStaticManagedInstrumentation`. With static instrumentation on, a Linux TUnit test host that covers its own assembly writes the report and then crashes with exit code 134 (`COMException`: "Unable to get nested type properties"); a one-test TUnit project does the same with collector versions 18.10.0 and 18.12.0. Dynamic instrumentation alone avoids the crash and measured the same line and branch rates on Windows and Linux. Nobody has checked yet whether Visual Studio 2026's defaults include this module.
+- [AnglePlates.Tests/code-coverage.settings.xml](../tests/AnglePlates.Tests/code-coverage.settings.xml) instruments only `SlusserLabs.AnglePlates.dll`. Without it, the collector also instruments every `GeneratedTests.<id>` assembly the tests write to disk, and on Linux it can do that while a test is still writing or loading the file, which fails those tests.
+- [AnglePlates.Runtime.Tests/code-coverage.settings.xml](../tests/AnglePlates.Runtime.Tests/code-coverage.settings.xml) turns on `IncludeTestAssembly`, because the collector leaves the test assembly out by default, and the emitted code lives there. It also turns off static instrumentation, which crashes a Linux TUnit host that covers its own assembly.
 
-With the collector's default settings plus `IncludeTestAssembly`, the results hold up to three kinds of modules. `SlusserLabs.AnglePlates` is the generator. Each `SlusserLabs.AnglePlates.GeneratedTests.<id>` module is one compilation an `AnglePlates.Tests` test emitted, with its own copy of the four support types and the template classes. A single module covers only what its test ran. These modules aren't the emitted-code measure; `AnglePlates.Runtime.Tests` is.
+`AnglePlates.Runtime.Tests` measures emitted code as one module because its test, model, and helper classes each carry `[ExcludeFromCodeCoverage]`, and the assembly deliberately doesn't. What's left is the support types and the template classes. Source-generated helpers such as a `[GeneratedRegex]` matcher don't inherit that attribute, so test code in that project avoids them. `AnglePlates.Tests` excludes its whole assembly, and the `GeneratedTests.<id>` modules it emits each cover only what one test ran, so they aren't the emitted-code measure.
 
-`AnglePlates.Runtime.Tests` is the third kind, and it measures emitted code as one module. Its test, model, and helper classes each carry `[ExcludeFromCodeCoverage]`, and the assembly deliberately doesn't, so what's left is the support types and the template classes. Its settings file sets `<IncludeTestAssembly>true</IncludeTestAssembly>` directly under `<Configuration>`. Source-generated helpers, such as a `[GeneratedRegex]` matcher, don't inherit `[ExcludeFromCodeCoverage]` from the class that declares them, so test code in this project avoids them.
-
-Running CI's test commands locally on Windows on 2026-10-13 measured the following; both modules measured the same in the Linux container:
-
-| Module | Line | Branch |
-|---|---|---|
-| `SlusserLabs.AnglePlates` (generator) | 99.8% | 99.5% |
-| `AnglePlates.Runtime.Tests` (emitted code) | 95.4% | 93.4% |
-
-The template-class gaps in `AnglePlates.Runtime.Tests` are mostly `Render` on templates that only `RenderAsyncTests` uses, plus a few branches the compiler adds around `dynamic` calls and `foreach` loops in those fixtures.
-
-The generator has one accepted gap: the `switch` default arms that throw `UnexpectedValue.Exception` for an unknown `DirectiveKind` or `TokenType`, in `DirectiveKindExtensions.GetName`, `DirectiveReader`, and `TemplateClassWriter.WriteRenderMethod`. Every enum value is handled, so no template can reach them. `UnexpectedValueTests` covers the helper itself, so only the three call sites and their branches stay uncovered. `#encode` adds no fourth one, because the `TemplateEncoding` names are written into the generated constructor as they are.
+The generator has one accepted gap: the `switch` default arms that throw `UnexpectedValue.Exception` for an unknown `DirectiveKind` or `TokenType`, in `DirectiveKindExtensions.GetName`, `DirectiveReader`, and `TemplateClassWriter.WriteRenderMethod`. Every enum value is handled, so no template can reach them. `UnexpectedValueTests` covers the helper itself.
