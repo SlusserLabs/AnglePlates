@@ -14,7 +14,7 @@ public sealed class TemplateSnapshotTests
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("[ordinary] [[ model ]]\r\na \r\n[[- -]][%- -%][*- -*]\r\nb"));
 
-        return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+        return GeneratorSnapshot.Verify(result.RunResult, "BracketsAndEmptyBlocks", source => !GeneratedSources.IsSupportType(source));
     }
 
     [Test]
@@ -22,7 +22,7 @@ public sealed class TemplateSnapshotTests
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Text\r\nlet a = \\[[1]];\r\n\\\\[% var b = 2; %]\\[*c*]"));
 
-        return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+        return GeneratorSnapshot.Verify(result.RunResult, "EscapedOpeners", source => !GeneratedSources.IsSupportType(source));
     }
 
     [Test]
@@ -32,7 +32,7 @@ public sealed class TemplateSnapshotTests
         // #encode none makes the constructor fall back to the Unencoded preset.
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Text\r\n#encode none\r\na[* c *]b[%%]c\\[[d[[]]e [*- x *]f"));
 
-        return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+        return GeneratorSnapshot.Verify(result.RunResult, "MergedLiteralRuns", source => !GeneratedSources.IsSupportType(source));
     }
 
     [Test]
@@ -43,7 +43,7 @@ public sealed class TemplateSnapshotTests
             "[% if (model.Length > 0) %]a[% else %][[ model.Length ]][% var n = 1; -%]  \r\n[%- n++; %]";
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
 
-        return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+        return GeneratorSnapshot.Verify(result.RunResult, "RenderAsync", source => !GeneratedSources.IsSupportType(source));
     }
 
     [Test]
@@ -51,7 +51,7 @@ public sealed class TemplateSnapshotTests
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("prefix [[ model"));
 
-        return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+        return GeneratorSnapshot.Verify(result.RunResult, "UnclosedBlock", source => !GeneratedSources.IsSupportType(source));
     }
 
     [Test]
@@ -59,6 +59,6 @@ public sealed class TemplateSnapshotTests
     {
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(TemplateText.Header + "#access privat\r\n#type Other\r\nbody"));
 
-        return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+        return GeneratorSnapshot.Verify(result.RunResult, "DirectiveErrors", source => !GeneratedSources.IsSupportType(source));
     }
 }

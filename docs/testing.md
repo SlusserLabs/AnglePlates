@@ -89,15 +89,17 @@ Leaving generated line numbers out means a cosmetic change to the emitted layout
 
 ## Snapshots
 
-A few reviewed snapshots pin what the generated code looks like. [ModuleInitializer](../tests/AnglePlates.Tests/Infrastructure/ModuleInitializer.cs) sets up Verify.SourceGenerators and stores the files in [Snapshots](../tests/AnglePlates.Tests/Snapshots). A snapshot test calls `Run`, which also checks that the output compiles, and verifies the run result:
+A few reviewed snapshots pin what the generated code looks like. [ModuleInitializer](../tests/AnglePlates.Tests/Infrastructure/ModuleInitializer.cs) sets up Verify.SourceGenerators and stores the files in [Snapshots](../tests/AnglePlates.Tests/Snapshots). A snapshot test calls `Run`, which also checks that the output compiles, and hands the run result to [GeneratorSnapshot](../tests/AnglePlates.Tests/Infrastructure/GeneratorSnapshot.cs) with a short file name:
 
 ```csharp
 var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("[[ model ]]"));
 
-return Verifier.Verify(result.RunResult).IgnoreGeneratedResult(GeneratedSources.IsSupportType);
+return GeneratorSnapshot.Verify(result.RunResult, "Variable", source => !GeneratedSources.IsSupportType(source));
 ```
 
-The support types have exactly one snapshot, in `SupportTypesSnapshotTests`, with one set for each base access modifier. Other snapshot tests leave them out with `IgnoreGeneratedResult(GeneratedSources.IsSupportType)`. Don't add per-test copies.
+The support types have exactly one snapshot, in `SupportTypesSnapshotTests`, with one set for each base access modifier. Other snapshot tests leave them out with the `GeneratedSources.IsSupportType` filter. Don't add per-test copies.
+
+That test writes `Variable#ExampleTextTemplate.verified.cs` for each generated class and `Variable.verified.txt` when the run has diagnostics. Verify's default names stack up the test class, method, arguments, and full hint name, and they ran past 190 characters, which breaks a Windows clone in a deeply nested folder. `RepositoryPathTests` fails when any file in the repository goes over 100 characters, so pick a short file name for a new snapshot.
 
 **Review every changed snapshot by hand.** When one fails, read the whole diff, generated sources and diagnostics both, and accept it only if every change is one you meant to make. Accept it with your diff tool or by replacing the `.verified` file, then rerun the test. Never turn on automatic acceptance, and never feed generated output back in as generator input. A snapshot doesn't replace a rendering assertion; it shows the shape of the code, not what it writes.
 

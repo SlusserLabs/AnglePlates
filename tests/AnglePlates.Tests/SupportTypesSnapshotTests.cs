@@ -15,7 +15,6 @@ public sealed class SupportTypesSnapshotTests
     {
         var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithAccessModifier(accessModifier));
 
-        // Verify.TUnit names each snapshot after the test's arguments
-        return Verifier.Verify(result.RunResult);
+        return GeneratorSnapshot.Verify(result.RunResult, $"SupportTypes.{accessModifier}", _ => true);
     }
 }
