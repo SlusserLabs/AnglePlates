@@ -1453,15 +1453,15 @@ As of 2026-10-14, Phases 0 through 7 are implemented and committed on the `relea
 | 0 | Done | `99864e6` Phase 0: editorconfig, gitattributes, dictionary, and agent rules |
 | 1 | Done locally; CI acceptance pending | `79754a4` Phase 1: CI workflow and package validation hardening |
 | 2 | Done | `5a2d162` Phase 2a: readable hint names, versionless header, test reorganization; `138f53e` Phase 2b: restructure the generator by concern |
-| 3 | Done; the fallback removal from 2026-10-14 follows | `c0f0c0d` Phase 3: C#-aware block scanner |
-| 4 | Done locally; CI acceptance and the owner's consolidated snapshot review pending; the restored nullable overload follows | `fae6754` Phase 4a: runtime test project and output-parity matrix; `7304b48` Phase 4b: the emitted 1.0 API; `18b7569` Phase 4b2: keep dynamic C# variables working; `506226d` Phase 4c: optional #type and #namespace, and the 1.0 diagnostics registry; `165bd07` Phase 4d: CI coverage gate and README example tests |
+| 3 | Done | `c0f0c0d` Phase 3: C#-aware block scanner; `08cc9fc` Apply the owner's 2026-10-14 decisions (fallback removed) |
+| 4 | Done locally; CI acceptance and the owner's consolidated snapshot review pending | `fae6754` Phase 4a: runtime test project and output-parity matrix; `7304b48` Phase 4b: the emitted 1.0 API; `18b7569` Phase 4b2: keep dynamic C# variables working; `506226d` Phase 4c: optional #type and #namespace, and the 1.0 diagnostics registry; `165bd07` Phase 4d: CI coverage gate and README example tests; `08cc9fc` Apply the owner's 2026-10-14 decisions (nullable overload restored) |
 | 5 | Done locally; CI acceptance pending | `0c58972` Phase 5a: build assets, default-items switch, metadata, and icon; `57d5fac` Phase 5b: package consumers and Native AOT proof; `2448260` Phase 5c: generate nothing where the AnglePlates props aren't imported |
 | 6 | Done; the owner's voice sign-off is pending | `0cf2609` Phase 6a: README rewrite and consumer docs; `bc15a06` Phase 6b: contributor docs, OSS files, sample, and link tests |
 | 7 | Done locally; a dispatched run is pending | `0129e70` Phase 7: release workflow and publishing guide; `841e3bf` Spec: set the publish switch before publishing the Release |
 | 0-7 | Audit fixes | `9f527d9` Final audit fixes for Phases 0-7; `ffcdf3a` Keep snapshot file names short enough for Windows clones |
 | 8, 9 | Not started | Waits on the owner ([19](#19-owner-only-tasks-and-remaining-inputs)) |
 
-The owner's 2026-10-14 answers add two code changes, made alongside this revision and not part of the commits above: the scanner reports SLAP004 instead of falling back to a plain search ([7.4](#74-fallbacks)), and the base classes get the nullable `Write<T>(T?)` overload back ([4.4](#44-support-base-classes)).
+The owner's 2026-10-14 answers added two code changes, committed with this revision in `08cc9fc`: the scanner reports SLAP004 instead of falling back to a plain search ([7.4](#74-fallbacks)), and the base classes get the nullable `Write<T>(T?)` overload back ([4.4](#44-support-base-classes)).
 
 **Acceptance items that need GitHub.** These can't be checked locally. They need the GitHub CLI installed and authenticated (it isn't on this machine), or the owner opening the pull request from `release-1.0`:
 
@@ -1613,12 +1613,11 @@ This is where the owner provides everything in [19](#19-owner-only-tasks-and-rem
 
 As of 2026-10-14, in order:
 
-1. Commit the 2026-10-14 changes (the scanner's fallback removal, the restored `Write<T>(T?)` overload, their tests, snapshots, and docs, and this spec revision) to `release-1.0`, and add the commit to the Phase 3 and Phase 4 rows in [Implementation status](#implementation-status). The pull request in the next step has to include them.
-2. Install and authenticate the GitHub CLI (`winget install GitHub.cli`, then `gh auth login`), or have the owner open the pull request from `release-1.0`. Then get all four CI legs green and fix whatever CI finds. Native AOT on Windows has never run locally, so expect that leg to need attention. This closes the GitHub-only acceptance items in [Implementation status](#implementation-status), including the deliberate-failure binlog upload, the `sdk-floor` log, and a dispatched `release.yml` run that stops at `publish-int`.
-3. The owner does the consolidated Phase 4 snapshot review in that pull request and records it there, and reviews the icon ([19](#19-owner-only-tasks-and-remaining-inputs), items 1 and 2).
-4. The owner answers the open questions in [19](#19-owner-only-tasks-and-remaining-inputs).
-5. Phase 8: the owner's inputs, then the preview preflight and the int.nugettest.org rehearsal.
-6. Phase 9: the stable 1.0.0 release, gated by the owner.
+1. Install and authenticate the GitHub CLI (`winget install GitHub.cli`, then `gh auth login`), or have the owner open the pull request from `release-1.0`. Then get all four CI legs green and fix whatever CI finds. Native AOT on Windows has never run locally, so expect that leg to need attention. This closes the GitHub-only acceptance items in [Implementation status](#implementation-status), including the deliberate-failure binlog upload, the `sdk-floor` log, and a dispatched `release.yml` run that stops at `publish-int`.
+2. The owner does the consolidated Phase 4 snapshot review in that pull request and records it there, and reviews the icon ([19](#19-owner-only-tasks-and-remaining-inputs), items 1 and 2).
+3. The owner answers the open questions in [19](#19-owner-only-tasks-and-remaining-inputs).
+4. Phase 8: the owner's inputs, then the preview preflight and the int.nugettest.org rehearsal.
+5. Phase 9: the stable 1.0.0 release, gated by the owner.
 
 ## 18. Risks
 
