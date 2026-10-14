@@ -1,15 +1,21 @@
 # AnglePlates 1.0 release spec
 
-Status: draft for owner review, 2026-10-13 (revision 3).
+Status: revision 4, 2026-10-14.
 
-Revision 3 records four owner decisions:
+Phases 0 through 7 are implemented and committed on the `release-1.0` branch. What's left is listed in [Implementation status](#implementation-status). Revision 4 records:
+
+- The owner's answers of 2026-10-14 to four questions: the benchmark slowdown is accepted, the scanner's plain-search fallback is removed, duplicate template classes stay compiler errors, and snapshot file names stay short ([2](#2-decision-log)).
+- Decisions S25 (the C# variable overloads) and S26 (no output without the props), which were made during implementation and still need the owner's acceptance.
+- Corrections found while implementing: SLAP012 isn't needed ([5.1](#51-rules)), the measured benchmark numbers ([8.1](#81-adopted-changes)), the windowed scanner ([7.4](#74-fallbacks)), and the snapshot naming ([10.2](#102-generator-tests)).
+
+Revision 3 recorded four owner decisions:
 
 - Agents may commit and push.
 - Only the owner makes the repo public or approves a nuget.org publish.
 - The README uses AssemblyInfo's AI disclosure.
 - The copyright string is settled.
 
-It also moves every remaining owner input to the end (Phase 8), so nothing earlier waits on them.
+It also moved every remaining owner input to the end (Phase 8), so nothing earlier waits on them.
 
 This spec takes AnglePlates from a working prototype to a 1.0.0 package that's ready for nuget.org. It covers the consumer-facing design changes, the generator internals, testing, packaging, CI and publishing, the new icon, the documentation set, and repository hygiene, and it ends with a phased execution plan whose phases each have acceptance criteria. **This spec doesn't approve publishing anything to nuget.org.** Every nuget.org release needs the owner's explicit approval for that release.
 
@@ -33,6 +39,7 @@ Revision 2 adds two things. The first is a four-lens adversarial review of revis
 - [14. Documentation](#14-documentation)
 - [15. Repository hygiene](#15-repository-hygiene)
 - [16. File dispositions](#16-file-dispositions)
+- [Implementation status](#implementation-status)
 - [17. Execution plan](#17-execution-plan)
 - [18. Risks](#18-risks)
 - [19. Owner-only tasks and remaining inputs](#19-owner-only-tasks-and-remaining-inputs)
@@ -107,9 +114,20 @@ These were considered and left out of 1.0 on purpose. None of them blocks a late
 | Per-assembly support namespace | **Not in 1.0.** Support types stay in `SlusserLabs.AnglePlates`, and the cross-assembly collision stays documented. |
 | Coverage | Manual and CI. CI doesn't need 100%; it fails below 90%. |
 
+### Owner decisions (2026-10-14)
+
+The owner answered four questions raised during implementation.
+
+| Topic | Decision |
+| --- | --- |
+| Benchmark slowdown | **Accepted.** Writing a value that needs escaping got about 19% slower (577 to 686 ns for a 220-character encoded string) in exchange for the simpler framework-call encoding. The owner prefers the code that's easier to maintain. HTML encoding stays the default ([8.1](#81-adopted-changes)). |
+| Scanner fallback | **Removed** (overturns S15). When the scanner can't find a closer it accepts, the parser reports SLAP004 at the opener, like a block with no closer at all. The 16-closer window stays as it is. A template that hits the limit fails to compile, and the user refactors their C# ([7.4](#74-fallbacks)). |
+| Duplicate template classes | **Keep the current behavior** (S21). The generator reports nothing; it numbers the hint names so `AddSource` never throws, and the compiler reports CS0111, CS0102, and CS0121. Those errors point at the generated files, because class declarations aren't mapped to templates. |
+| Snapshot file names | **Done.** Snapshot files get short names through a `GeneratorSnapshot` helper, and `RepositoryPathTests` holds every repository path to 100 characters, which leaves 160 for the clone folder ([10.2](#102-generator-tests)). |
+
 ### Decisions made by this spec
 
-Each of these is a recommendation the owner can overturn in review. The rationale is in the linked section.
+Each of these is a recommendation the owner can overturn in review. The rationale is in the linked section. S25 and S26 were made during implementation on the owner's behalf, and they're **awaiting the owner's acceptance**.
 
 | # | Topic | Decision | Section |
 | --- | --- | --- | --- |
@@ -127,20 +145,22 @@ Each of these is a recommendation the owner can overturn in review. The rational
 | S12 | Icon files | `icon.svg` and a 256x256 `icon.png` at the repo root. | [13](#13-icon) |
 | S13 | Docs set | README plus `templates.md`, `rendering.md`, `configuration.md`, `diagnostics.md`, `development.md`, `testing.md`, `releasing.md`, `lexicon.md`. `roadmap.md` and `performance.md` are deleted. | [14](#14-documentation) |
 | S14 | `plans/` | Committed during development, deleted in the release-prep pull request. | [15.6](#156-plans-folder) |
-| S15 | Hidden-closer fallback | A plain search with no new diagnostic. | [7.4](#74-fallbacks) |
+| S15 | Hidden-closer fallback | **Withdrawn on 2026-10-14.** This was a plain search with no new diagnostic. The owner removed it: when the scanner returns -1, the parser reports SLAP004 at the opener. | [7.4](#74-fallbacks) |
 | S16 | Line breaks | CR, LF, and CRLF are all line ends everywhere in the generator. | [6.6](#66-small-correctness-fixes) |
 | S17 | `#access` casing | Case-insensitive, like `#generate` and the MSBuild property. | [4.2](#42-directives) |
 | S18 | Encoding presets | `TemplateOptions` gets static `Html`, `Unencoded`, `JavaScript`, and `Url` presets, which `#encode` uses. | [4.3](#43-templateoptions) |
 | S19 | Terminology | Keep "C# variable" and `NullVariable`. A rename isn't worth the churn. | [14.6](#146-terminology) |
 | S20 | `#encode` values and name derivation | `html` (default), `none`, `javascript`, `url`. `#type` comes from the file name, `#namespace` from `RootNamespace` plus folders, and `#model` stays required. | [4.2](#42-directives) |
-| S21 | Duplicate template classes | No dedicated diagnostic; the compiler reports duplicate-member errors (CS0111, CS0102, CS0121, because the classes are partial and merge), matching the owner's AssemblyInfo choice (commit `d19854e`). Hint names get a numbered suffix so the generator never crashes on a clash. | [4.9](#49-generated-file-names) |
+| S21 | Duplicate template classes | No dedicated diagnostic; the compiler reports duplicate-member errors (CS0111, CS0102, and CS0121, because the classes are partial and merge instead of producing CS0101), matching the owner's AssemblyInfo choice (commit `d19854e`). Hint names get a numbered suffix so the generator never crashes on a clash. The owner confirmed this on 2026-10-14. | [4.9](#49-generated-file-names) |
 | S22 | Visibility timing | Private through development and int previews. The owner makes it public after Phase 8 is accepted and before the first nuget.org release. | [12.4](#124-agent-guardrails) |
 | S23 | Preview trigger | Previews come only from a manual `workflow_dispatch`, numbered by run number. There are no preview tags. | [12.1](#121-versions) |
 | S24 | Stable trigger | A published GitHub Release for a `vX.Y.Z` tag, plus a `NUGET_ORG_PUBLISH_ENABLED` repository variable, plus the `nuget-org` environment approval. That's the AssemblyInfo pattern, with the approval gate added. | [12.3](#123-release-workflow) |
-| S25 | C# variable overloads | Each base class has exactly two: `Write(string?)` and an unconstrained `Write<T>(T)`, with matching `WriteAsync` overloads. The constrained `IFormattable` overloads and `Write(object?)` are gone, because the C# runtime binder doesn't drop a candidate that fails its constraints, so a `dynamic` `bool`, array, or custom class picked the constrained `Write<T>` and threw `RuntimeBinderException`. `Write<T>` converts the way the pre-1.0 `Convert.ToString(value, CultureInfo.InvariantCulture)` did, so `dynamic` works for every type again. A type with an implicit conversion to `string` now binds `Write<T>` and uses `ToString()` like pre-1.0, which withdraws the behavior change that routed it to `Write(string?)`. This was decided during Phase 4b on the owner's behalf, and the owner can overturn it. | [4.4](#44-support-base-classes), [4.6](#46-how-c-variables-convert) |
-| S26 | Generator without the props | The props set a compiler-visible `AnglePlatePropsImported` property to `true`. When it's missing or not `true`, the generator emits nothing: no support types, no template classes, and no diagnostics, `SLAP009` and `SLAP010` included. A project without the props can't have templates, so this only stops the support types that leaked into projects referencing a library without `PrivateAssets` and collided with its public ones (`CS0436`). A missing `AnglePlateBaseAccessModifier` still means `internal` when the marker is present. This was decided during Phase 5c on the owner's behalf, and the owner can overturn it. | [11.2](#112-build-instead-of-buildtransitive), [10.4](#104-package-validation) |
+| S25 | C# variable overloads | Each base class has three: `Write(string?)`, an unconstrained `Write<T>(T)`, and `Write<T>(T?) where T : struct`, with matching `WriteAsync` overloads. The constrained `IFormattable` overloads and `Write(object?)` are gone, because the C# runtime binder doesn't drop a candidate that fails its constraints, so a `dynamic` `bool`, array, or custom class picked the constrained `Write<T>` and threw `RuntimeBinderException`. `Write<T>` converts the way the pre-1.0 `Convert.ToString(value, CultureInfo.InvariantCulture)` did, so `dynamic` works for every type again. The nullable overload was dropped in Phase 4b2 and restored on 2026-10-14, because without it every `int?` write boxed (24 B), which pre-1.0 code didn't do. The runtime binder never infers `T?` from a non-nullable runtime value, so it doesn't break `dynamic`. A type with an implicit conversion to `string` binds `Write<T>` and uses `ToString()` like pre-1.0, which withdraws the behavior change that routed it to `Write(string?)`. This was decided during Phase 4b on the owner's behalf. **Awaiting the owner's acceptance.** | [4.4](#44-support-base-classes), [4.6](#46-how-c-variables-convert) |
+| S26 | Generator without the props | The props set a compiler-visible `AnglePlatePropsImported` property to `true`. When it's missing or not `true`, the generator emits nothing: no support types, no template classes, and no diagnostics, `SLAP009` and `SLAP010` included. A project without the props can't have templates, so this only stops the support types that leaked into projects referencing a library without `PrivateAssets` and collided with its public ones (`CS0436`). A missing `AnglePlateBaseAccessModifier` still means `internal` when the marker is present. This was decided during Phase 5c on the owner's behalf. **Awaiting the owner's acceptance.** | [11.2](#112-build-instead-of-buildtransitive), [10.4](#104-package-validation) |
 
 ## 3. Where the project stands today
+
+This section describes the project at commit `8410d49`, before Phase 0. [Implementation status](#implementation-status) says what's been done since.
 
 AnglePlates already works well. Templates compile into `internal` classes for two targets: `XTextTemplate` writes to a `TextWriter`, and `XUtf8Template` writes to an `IBufferWriter<byte>` and also has `RenderAsync` for a `PipeWriter`. 306 tests pass on Windows and Linux, and generator coverage measures 98.6% line and 94.4% branch. Eight isolated package consumers prove the packed analyzer, including an ASP.NET Core app and a Native AOT publish with warnings as errors. The incremental pipeline is correct: every value between steps compares by value, and editing one template leaves the others cached.
 
@@ -177,7 +197,8 @@ What changes is where a block ends. [7](#7-the-c-aware-block-scanner) has the fu
 - A closer inside a C# string, character literal, or `/* */` comment doesn't end the block.
 - In a C# variable, `]]` only ends the variable when every `[` inside it has its `]`. `[[ grid[row[0]] ]]` and `[[ model[0..1]]]` both work.
 - A `//` comment or a `#` preprocessor line ends at the first closer on that line, so `[% // note %]` and `[% #if DEBUG %]` do what they look like.
-- If the C# is broken (a string without its closing quote, say), the block ends at the first closer, exactly like today, and the compiler reports the typo at the template line.
+- If the C# is broken (a regular string without its closing quote, say), the block ends at the first closer, exactly like today, and the compiler reports the typo at the template line. A verbatim or raw string or a `/*` comment that never ends gets the same rule only when fewer than 16 closers follow it; otherwise it's one of the SLAP004 cases below.
+- If the scanner can't find a closer it accepts, the template reports SLAP004 at the opener and doesn't compile. [7.4](#74-fallbacks) lists the cases, including C# that hides more than 15 closers in literals or comments. The fix is to refactor the C#.
 - Comments (`[* *]`) keep the plain text search.
 
 Docs additions that go with the syntax:
@@ -258,8 +279,9 @@ internal abstract class TextTemplate<TModel>
     protected void Write(string? value, TextWriter writer);
     protected void WriteRaw(string? value, TextWriter writer);
 
-    // The overload the generated code binds every other C# variable to (see 4.6)
+    // The overloads the generated code binds every other C# variable to (see 4.6)
     protected void Write<T>(T value, TextWriter writer);
+    protected void Write<T>(T? value, TextWriter writer) where T : struct;
 
     // Literal writes from generated code
     private protected static void WriteLiteral(string value, TextWriter writer);
@@ -275,11 +297,13 @@ internal abstract class Utf8Template<TModel>
     protected void Write(string? value, IBufferWriter<byte> writer);
     protected void WriteRaw(string? value, IBufferWriter<byte> writer);
     protected void Write<T>(T value, IBufferWriter<byte> writer);
+    protected void Write<T>(T? value, IBufferWriter<byte> writer) where T : struct;
 
     private protected static void WriteLiteral(ReadOnlySpan<byte> value, IBufferWriter<byte> writer);
     private protected ValueTask WriteLiteralAsync(ReadOnlySpan<byte> value, PipeWriter writer, CancellationToken cancellationToken);
     private protected ValueTask WriteAsync(string? value, PipeWriter writer, CancellationToken cancellationToken);
     private protected ValueTask WriteAsync<T>(T value, PipeWriter writer, CancellationToken cancellationToken);
+    private protected ValueTask WriteAsync<T>(T? value, PipeWriter writer, CancellationToken cancellationToken) where T : struct;
     private protected static ValueTask FlushAsync(PipeWriter writer, CancellationToken cancellationToken);
 }
 ```
@@ -288,7 +312,8 @@ Notes:
 
 - `private protected` members are visible to compiled templates, which always live in the same assembly as their support types, but not to another assembly that derives from public support types. That shrinks the public surface to `Render`, `RenderAsync`, `Options`, `Write`, and `WriteRaw`.
 - A scratch build on .NET 10 with C# 11 confirmed that `private protected` members work from a sealed derived class's `async` method, from lambdas, and through `dynamic` arguments. The runtime binder respects the calling class's access, and it picks `WriteAsync<T>(T)` for a `dynamic` `int` and `WriteAsync(string?)` for a `dynamic` `string`. Runtime.Tests pins this with a `dynamic` C# variable in `Render` and `RenderAsync`.
-- `Write<T>` and `WriteAsync<T>` have no constraint on purpose ([S25](#decisions-made-by-this-spec)). The C# runtime binder doesn't drop a candidate whose constraints a `dynamic` argument fails; it picks it and then throws `RuntimeBinderException`. An earlier draft constrained `T` to `IFormattable` and added `Write(object?)` and a nullable `Write<T>(T?)`, which broke a `dynamic` `bool`, array, or custom class. With only `Write(string?)` and an unconstrained `Write<T>(T)`, a `dynamic` value of any type binds, and Runtime.Tests pins that for `bool`, `byte[]`, a custom class, and `#model dynamic` members.
+- `Write<T>(T)` and `WriteAsync<T>(T)` have no constraint on purpose ([S25](#decisions-made-by-this-spec)). The C# runtime binder doesn't drop a candidate whose constraints a `dynamic` argument fails; it picks it and then throws `RuntimeBinderException`. An earlier draft constrained `T` to `IFormattable` and added `Write(object?)`, which broke a `dynamic` `bool`, array, or custom class. With `Write(string?)` and an unconstrained `Write<T>(T)`, a `dynamic` value of any type binds, and Runtime.Tests pins that for `bool`, `byte[]`, a custom class, and `#model dynamic` members.
+- `Write<T>(T?) where T : struct` and its `WriteAsync` twin exist so an `int?` or other nullable value type isn't boxed. The `struct` constraint can't trip the binder the way `IFormattable` did, because the binder never infers `T?` from a runtime value: a `dynamic` value is either `null` or a boxed non-nullable value, so this overload is never a candidate for it.
 - `WriteAsync(ReadOnlySpan<byte>)` is renamed to `WriteLiteralAsync`, so a `byte[]` C# variable never meets a span overload and always reaches `WriteAsync<T>`.
 - The XML docs on every emitted member go through `/humanizer`, because consumers read them in IntelliSense.
 
@@ -361,15 +386,16 @@ The reserved local names inside render methods become `model`, `Model`, `writer`
 
 ### 4.6 How C# variables convert
 
-The two overloads in [4.4](#44-support-base-classes) decide how a value becomes text. A string binds `Write(string?)`; everything else binds `Write<T>(T)`, which calls one small private helper that matches the pre-1.0 `Convert.ToString(value, CultureInfo.InvariantCulture)`. The rows below were checked with a scratch build on .NET 10.
+The three overloads in [4.4](#44-support-base-classes) decide how a value becomes text. A string binds `Write(string?)`, a nullable value type binds `Write<T>(T?)`, and everything else binds `Write<T>(T)`, which calls one small private helper that matches the pre-1.0 `Convert.ToString(value, CultureInfo.InvariantCulture)`. The rows below were checked with a scratch build on .NET 10.
 
 | Value type | Overload | Conversion |
 | --- | --- | --- |
 | `string` | `Write(string?)` | Used as-is. |
-| Everything else: value types (numbers, `bool`, `char`, `DateTime`, `Guid`, enums), nullable value types (`int?`), reference types that implement `IFormattable`, `byte[]`, and custom classes | `Write<T>(T)` | `null` check, then `IConvertible.ToString(CultureInfo.InvariantCulture)` if the value implements `IConvertible`, else `IFormattable.ToString(null, CultureInfo.InvariantCulture)` if it implements `IFormattable`, else `ToString()`. That's `Convert.ToString`'s order, so the output is today's. The checks and casts are on `T`, so the JIT drops the box for non-nullable value types (a scratch allocation check on .NET 10 found nothing beyond a constrained `IFormattable` call for `int`, `double`, `decimal`, `DateTime`, `Guid`, and enums, and nothing beyond the result string for `char` and `bool`). A nullable value type is boxed, as it is today. |
+| Nullable value types (`int?`, `DateTime?`) | `Write<T>(T?) where T : struct` | `null` writes `NullVariable`; otherwise the underlying value converts as in the next row. Nothing is boxed, which matches pre-1.0. Without this overload, `Write<T>(T)` boxed every `int?` (24 B per write). |
+| Everything else: value types (numbers, `bool`, `char`, `DateTime`, `Guid`, enums), reference types that implement `IFormattable`, `byte[]`, and custom classes | `Write<T>(T)` | `null` check, then `IConvertible.ToString(CultureInfo.InvariantCulture)` if the value implements `IConvertible`, else `IFormattable.ToString(null, CultureInfo.InvariantCulture)` if it implements `IFormattable`, else `ToString()`. That's `Convert.ToString`'s order, so the output is today's. The checks and casts are on `T`, so the JIT drops the box for non-nullable value types (a scratch allocation check on .NET 10 found nothing beyond a constrained `IFormattable` call for `int`, `double`, `decimal`, `DateTime`, `Guid`, and enums, and nothing beyond the result string for `char` and `bool`). |
 | A type with an implicit conversion to `string` | `Write<T>(T)` | The same as the previous row, so `ToString()` decides the text as it does today. `[[ (string)value ]]` uses the conversion. |
 | `null` literal, `default` | `Write(string?)` | Writes `NullVariable`. |
-| `dynamic` | Bound at run time | Same rules at run time, for every type. AOT-hostile, as it is today; the framework's own IL2026/IL3050 warnings stay unsuppressed. |
+| `dynamic` | Bound at run time to `Write(string?)` or `Write<T>(T)` | Same rules at run time, for every type. AOT-hostile, as it is today; the framework's own IL2026/IL3050 warnings stay unsuppressed. |
 | `Span<char>` and other ref structs | none | Compile error at the template location, as today. |
 
 Every `null`, whatever its type, writes `NullVariable`. A `ToString()` that returns `null` writes `NullVariable` too. The value is then encoded with the options' encoder, or written raw when the encoder is `null`.
@@ -447,7 +473,7 @@ A generated-code test renders a parent with `TemplateOptions.Unencoded` and chec
 Template sources get the hint name `{Namespace}.{Type}{Target}Template.g.cs`, for example `MyApp.Templates.GreetingTextTemplate.g.cs`. Support types become `SlusserLabs.AnglePlates.TemplateOptions.g.cs`, `SlusserLabs.AnglePlates.TextTemplate.g.cs`, `SlusserLabs.AnglePlates.Utf8Template.g.cs`, and `SlusserLabs.AnglePlates.TemplateExtensions.g.cs`.
 
 - Roslyn compares hint names case-insensitively, and `AddSource` throws on a repeat, which crashes the generator. So the existing numbering step stays, but groups names with `StringComparer.OrdinalIgnoreCase` and sorts by ordinal path. The second file of a clash becomes `MyApp.Templates.GreetingTextTemplate.2.g.cs`.
-- Two templates that declare the same class get duplicate-member errors (CS0111, CS0102, CS0121) from the compiler, as today (S21). The classes are `partial`, so the two declarations merge instead of producing CS0101. Classes that differ only by case (`App.Page` and `app.page`) are legal C#; they just get numbered file names. A test covers each case.
+- Two templates that declare the same class get duplicate-member errors (CS0111, CS0102, CS0121) from the compiler, as today (S21). The classes are `partial`, so the two declarations merge instead of producing CS0101. The errors point at the generated `.g.cs` files, because class declarations aren't mapped back to templates; `HintNameTests` and the `BuildErrors/Cs0111` package consumer pin them. Classes that differ only by case (`App.Page` and `app.page`) are legal C#; they just get numbered file names. A test covers each case.
 - The SHA-256 identity code, its length-prefix scheme, and the `System.Security.Cryptography` dependency go away.
 
 ### 4.10 Generated header
@@ -472,7 +498,7 @@ Nothing has shipped (`AnalyzerReleases.Shipped.md` is empty), so 1.0 gets a clea
 | SLAP001 | Error | Template class name can't be derived | `#type` is omitted and the file name doesn't produce a valid identifier. | Line 1 | Missing `#type` |
 | SLAP002 | Error | Template namespace can't be derived | `#namespace` is omitted and `RootNamespace` plus the folders don't produce a valid namespace, or the file is outside the project folder. | Line 1 | Missing `#namespace` |
 | SLAP003 | Error | Template has no `#model` directive | No `#model` directive. | End of the directive section | Same |
-| SLAP004 | Error | Unclosed template block | An opener has no closer anywhere after it. | The opener | Same |
+| SLAP004 | Error | Unclosed template block | An opener has no closer after it that the scanner accepts ([7.4](#74-fallbacks)). | The opener | Same, plus the scanner's -1 cases |
 | SLAP005 | Error | Public template needs public support types | `#access public` while `AnglePlateBaseAccessModifier` is `internal`. Reported in the per-template output step, which already sees the settings. | The `#access` value | Invalid `#generate` (folded into SLAP007) |
 | SLAP006 | Error | Duplicate directive | A non-repeatable directive appears twice. | The repeat | Same |
 | SLAP007 | Error | Invalid directive value | Any bad or blank value, including `#generate` and `#encode`. | The value | Same, plus old SLAP005 |
@@ -480,9 +506,11 @@ Nothing has shipped (`AnalyzerReleases.Shipped.md` is empty), so 1.0 gets a clea
 | SLAP009 | Error | Invalid MSBuild setting | `AnglePlateBaseAccessModifier` isn't `public` or `internal`. Stops all generation. | None | Same |
 | SLAP010 | Error | C# version too old | `LangVersion` below 11. Stops all generation. | None | Same |
 | SLAP011 | Warning | Possible misspelled directive | See [5.2](#52-slap011-rule). | The line | New |
-| SLAP012 | Error | Required framework APIs missing | Conditional; see below. | None | New |
+| SLAP012 | n/a | Not assigned | Dropped in Phase 5b; see below. | n/a | n/a |
 
-**SLAP012 is conditional.** Before writing it, compile the emitted support types against the .NET 8 and .NET 9 reference packs and record which APIs the emitted code needs that older frameworks lack. If .NET 10-only APIs are involved, SLAP012 probes for one of them (a well-known type or member lookup on the compilation, reported once, stopping all generation like SLAP010). If the emitted code compiles on older frameworks, drop SLAP012 and keep the README's ".NET 10 or later" requirement as a support statement, not a technical gate. Either way, add an `UnsupportedFramework` package consumer that pins the behavior. Don't widen the supported-framework claim without testing it, per AGENTS.md.
+**SLAP012 isn't needed.** Phase 5b found that the emitted code needs only `System.IO.Pipelines` beyond what .NET 8 has, so there's no SLAP012. A `net8.0` project fails with the compiler's own CS0234, and the `UnsupportedFramework` consumer pins exactly that error, so a new framework dependency reopens the question. `docs/development.md` records this under "Supported frameworks". The ID was never assigned and stays free. The original plan follows for the record.
+
+**SLAP012 was conditional.** Before writing it, compile the emitted support types against the .NET 8 and .NET 9 reference packs and record which APIs the emitted code needs that older frameworks lack. If .NET 10-only APIs are involved, SLAP012 probes for one of them (a well-known type or member lookup on the compilation, reported once, stopping all generation like SLAP010). If the emitted code compiles on older frameworks, drop SLAP012 and keep the README's ".NET 10 or later" requirement as a support statement, not a technical gate. Either way, add an `UnsupportedFramework` package consumer that pins the behavior. Don't widen the supported-framework claim without testing it, per AGENTS.md.
 
 Messages drop the absolute file path argument, because the diagnostic location already names the file. Titles are full phrases, as in the table. The descriptors are declared in ID order through one small helper:
 
@@ -660,11 +688,12 @@ The audit prototyped this scanner against Roslyn 4.14 and ran 47 cases. A verifi
 `Parsing/CSharpBlockScanner.cs` is one static class with one public method:
 
 ```csharp
-// Returns where the closer starts, or -1 when the C# runs to the end of the text without one
+// Returns where the closer starts, or -1 when the C# runs to the end of the text without one or hides more closers
+// than the last window holds
 public static int FindCloser(string text, int contentStart, TokenType blockType)
 ```
 
-`TemplateParser.TryParseBlock` calls it for C# variables and C# blocks and keeps `IndexOf` for comments. Trim-marker detection and `TrimToken` don't change, so token spans and `#line` mappings need no new logic.
+`TemplateParser.TryParseBlock` calls it for C# variables and C# blocks and keeps `IndexOf` for comments. When it returns -1, the parser reports SLAP004 ([7.4](#74-fallbacks)). Trim-marker detection and `TrimToken` don't change, so token spans and `#line` mappings need no new logic.
 
 ### 7.2 The rule
 
@@ -675,7 +704,7 @@ The scanner reads the block with `SyntaxFactory.ParseTokens(text, offset, initia
 3. **Whitespace, line breaks, and `/* */` comments** never hold a closer.
 4. **Line-shaped trivia** (`//` and `///` comments, any `#` directive, skipped tokens, disabled text) ends at the first closer inside it. That keeps `[% // %]tail` (pinned by `TemplateParserTests.cs:25`) and `[% #if DEBUG %]…[% #endif %]` working.
 5. **After a directive line** with no closer, lexing restarts on the next line, so `#if` state never turns later lines into disabled text. That matters because the generator can't know the consumer's preprocessor symbols.
-6. **Broken C# keeps the old rule.** A token or trivia with lexer errors (`ContainsDiagnostics`) ends at the first closer inside it. A string missing its closing quote then ends at the first `%]`, like today, and the compiler reports CS1010 at the template line instead of pulling the next lines of HTML into C#. Use `ContainsDiagnostics` only; `SyntaxTrivia.GetDiagnostics()` throws on trivia from `ParseTokens`, because that trivia has no syntax tree.
+6. **Broken C# keeps the old rule.** A token or trivia with lexer errors (`ContainsDiagnostics`) ends at the first closer inside it. A string missing its closing quote then ends at the first `%]`, like today, and the compiler reports CS1010 at the template line instead of pulling the next lines of HTML into C#. A broken token that runs to the end of the text, such as an unterminated verbatim string or `/*` comment, reaches the end of every window, so this rule applies to it only when the last window is the whole text (fewer than 16 closers follow); otherwise `FindCloser` returns -1 ([7.4](#74-fallbacks)). Use `ContainsDiagnostics` only; `SyntaxTrivia.GetDiagnostics()` throws on trivia from `ParseTokens`, because that trivia has no syntax tree.
 
 ### 7.3 Verified lexer behavior
 
@@ -691,16 +720,32 @@ The audit checked these against Microsoft.CodeAnalysis.CSharp 4.14.0. The implem
 
 ### 7.4 Fallbacks
 
-When `FindCloser` returns -1:
+There's no fallback. When `FindCloser` returns -1, the parser reports SLAP004 at the opener and consumes the rest of the template, exactly as it does for a block with no closer at all. The template doesn't compile, and the user refactors their C#. The owner chose this on 2026-10-14 to keep the code simple; it withdraws S15, which ended the block at a plain-search closer with no diagnostic.
 
-- If a plain text search finds no closer at all, report SLAP004 at the opener and consume the rest, as today.
-- Otherwise end the block at the plain-search position, with no new diagnostic (S15). After rule 6, the only ways to get here are an unmatched `[` in a C# variable, which the compiler already reports through `#line`, and the window limit below.
+`FindCloser` returns -1 in these cases:
 
-Phase 3 review found that broken C# made the full-text lex quadratic: an unterminated verbatim string, `/*` comment, or unmatched `[` lexed to the end of the template for every block, and an unclosed `$"{` hole nested Roslyn's interpolation scanner one level per later block until the stack overflowed. The scanner therefore lexes a substring window that ends after the first plain-search closer, doubles the number of closers in the window whenever a token or comment reaches its end, and returns -1 after the window with 16 closers. Valid C# that hides more than 15 closers in literals, comments, or brackets falls back to the plain search too, and the compiler reports the cut-off block.
+- The text has no closer after the opener at all.
+- A C# variable has an unmatched `[`, so no `]]` sits at bracket depth 0.
+- The only closers left are inside C# strings, character literals, or `/* */` comments, as in `[% var s = "%]";` with no real closer after it.
+- More than 15 closers are hidden before the real one, so the last window can't decide (see below). That includes broken C# that runs past the last window, such as an unterminated verbatim string or `/*` comment followed by 16 or more closers.
+
+**Why there's a window.** Phase 3 review found that broken C# made the full-text lex quadratic: an unterminated verbatim string, `/*` comment, or unmatched `[` lexed to the end of the template for every block (96 seconds for 4,000 broken blocks), and an unclosed `$"{` hole nested Roslyn's interpolation scanner one level per later block until the stack overflowed and crashed the compiler. The scanner therefore lexes a substring window that ends after the first plain-search closer, doubles the number of closers in the window (1, 2, 4, 8, 16) whenever a token or comment reaches its end, and returns -1 when the window with 16 closers still can't decide. The 16-closer limit stays as it is.
+
+**Example.** A C# block with 16 `"%]"` strings before its real closer reports SLAP004, and the same block with 15 compiles:
+
+```text
+[% var codes = new[] { "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "%]", "x" }; %]
+```
+
+The fix is to move the strings out of the template's C#, for example into a static class of the consumer's own that both generated classes can reach, or to build them without spelling the closer, as in `"%" + "]"`. A field in one hand-written `partial` half doesn't work for a template that generates both classes, because the other class can't see it. `docs/templates.md` and SLAP004's section in `docs/diagnostics.md` describe the limit and the fix.
+
+None of these cases compiled under the pre-1.0 plain search either: a hidden closer cut the block short, and the compiler reported the broken C#. What changes is the error. Broken C# that used to reach the compiler can now report SLAP004 at the opener instead of a compiler error at the typo, and "missing its closing delimiter" can describe a block that does have one, just past the scanner's limit.
 
 ### 7.5 Parity and release note
 
 Any C# variable or C# block that compiles today scans the same way: its literals and comments are terminated, its brackets are balanced, and line comments and directives keep the old rule. The only templates that change are ones that relied on the bug, such as a C# string opened in one block and closed in a later one. The CHANGELOG entry for 1.0.0 says so in one sentence.
+
+Templates that didn't compile before still don't, but some now fail differently: a block whose only closers hide in C# literals or comments, or that hides more than 15 of them, reports SLAP004 at the opener ([7.4](#74-fallbacks)) instead of reaching the compiler as cut-off C#. The CHANGELOG entry mentions the limit and that the fix is to refactor the C#.
 
 ### 7.6 Host compiler
 
@@ -714,11 +759,25 @@ The owner's rule is that performance work never comes at the expense of simple c
 
 | Change | Why | Expected effect (recorded baselines) |
 | --- | --- | --- |
-| Replace the hand-rolled rent-encode-copy loop with `encoder.Encode(writer, value)` for text and `WriteRaw(encoder.Encode(value), writer)` for UTF-8. Remove `BufferPool`, `_maxRental`, and the three exception messages. | About 80 lines of emitted code shrink to a few. The hand-written benchmark baselines already use exactly these calls. | Text: plain values about 2.4x faster, large values about 2x. UTF-8: plain about 1.6x, large about 1.4x. Encoded text gets about 15% slower, and an encoded UTF-8 value allocates its encoded string (984 B in the 220-char case). |
-| One-line `Write(expr, writer)` through the overload set ([4.6](#46-how-c-variables-convert)). | Readable generated code, no per-variable locals, and no boxing for formattable value types. | The 3,000-variable render drops from 3,001 locals and about 145 KB of IL, which is past the JIT's MinOpts thresholds, to a fraction of that. |
+| Replace the hand-rolled rent-encode-copy loop with `encoder.Encode(writer, value)` for text and `WriteRaw(encoder.Encode(value), writer)` for UTF-8. Remove `BufferPool`, `_maxRental`, and the three exception messages. | About 80 lines of emitted code shrink to a few. The hand-written benchmark baselines already use exactly these calls. | Text: plain values about 2.4x faster, large values about 2x. UTF-8: plain about 1.6x, large about 1.4x. Encoded text gets about 15% slower (measured: about 19%), and an encoded UTF-8 value allocates its encoded string (984 B in the 220-char case). |
+| One-line `Write(expr, writer)` through the overload set ([4.6](#46-how-c-variables-convert)). | Readable generated code, no per-variable locals, and no boxing for value types, nullable ones included. | The 3,000-variable render drops from 3,001 locals and about 145 KB of IL, which is past the JIT's MinOpts thresholds, to a fraction of that. |
 | `WriteLiteral` helpers and merged literal runs. | Readability; fewer calls. | Neutral to small gain. |
 
-The UTF-8 encoded-value allocation is the one regression. If the Table benchmark shows a meaningful loss, record the numbers in the PR and ask the owner. Keeping any of the old loop is the owner's call, because it trades simplicity for speed.
+**Measured results.** The Phase 4 before and after runs, under the JIT:
+
+| Benchmark | Before | After |
+| --- | --- | --- |
+| 220-character value that needs encoding, text | 577 ns | 686 ns (about 19% slower) |
+| Plain value, text | 34 ns | 17 ns |
+| 3,000 C# variables, text | 209 us | 70 us |
+| Table, 1,000 rows | 351 us | 258 us |
+
+The table run allocated more than before, for two reasons:
+
+- **`int?` boxing.** Decision S25 first dropped the nullable overload, so every `int?` write boxed 24 B; the pre-1.0 code didn't. Restoring `Write<T>(T?) where T : struct` removes it ([4.6](#46-how-c-variables-convert)).
+- **Encoded UTF-8 strings.** The UTF-8 target allocates the encoded string for a value that needs escaping, as this section predicted. That's the price of `WriteRaw(encoder.Encode(value), writer)`.
+
+**The owner accepted the encoded-value slowdown on 2026-10-14** in exchange for the simpler framework-call encoding. HTML encoding stays the default, and none of the old encode loop comes back.
 
 ### 8.2 Benchmark protocol
 
@@ -726,6 +785,8 @@ The UTF-8 encoded-value allocation is the one regression. If the Table benchmark
 2. Run them again after the phase.
 3. Put both tables in the pull request description. They aren't committed as a doc.
 4. Any regression beyond noise needs the owner's written acceptance in the PR.
+
+Phases 0 through 7 were committed straight to `release-1.0` without phase PRs, because the GitHub CLI wasn't available, so the Phase 4 numbers are recorded in [8.1](#81-adopted-changes) instead, along with the owner's acceptance. The pull request from `release-1.0` should repeat them. Later benchmark runs follow the steps above.
 
 The benchmarks project stays in the solution and builds in CI, but CI doesn't run it. `docs/development.md` gets a short "Benchmarks" section: the command, what each class measures, and that each benchmark checks its output against the hand-written baseline.
 
@@ -782,6 +843,9 @@ Reorganize by feature into ordinary (non-partial) classes, and drop the meaningl
 | `EquatableArrayTests`, `TemplatePathTests`, `GeneratorSettingTests` | Small direct tables that replace today's indirect coverage. |
 | `DocumentationModeTests` | Generated sources compile with `DocumentationMode.Diagnose` and produce no warnings, for both access modifiers. |
 | `DocumentationLinkTests` | The link and anchor checks from [14.5](#145-link-and-drift-checks). |
+| `RepositoryPathTests` | Every file in the repository has a path of at most 100 characters, so a Windows clone has 160 characters left for its folder. |
+
+The scanner's -1 cases from [7.4](#74-fallbacks) get `TemplateParserTests` rows that expect SLAP004 at the opener: an unmatched `[` and closers only inside strings or comments (`Parse_UnclosedBlock_ReportsOpenerSpanAndCloser`), and thousands of broken blocks, including an unterminated `@"` and `/*`, that report only the first opener (`Parse_ManyBrokenBlocks_ReportsFirstOpener`). The 15- and 16-closer pair runs through the whole generator: `BlockSyntaxTests.CSharpScanner_FifteenHiddenClosers_RendersLikeCSharp` renders 15 on both paths, and the last `DiagnosticTests.HiddenCloserCases` row reports SLAP004 for 16.
 
 Infrastructure changes:
 
@@ -791,6 +855,7 @@ Infrastructure changes:
 - `CountingCharPool` is deleted with `BufferPool`. `ProbeEncoder` moves to `AnglePlates.Runtime.Tests` and keeps only its custom-encoder pass-through mode; that project enables `AllowUnsafeBlocks` with a comment explaining that it's for `ProbeEncoder`'s pointer overrides. `AnglePlates.Tests` no longer needs a custom encoder, so it doesn't enable unsafe code.
 - `[assembly: ExcludeFromCodeCoverage]` stays in this project, because the emitted code it compiles lives in separate assemblies.
 - The 15 duplicated support-type snapshots are deleted.
+- Snapshot files get short names through a `GeneratorSnapshot` helper, such as `SupportTypes.internal#TemplateOptions.verified.cs`. Verify's default names combine the test class, method, arguments, and full hint name, and they reached 191 characters. The longest snapshot path is now 86 characters, and `docs/testing.md` explains the naming rule (commit `ffcdf3a`).
 
 ### 10.3 Runtime tests
 
@@ -840,11 +905,11 @@ Consumers, existing and new:
 | RemoveDefault | `AnglePlate Remove` in the project file. Also runs the incremental check: build, edit a template, rebuild, see new output, delete it, see the class gone. | Edit |
 | DirectoryBuildPropsRemove | Becomes `EnableDefaultAnglePlateItems=false` set in `Directory.Build.props`, plus one assertion that a `Remove` there is still a no-op. | Rewrite |
 | DirectoryBuildTargetsRemove | `Remove` in `Directory.Build.targets`. | Edit |
-| BuildErrors (new) | Builds that must fail. One small project per case with an `ExpectedErrors.txt`: SLAP001, SLAP002, SLAP004, SLAP005, SLAP008, SLAP009 (`-p:AnglePlateBaseAccessModifier=private`), SLAP010 (`-p:LangVersion=10`), SLAP011 (warning with `-warnaserror`), CS0111 for a duplicate class, and a CS0103 inside `[% %]` at `Templates/bad.html(5,4)`. The script requires a nonzero exit and every expected line, with absolute paths normalized to project-relative ones. | Add |
-| NoPrivateAssets (new) | A library with a plain one-line reference, and an app that reaches it through a `ProjectReference` and has its own `Templates` folder. Asserts the app has no `AnglePlate` items and no generated classes, support types included, so there's no `CS0436` (S26). | Add |
-| CentralPackageManagement (new) | `ManagePackageVersionsCentrally` with `GlobalPackageReference`. | Add |
-| UnsupportedFramework (new) | `net8.0`; pins SLAP012 or the documented behavior. | Add |
-| DefaultNames (new) | Templates with no `#type` or `#namespace`, in nested folders, plus `#encode none` and `RenderToString`. | Add |
+| BuildErrors (new) | Builds that must fail. One small project per case with an `ExpectedErrors.txt`: SLAP001, SLAP002, SLAP004, SLAP005, SLAP008, SLAP009 (`-p:AnglePlateBaseAccessModifier=private`), SLAP010 (`-p:LangVersion=10`), SLAP011 (warning with `-warnaserror`), CS0111 and CS0102 for a duplicate class (`Cs0111`), and a CS0103 inside `[% %]` at `Templates/bad.html(5,4)`. The script requires a nonzero exit and every expected line, with absolute paths normalized to project-relative ones. | Added in Phase 5b |
+| NoPrivateAssets (new) | A library with a plain one-line reference, and an app that reaches it through a `ProjectReference` and has its own `Templates` folder. Asserts the app has no `AnglePlate` items and no generated classes, support types included, so there's no `CS0436` (S26). | Added in Phase 5b, changed in 5c |
+| CentralPackageManagement (new) | `ManagePackageVersionsCentrally` with `GlobalPackageReference`. | Added in Phase 5b |
+| UnsupportedFramework (new) | A `net8.0` build must fail with exactly CS0234 for `System.IO.Pipelines`, which is why there's no SLAP012 ([5.1](#51-rules)). | Added in Phase 5b |
+| DefaultNames (new) | Templates with no `#type` or `#namespace`, in nested folders, plus `#encode none` and `RenderToString`. | Added in Phase 5b |
 | ScannerParity (new) | The scanner parity template (`[[ grid[row[0]] ]]`, `[% var close = "%]"; %]`, and other closers inside C# literals, comments, and directives) rendered through the packed analyzer. Phase 3 added it because [7.6](#76-host-compiler) needs parity templates before `DefaultNames` exists; Phase 4 leaves the parity cases here. | Added in Phase 3 |
 | PackageTests | Layout, metadata, consumer assets, discovery tags, fixtures, and a UTF-8 BOM template with non-ASCII text. | Edit |
 
@@ -864,6 +929,8 @@ How CI measures it:
 - Run each test project with Microsoft.Testing.Platform's built-in collector: `--coverage --coverage-output-format cobertura --coverage-output <file>`. The test project already gets `Microsoft.Testing.Extensions.CodeCoverage` 18.10.0 through TUnit (checked in `project.assets.json`), so no package is added. If a TUnit update ever drops it, stop and ask the owner before adding it, because AGENTS.md requires an explicit request for coverage packages.
 - A short, commented `pwsh` step in `ci.yml` reads `line-rate` and `branch-rate` for the named module in each Cobertura file and fails below 0.90. It ignores the GUID-named modules that the in-memory tests emit.
 - AGENTS.md's coverage rule changes to describe exactly this gate, in the phase that adds it ([15.5](#155-agentsmd-changes)).
+
+Measured so far: at commit `9f527d9`, a local run put the emitted code at 100% line and 99.7% branch, with the compiler-generated branch as its one accepted gap. The CI gate hasn't run on GitHub yet ([Implementation status](#implementation-status)).
 
 ## 11. Packaging and MSBuild
 
@@ -1126,7 +1193,7 @@ Files:
 - No dated measurements, no "this pass" or "now" language, no regression inventories, no em dashes, and no section-sign cross-references (link to the heading instead).
 - Documentation describes what's implemented. Planned work lives in GitHub issues.
 - Docs change in the same phase as the behavior they describe ([17](#17-execution-plan)), not only in Phase 6.
-- **The owner signs off on the voice** of the README and `docs/templates.md` before release.
+- **The owner signs off on the voice** of the README, `docs/templates.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, and `SECURITY.md` before release ([19](#19-owner-only-tasks-and-remaining-inputs), Q2).
 
 ### 14.2 Target doc set
 
@@ -1377,6 +1444,32 @@ Every tracked file and the relevant untracked state. "Phase" refers to [17](#17-
 | `tests/AnglePlates.PackageConsumers/*` | Edit, add | 4, 5 | [10.4](#104-package-validation) |
 | Untracked: `TestResults/`, `artifacts/`, `.vs/` | Ignored | | Clean the stale package pair locally |
 
+## Implementation status
+
+As of 2026-10-14, Phases 0 through 7 are implemented and committed on the `release-1.0` branch. Nothing has been pushed through a pull request yet, so no CI run has happened on GitHub.
+
+| Phase | Status | Key commits |
+| --- | --- | --- |
+| 0 | Done | `99864e6` Phase 0: editorconfig, gitattributes, dictionary, and agent rules |
+| 1 | Done locally; CI acceptance pending | `79754a4` Phase 1: CI workflow and package validation hardening |
+| 2 | Done | `5a2d162` Phase 2a: readable hint names, versionless header, test reorganization; `138f53e` Phase 2b: restructure the generator by concern |
+| 3 | Done; the fallback removal from 2026-10-14 follows | `c0f0c0d` Phase 3: C#-aware block scanner |
+| 4 | Done locally; CI acceptance and the owner's consolidated snapshot review pending; the restored nullable overload follows | `fae6754` Phase 4a: runtime test project and output-parity matrix; `7304b48` Phase 4b: the emitted 1.0 API; `18b7569` Phase 4b2: keep dynamic C# variables working; `506226d` Phase 4c: optional #type and #namespace, and the 1.0 diagnostics registry; `165bd07` Phase 4d: CI coverage gate and README example tests |
+| 5 | Done locally; CI acceptance pending | `0c58972` Phase 5a: build assets, default-items switch, metadata, and icon; `57d5fac` Phase 5b: package consumers and Native AOT proof; `2448260` Phase 5c: generate nothing where the AnglePlates props aren't imported |
+| 6 | Done; the owner's voice sign-off is pending | `0cf2609` Phase 6a: README rewrite and consumer docs; `bc15a06` Phase 6b: contributor docs, OSS files, sample, and link tests |
+| 7 | Done locally; a dispatched run is pending | `0129e70` Phase 7: release workflow and publishing guide; `841e3bf` Spec: set the publish switch before publishing the Release |
+| 0-7 | Audit fixes | `9f527d9` Final audit fixes for Phases 0-7; `ffcdf3a` Keep snapshot file names short enough for Windows clones |
+| 8, 9 | Not started | Waits on the owner ([19](#19-owner-only-tasks-and-remaining-inputs)) |
+
+The owner's 2026-10-14 answers add two code changes, made alongside this revision and not part of the commits above: the scanner reports SLAP004 instead of falling back to a plain search ([7.4](#74-fallbacks)), and the base classes get the nullable `Write<T>(T?)` overload back ([4.4](#44-support-base-classes)).
+
+**Acceptance items that need GitHub.** These can't be checked locally. They need the GitHub CLI installed and authenticated (it isn't on this machine), or the owner opening the pull request from `release-1.0`:
+
+- Phase 1: all four CI legs (`windows`, `ubuntu`, `latest-sdk`, `sdk-floor`) green on a pull request, a deliberately broken consumer uploading its binlog from `$RUNNER_TEMP/validation`, and the `sdk-floor` log showing SDK `10.0.100`.
+- Phase 4: Runtime.Tests and the 90% coverage gate running in CI.
+- Phase 5: `validate-package.ps1` passing on all four legs, including Native AOT on Windows, which has never run locally.
+- Phase 7: a dispatched `release.yml` run that passes `validate` and `pack` and stops at `publish-int` with the "owner inputs pending" message.
+
 ## 17. Execution plan
 
 Each phase is one or more PRs, and every PR goes through CI once Phase 1 lands. **Agents may commit and push to the remote repository** as they go (the owner's decision). **Only the owner approves making the repo public or publishing to nuget.org.**
@@ -1443,7 +1536,7 @@ The order exists to protect the manual snapshot review. CI and test hygiene come
 **Accept when:**
 
 - One consolidated snapshot review is done and recorded in the PR.
-- The before and after benchmark tables are in the PR, with no unaccepted regression.
+- The before and after benchmark tables are in the PR, with no unaccepted regression. (They're in [8.1](#81-adopted-changes), and the owner accepted the encoded-value slowdown on 2026-10-14.)
 - The output-parity matrix from [4.6](#46-how-c-variables-convert) passes.
 - Runtime.Tests runs in CI.
 - Coverage is at least 90% in CI for both modules.
@@ -1516,13 +1609,25 @@ This is where the owner provides everything in [19](#19-owner-only-tasks-and-rem
 - The GitHub Release has its assets.
 - The variable is back to `false`.
 
+### Next steps
+
+As of 2026-10-14, in order:
+
+1. Commit the 2026-10-14 changes (the scanner's fallback removal, the restored `Write<T>(T?)` overload, their tests, snapshots, and docs, and this spec revision) to `release-1.0`, and add the commit to the Phase 3 and Phase 4 rows in [Implementation status](#implementation-status). The pull request in the next step has to include them.
+2. Install and authenticate the GitHub CLI (`winget install GitHub.cli`, then `gh auth login`), or have the owner open the pull request from `release-1.0`. Then get all four CI legs green and fix whatever CI finds. Native AOT on Windows has never run locally, so expect that leg to need attention. This closes the GitHub-only acceptance items in [Implementation status](#implementation-status), including the deliberate-failure binlog upload, the `sdk-floor` log, and a dispatched `release.yml` run that stops at `publish-int`.
+3. The owner does the consolidated Phase 4 snapshot review in that pull request and records it there, and reviews the icon ([19](#19-owner-only-tasks-and-remaining-inputs), items 1 and 2).
+4. The owner answers the open questions in [19](#19-owner-only-tasks-and-remaining-inputs).
+5. Phase 8: the owner's inputs, then the preview preflight and the int.nugettest.org rehearsal.
+6. Phase 9: the stable 1.0.0 release, gated by the owner.
+
 ## 18. Risks
 
 | Risk | Mitigation |
 | --- | --- |
 | The scanner behaves differently on a newer SDK's Roslyn than on 4.14. | Parity templates in a package consumer, run on the SDK floor and the newest 10.0 SDK in CI; the yearly floor check. |
+| With no fallback, valid C# that hides more than 15 closers in literals or comments, or broken C# that runs past the scanner's last window, reports SLAP004 ("missing its closing delimiter") at the opener, which can puzzle a user whose block does have a closer. | The owner accepted this on 2026-10-14 to keep the code simple. None of these templates compiled under the pre-1.0 plain search either. `docs/templates.md` and SLAP004's section in `docs/diagnostics.md` describe the limit and the refactor. `BlockSyntaxTests` pins that 15 hidden closers render, and `DiagnosticTests` pins that 16 report SLAP004. Q3 asks the owner whether SLAP004's message is clear enough for these cases. If users hit it in practice, a dedicated diagnostic or a larger window can come later without breaking anyone. |
 | The Phase 4 snapshot review is large. | Phase 2 cuts the snapshot count and removes generated line numbers from assertions first. Phase 4 is a single batch with a checklist. |
-| The overload set changes output for some type. | The output-parity matrix is written and passing **before** the old conversion code is deleted. |
+| The overload set changes output for some type. | The output-parity matrix is written and passing **before** the old conversion code is deleted, and it covers `int?` with and without a value through the restored nullable overload. |
 | A packaging defect reaches a feed and burns a version, as happened four times in AssemblyInfo. | Full validation before every push, the consumer-assets check, run-numbered previews, and no `--skip-duplicate`. |
 | int.nugettest.org's trusted publishing changes. | AssemblyInfo confirmed the current settings; the rehearsal catches any change. An int-only API key is a fallback only with the owner's approval. |
 | The int policy expires before the first publish. | The 7-day note in [12.3](#123-release-workflow) and preflight line 5. |
@@ -1533,13 +1638,24 @@ This is where the owner provides everything in [19](#19-owner-only-tasks-and-rem
 
 ## 19. Owner-only tasks and remaining inputs
 
-The AI disclosure and the copyright string are settled ([2](#2-decision-log)). Everything else falls into three groups.
+The AI disclosure and the copyright string are settled ([2](#2-decision-log)). Everything else falls into four groups. The inputs and approvals (items 4-12) match the owner checklist in `docs/releasing.md` ("Owner inputs"), in the same order.
 
-**Reviews during Phases 0-7.** These are the only things earlier phases wait on.
+**Reviews during Phases 0-7.**
 
-1. Review this spec and the icon draft in [plans/icon-draft](icon-draft).
-2. Review the Phase 4 snapshot batch and any benchmark regression.
-3. Sign off on the voice of the README and `docs/templates.md` (Phase 6).
+1. Review this spec and the icon draft in [plans/icon-draft](icon-draft). The owner answered the four open questions from the last revision on 2026-10-14 ([2](#2-decision-log)). The icon review and the rest of the spec are still open; Phase 5 committed the draft icon to the repo root, but the owner hasn't accepted it.
+2. Review the Phase 4 snapshot batch in the pull request from `release-1.0`, and record the review there (Phase 4's acceptance needs it). ~~Review any benchmark regression.~~ **Done:** the owner accepted the encoded-value slowdown on 2026-10-14 ([8.1](#81-adopted-changes)).
+3. The voice sign-off moved to the open questions below (Q2).
+
+**Open questions.** Nothing in Phases 0-7 waits on these, but they should be settled before Phase 9.
+
+- **Q1.** Accept or overturn decisions S25 (the three C# variable overloads) and S26 (no output without the props) ([2](#2-decision-log)).
+- **Q2.** Sign off on the voice of `README.md`, `docs/templates.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, and `SECURITY.md`.
+- **Q3.** Approve the diagnostic message wording for SLAP001, SLAP002, SLAP003, SLAP005, and SLAP008; confirm that SLAP004 keeps "Template block is missing its closing delimiter '{0}'" for the scanner's new cases in [7.4](#74-fallbacks), with `docs/diagnostics.md` explaining them, since one message covers comments too; that a blank required directive reports SLAP007; and that `#modal {` in CSS triggers SLAP011 (it's one edit from `#model`).
+- **Q4.** Check in Visual Studio 2026 whether a breakpoint set in a template file binds through `#line` ([14.2](#142-target-doc-set)). `docs/rendering.md` doesn't promise it until someone checks. The determinism check is done: two clones built with `ContinuousIntegrationBuild=true` record identical template paths.
+- **Q5.** File GitHub issues for the deferred work in [1](#1-goals-and-non-goals): span-based formatting, `RenderToBytes` and a `Stream` overload of `RenderAsync`, a static child-template facade, `TemplateOptions.FormatProvider`, project-wide `#generate` and `#encode` defaults, and a TextMate grammar. This needs the GitHub CLI or the owner.
+- **Q6.** Decide whether previews should only be dispatched from `main`. Today `release.yml` packs a preview from whatever ref the dispatch names.
+- **Q7.** Confirm that the trusted-publishing steps in `docs/releasing.md` use the wording nuget.org and int.nugettest.org show in their UI.
+- **Q8.** Confirm the labels the issue forms apply (`bug` and `enhancement`), and the promises `SECURITY.md` makes (private vulnerability reporting, and what's in and out of scope).
 
 **Inputs, collected at the very end (Phase 8).** No earlier phase waits on these. `docs/releasing.md` (written in Phase 7) has this list as a checklist so they can all be provided in one sitting.
 
@@ -1552,9 +1668,9 @@ The AI disclosure and the copyright string are settled ([2](#2-decision-log)). E
 
 **Approvals only the owner gives (Phase 9).**
 
-10. Make the repo public. Then set up the `nuget-org` environment, the `NUGET_ORG_PUBLISH_ENABLED` variable (`false`), rulesets, private vulnerability reporting, and the social preview.
-11. Create the nuget.org trusted-publishing policy.
-12. Set `NUGET_ORG_PUBLISH_ENABLED` to `true`, tag `v1.0.0`, publish the GitHub Release, approve the `nuget-org` deployment, then set the variable back to `false`.
+10. Make the repo public. Then set up the `nuget-org` environment, the `NUGET_ORG_PUBLISH_ENABLED` variable (`false`), both rulesets, private vulnerability reporting, and the social preview.
+11. Create the nuget.org trusted-publishing policy with environment `nuget-org`.
+12. Set `NUGET_ORG_PUBLISH_ENABLED` to `true` first, then tag `v1.0.0`, publish the GitHub Release, approve the `nuget-org` deployment, and set the variable back to `false`. The variable has to be `true` before the Release is published, because `publish-nuget` reads it during the run the Release starts ([12.7](#127-stable-release-to-nugetorg)).
 
 ## Appendix A. Draft icon SVG
 
@@ -1569,7 +1685,7 @@ Apply the shared-`clipPath` cleanup from [13](#13-icon) before committing it to 
 
 ## Appendix B. Scanner sketch
 
-The verified prototype, with the broken-C# rule folded in. The implementer adapts names to [6.1](#61-folder-layout) and runs it through `/csharp`, and runs its comments through `/humanizer`.
+The verified prototype, with the broken-C# rule folded in. The implementer adapts names to [6.1](#61-folder-layout) and runs it through `/csharp`, and runs its comments through `/humanizer`. The shipped `CSharpBlockScanner` differs: it lexes in growing windows and reads directive lines itself ([7.4](#74-fallbacks)), and the parser turns its -1 into SLAP004.
 
 ```csharp
 // Finds the closing delimiter of a C# variable or C# block.

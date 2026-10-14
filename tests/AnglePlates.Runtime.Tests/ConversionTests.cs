@@ -266,6 +266,9 @@ public sealed class ConversionTests
         yield return (true, new CustomValue("<custom>"), "&lt;custom&gt;");
         yield return (false, new byte[] { 1, 2, 3 }, "System.Byte[]");
         yield return (true, new NullToString(), "");
+
+        // A boxed int? is a boxed int, so the runtime binder picks Write<T> with T as int, never the T? overload
+        yield return (true, (int?)7, "7");
     }
 
     // The tests below pin the 1.0 overload set, where it differs from the captured conversion or decides which conversion runs
@@ -295,8 +298,8 @@ public sealed class ConversionTests
     [Test]
     public async Task Render_FormattableAndConvertibleValue_PrefersConvertibleLikeConvert()
     {
-        // The value as itself, as a nullable, as object, and as dynamic all reach Write<T>, which checks IConvertible before
-        // IFormattable the way Convert.ToString does
+        // The value as itself, as a nullable through the T? overload, as object, and as dynamic all reach Write<T>, which checks
+        // IConvertible before IFormattable the way Convert.ToString does
         await AssertConvertsAsync(
             o => new ConversionDualFormatTextTemplate(o), o => new ConversionDualFormatUtf8Template(o), true, new DualFormat(),
             "convertible|convertible|convertible|convertible");
@@ -323,6 +326,7 @@ public sealed class ConversionTests
         yield return (true, "True");
         yield return (new CustomValue("<custom>"), "&lt;custom&gt;");
         yield return (new byte[] { 1, 2, 3 }, "System.Byte[]");
+        yield return ((int?)7, "7");
     }
 
     [Test]

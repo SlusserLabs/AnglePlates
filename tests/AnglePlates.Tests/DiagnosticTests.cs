@@ -72,10 +72,38 @@ public sealed class DiagnosticTests
         var diagnostic = result.RunResult.Diagnostics.Single();
 
         await AssertRule(diagnostic, "SLAP004", DiagnosticSeverity.Error, "Unclosed template block");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo($"Template block is missing its closing delimiter '{close}'");
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo(UnclosedBlockMessage(close));
         await Assert.That(diagnostic.Location.SourceSpan).IsEqualTo(new TextSpan(header.Length + 7, 2));
         await AssertLineSpan(diagnostic, template.Path, 3, 7, 3, 9);
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+    }
+
+    // Closers the scanner skips don't close the block, so C# that hides every closer it has reports SLAP004 at the opener
+    // and consumes the rest of the template, which leaves no generated code for the compiler to report
+    [Test]
+    [MethodDataSource(nameof(HiddenCloserCases))]
+    public async Task Slap004_OnlyHiddenClosers_ReportsAtOpeningDelimiter(string block, string close)
+    {
+        var template = new TemplateAdditionalText(TemplateText.Header + "prefix " + block + "\r\n<p>tail</p>");
+        var result = GeneratorTestHelper.Run(template);
+        var diagnostic = result.RunResult.Diagnostics.Single();
+
+        await AssertRule(diagnostic, "SLAP004", DiagnosticSeverity.Error, "Unclosed template block");
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo(UnclosedBlockMessage(close));
+        await AssertLineSpan(diagnostic, template.Path, 3, 7, 3, 9);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
+    }
+
+    public static IEnumerable<(string block, string close)> HiddenCloserCases()
+    {
+        // An unmatched "[" in a C# variable, and closers that sit only inside C# strings or comments
+        yield return ("[[ model[0 ]]", "]]");
+        yield return ("[[ \"]]\" + model", "]]");
+        yield return ("[% var s = \"%]\"; /* %] */", "%]");
+
+        // The last window holds 16 closers, so 16 hidden ones leave the real closer outside it
+        var hidden = string.Concat(Enumerable.Repeat("\"%]\", ", 16));
+        yield return ($"[% var codes = new[] {{ {hidden}\"x\" }}; %]", "%]");
     }
 
     public static IEnumerable<(string header, string open, string contents, string close)> UnclosedBlockCases()
@@ -260,6 +288,11 @@ public sealed class DiagnosticTests
         await Assert.That(second.text).IsEqualTo("second &lt;value&gt;");
         await Assert.That(first.bytes.SequenceEqual(Encoding.UTF8.GetBytes(first.text))).IsTrue();
         await Assert.That(second.bytes.SequenceEqual(Encoding.UTF8.GetBytes(second.text))).IsTrue();
+    }
+
+    private static string UnclosedBlockMessage(string close)
+    {
+        return $"Template block is missing its closing delimiter '{close}'";
     }
 
     private static async Task AssertRule(Diagnostic diagnostic, string id, DiagnosticSeverity severity, string title)

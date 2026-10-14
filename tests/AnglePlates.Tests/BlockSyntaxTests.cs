@@ -110,6 +110,20 @@ public sealed class BlockSyntaxTests
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
     }
 
+    // The scanner's last window holds 16 closers, so a block can hide 15 before its own; DiagnosticTests covers 16
+    [Test]
+    public async Task CSharpScanner_FifteenHiddenClosers_RendersLikeCSharp()
+    {
+        var hidden = string.Concat(Enumerable.Repeat("\"%]\", ", 15));
+        var body = $"[% var codes = new[] {{ {hidden}\"x\" }}; %][[ codes.Length ]]:[[ codes[14] ]]";
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+        var output = RenderingTestHelper.Render(result.Compilation);
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(output.text).IsEqualTo("16:%]");
+        await Assert.That(output.bytes.SequenceEqual("16:%]"u8.ToArray())).IsTrue();
+    }
+
     [Test]
     [MethodDataSource(nameof(EmptyBlockCases))]
     public async Task EmptyBlock_WithTrimFlags_RendersNothingButTrims(string body, string expected)

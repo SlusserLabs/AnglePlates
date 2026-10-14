@@ -52,7 +52,7 @@ Add `#model` with the model's C# type, or fix the spelling. The squiggle covers 
 
 **Unclosed template block**
 
-A C# variable (`[[`), C# block (`[%`), or comment (`[*`) has no closer anywhere after it. The message names the closer it expected.
+A C# variable (`[[`), C# block (`[%`), or comment (`[*`) has no closer after it that counts. For a comment, any `*]` counts. For C#, usually there's just no closer at all, but there are a few cases where a closer is there and the lexer won't take it; they're listed after the example. The message names the closer it expected.
 
 ```html
 #model MyApp.GreetingModel
@@ -61,6 +61,32 @@ A C# variable (`[[`), C# block (`[%`), or comment (`[*`) has no closer anywhere 
 ```
 
 Add the missing `]]`, `%]`, or `*]`. The squiggle covers the opener.
+
+In C# variables and C# blocks, a closer only counts if the C# lexer agrees it's a closer, as [How blocks end](templates.md#how-blocks-end) explains. So you can also get `SLAP004` with a closer right there on the screen:
+
+- A C# variable with an unmatched `[`, such as `[[ model[0 ]]`. The `]]` closes nothing until the brackets balance.
+- A block whose only closers are inside a C# string or comment, such as `[% var s = "%]";` at the end of the file.
+- A verbatim or raw string that never ends, such as `[% var s = @"x %]`, or a `/*` comment with no `*/`, when 16 or more closers come after it in the template. With fewer than that, the block ends at its first closer and the compiler points at the typo instead.
+- A block that hides more than 15 closers in strings, comments, or brackets before its own. The scanner stops looking after 16, so this one fails even though it's valid C#:
+
+```html
+#model MyApp.CodeListModel
+[% var codes = new[] { "%]", "%]", /* 14 more of the same */ "x" }; %]
+```
+
+Fix the first three like any other typo. For the last one, get the closers out of the template. A small class of your own is a good place for them, since the scanner never reads `.cs` files:
+
+```csharp
+namespace MyApp.Templates;
+
+// Strings that would hide too many closers in code-list.html
+internal static class CodeLists
+{
+    public static readonly string[] Codes = { "%]", "%]", /* ... */ "x" };
+}
+```
+
+Then the block is just `[% var codes = CodeLists.Codes; %]`. Without a `#generate` directive the template builds both a text class and a UTF-8 class, and both of them can reach a separate class like this one. A field in your half of `CodeListTextTemplate` would only be visible to the text class, so the UTF-8 class wouldn't compile. If you'd rather keep everything in the template, build the strings without the closer in them, such as `"%" + "]"`.
 
 ## SLAP005
 

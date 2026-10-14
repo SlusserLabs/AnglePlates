@@ -89,15 +89,25 @@ internal static class TemplateParser
         int openingLength = reader.Position - openingStart;
         bool trimPrevious = reader.IsNext(TemplateSyntax.TrimMarker, advancePast: true);
 
-        // C# variables and C# blocks skip closers inside C# strings and comments. Comments, and C# where the scanner finds
-        // no closer, use the plain search; an unclosed block reports the opener and consumes the rest.
+        // C# variables and C# blocks end where the scanner says, skipping closers inside C# strings and comments. Comments
+        // aren't C#, so they end at the first closer. A block with no closer reports the opener and consumes the rest.
         int start = reader.Position;
-        int closerStart = type == TokenType.Comment ? -1 : CSharpBlockScanner.FindCloser(text, start, type);
-        if (closerStart >= 0)
+        bool closed;
+        if (type == TokenType.Comment)
         {
-            reader.Advance(closerStart - start);
+            closed = reader.TryAdvanceTo(closer);
         }
-        else if (!reader.TryAdvanceTo(closer))
+        else
+        {
+            int closerStart = CSharpBlockScanner.FindCloser(text, start, type);
+            closed = closerStart >= 0;
+            if (closed)
+            {
+                reader.Advance(closerStart - start);
+            }
+        }
+
+        if (!closed)
         {
             errors.Add(new TemplateError(DiagnosticDescriptors.UnclosedBlock, new TextSpan(openingStart, openingLength), closer));
             reader.AdvanceToEnd();

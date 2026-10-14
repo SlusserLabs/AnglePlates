@@ -106,9 +106,9 @@ public sealed class NameCollisionTests
 
     [Test]
     [Arguments("", "", "Hello [[ model ]]", "Hello &lt;value&gt;")]
-    // The C# block makes RenderAsync use the flushing literal and variable writes too
-    [Arguments(_consumerConflicts, "", "[% var n = 1; %]Hello [[ model ]] [% n++; %][[ n ]]", "Hello &lt;value&gt; 2")]
-    [Arguments(_importedConflicts, "#using Conflicts\r\n", "[% var n = 1; %]Hello [[ model ]] [% n++; %][[ n ]]", "Hello &lt;value&gt; 2")]
+    // The C# block makes RenderAsync use the flushing literal and variable writes too, and the int? uses the T? overloads
+    [Arguments(_consumerConflicts, "", "[% var n = 1; %]Hello [[ model ]] [% n++; int? m = n; %][[ n ]][[ m ]]", "Hello &lt;value&gt; 22")]
+    [Arguments(_importedConflicts, "#using Conflicts\r\n", "[% var n = 1; %]Hello [[ model ]] [% n++; int? m = n; %][[ n ]][[ m ]]", "Hello &lt;value&gt; 22")]
     [Arguments("global using System.Text;", "#using System.Text\r\n", "> [[ new StringBuilder(model) ]]", "> &lt;value&gt;")]
     public async Task ConsumerSources_WithCollidingNames_CompileWithoutWarnings(string consumerSource, string usingDirective, string body, string expected)
     {

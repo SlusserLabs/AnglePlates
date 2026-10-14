@@ -86,6 +86,25 @@ internal abstract class TextTemplate<TModel>
     }
 
     /// <summary>
+    /// Writes a nullable value like <see cref="Write{T}(T, global::System.IO.TextWriter)" /> without boxing it. A null value
+    /// writes <see cref="TemplateOptions.NullVariable" /> instead.
+    /// </summary>
+    /// <typeparam name="T">The value type inside the <see cref="global::System.Nullable{T}" />.</typeparam>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">The writer that receives the output.</param>
+    protected void Write<T>(T? value, global::System.IO.TextWriter writer) where T : struct
+    {
+        if (value.HasValue)
+        {
+            Write(value.GetValueOrDefault(), writer);
+        }
+        else
+        {
+            Write((string?)null, writer);
+        }
+    }
+
+    /// <summary>
     /// Writes literal template text.
     /// </summary>
     /// <param name="value">The text to write.</param>
@@ -97,7 +116,7 @@ internal abstract class TextTemplate<TModel>
 
     // Matches the pre-1.0 Convert.ToString(value, CultureInfo.InvariantCulture): IConvertible first, then IFormattable,
     // then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below are on T rather
-    // than on pattern variables, so the JIT drops the box for most value types; a nullable value type is still boxed.
+    // than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in Write(T?) first.
     private static string? ToInvariantString<T>(T value)
     {
         if (value is null)

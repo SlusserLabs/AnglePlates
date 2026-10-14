@@ -13,6 +13,9 @@ namespace SlusserLabs.AnglePlates;
 // - A // comment or # directive runs to the end of its line, but the first closer on that line still ends the block,
 //   so [% // note %] and [% #if DEBUG %] work the way they look.
 // - Broken C#, such as a string missing its closing quote, ends at its first closer, and the compiler reports the typo.
+//   A verbatim or raw string with no end, or a /* comment with no end, runs to the end of every window, so it gets that
+//   rule only when fewer than 16 closers follow it; otherwise there's no closer.
+// - When no closer follows the rules, or the C# hides more closers than the last window holds, there's no closer.
 // - The scanner reads each # directive line itself and starts the lexer again on the next line. The generator can't
 //   know the consumer's preprocessor symbols, and a lexer that saw "#if DEBUG" would read every line after it, to the
 //   end of the template, as disabled text. Doing that for every [% #if %] block would make parsing quadratic.
@@ -25,21 +28,22 @@ internal static class CSharpBlockScanner
         .WithDocumentationMode(DocumentationMode.None);
 
     // The most closers a window can hold. Valid C# decides within a window or two; broken C# that runs to the end of the
-    // text gives up here, so every broken block lexes a bounded stretch instead of the rest of the template.
+    // text gives up here, so every broken block lexes a bounded stretch instead of the rest of the template. Valid C# that
+    // hides 16 or more closers in strings, comments, or brackets gives up too.
     private const int _maxWindowClosers = 16;
 
     // Scan returns this when the window ended before the scan could decide
     private const int _needMore = -2;
 
     // Returns where the closer starts, or -1 when the C# runs to the end of the text without one or hides more closers
-    // than the last window holds. The block type is Variable or Code; anything else is scanned as a C# block.
+    // than the last window holds. The parser reports -1 as an unclosed block. The block type is Variable or Code; anything
+    // else is scanned as a C# block.
     //
-    // The lexer reads a window that ends right after a plain-search closer: the first one, then the second, the fourth,
-    // and so on. A token that ends inside the window lexes the same as it would in the whole text, and the window grows
-    // only when a token reaches its end. Broken C#, such as a /* comment with no end, would otherwise send the lexer to
-    // the end of the template for every block. An unclosed interpolation hole also nests Roslyn one level deeper for
-    // each later $"{ it reads, which can overflow the stack. Past the last window, the parser falls back to the first
-    // closer, which is where rules for broken C# end the block anyway.
+    // The lexer reads a window that ends right after a closer that a plain text search finds: the first one, then the
+    // second, the fourth, and so on. A token that ends inside the window lexes the same as it would in the whole text, and
+    // the window grows only when a token reaches its end. Broken C#, such as a /* comment with no end, would otherwise send
+    // the lexer to the end of the template for every block. An unclosed interpolation hole also nests Roslyn one level
+    // deeper for each later $"{ it reads, which can overflow the stack.
     public static int FindCloser(string text, int contentStart, TokenType blockType)
     {
         bool isVariable = blockType == TokenType.Variable;

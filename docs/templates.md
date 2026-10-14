@@ -64,7 +64,9 @@ AnglePlates reads C# variables and C# blocks with the C# lexer, so a closer insi
 - A C# variable ends only once its brackets balance, so `[[ grid[row[0]] ]]` and `[[ model[0..1]]]` both work.
 - A `//` comment or a `#` preprocessor line ends at the first closer on that line, so `[% // note %]` and `[% #if DEBUG %]` do what they look like.
 - A C# variable can end in a `//` comment. `[[ model.Name // display name ]]` works, because the generated code starts a new line after the comment.
-- If the C# is broken, say a string is missing its closing quote, the block ends at the first closer, and the compiler points at the typo in the template. It won't swallow the HTML that follows.
+- If the C# is broken, say a regular string is missing its closing quote, the block ends at the first closer, and the compiler points at the typo in the template. It won't swallow the HTML that follows. A verbatim or raw string that never ends, or a `/*` comment with no `*/`, works the same way unless 16 or more closers come after it; then it's the `SLAP004` case below.
+
+A block with no closer the lexer accepts doesn't end at all. It reports [`SLAP004`](diagnostics.md#slap004) at the opener, and the template doesn't compile. That happens when a C# variable has an unmatched `[`, as in `[[ model[0 ]]`, or when every closer after the opener is inside a C# string or comment, as in `[% var s = "%]";` with nothing after it. It also happens when the C# hides more than 15 closers before its own, because the lexer stops looking there so that broken C# can't make it read the rest of a long template once per block. That same limit catches a verbatim or raw string or a `/*` comment that never ends, when 16 or more closers follow it: the scanner can't tell where the broken C# stops, so it reports `SLAP004` and the rest of the template goes with it. Fifteen is plenty for C# you'd write by hand. If you go past it, move those strings out of the template; [`SLAP004`](diagnostics.md#slap004) shows how.
 
 Comments (`[* *]`) aren't C#, so they end at the first `*]`.
 

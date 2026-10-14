@@ -22,12 +22,10 @@ public sealed class TemplateParserTests
     [Arguments("#type X\r\rbody", "Directive 6-7, Literal 8-13")]
     [Arguments("plain", "Literal 0-5")]
     [Arguments("", "")]
-    // C# strings and comments hide closers, and an unmatched "[" falls back to the plain search
+    // C# strings and comments hide closers
     [Arguments("[[ \"]]\" ]]", "Variable 3-7")]
     [Arguments("[% var s = \"%]\"; %]x", "Code 3-16, Literal 19-20")]
     [Arguments("[% // note %]tail", "Code 3-10, Literal 13-17")]
-    [Arguments("x[[ a[ ]]y", "Literal 0-1, Variable 4-6, Literal 9-10")]
-    [Arguments("[% /* %] */ x", "Code 3-5, Literal 8-13")]
     [Arguments("[[ a-- -]]", "Variable 3-6 trim-next")]
     public async Task Parse_Text_ReturnsTokens(string text, string expected)
     {
@@ -44,6 +42,10 @@ public sealed class TemplateParserTests
     [Arguments("ab [[", 3, "]]")]
     [Arguments("[% \"abc", 0, "%]")]
     [Arguments("[[ a[0", 0, "]]")]
+    // Closers the scanner skips don't close the block, even when the C# around them is broken
+    [Arguments("x[[ a[ ]]y", 1, "]]")]
+    [Arguments("[% /* %] */ x", 0, "%]")]
+    [Arguments("[% var s = \"%]\";", 0, "%]")]
     public async Task Parse_UnclosedBlock_ReportsOpenerSpanAndCloser(string text, int start, string closingDelimiter)
     {
         var result = TemplateParser.Parse(text, CancellationToken.None);
@@ -84,22 +86,37 @@ public sealed class TemplateParserTests
         await Assert.That(result.Tokens).IsEmpty();
     }
 
-    // Each broken block ends at its own closer. An unclosed interpolation hole that read on through every later block
-    // used to overflow the stack, and the others took seconds.
+    // An unclosed interpolation hole that read on through every later block used to overflow the stack. The scanner's
+    // windows stop it within 16 closers, so each broken hole ends at its own closer.
     [Test]
-    [Arguments("[[ a[0 ]]")]
-    [Arguments("[% var s = $\"{ x %]")]
-    [Arguments("[% var s = @\"x %]")]
-    [Arguments("[% /* x %]")]
-    public async Task Parse_ManyBrokenBlocks_EndsEachAtItsFirstCloser(string block)
+    public async Task Parse_ManyUnclosedInterpolationHoles_EndsEachAtItsFirstCloser()
     {
         const int count = 3000;
-        var text = string.Concat(Enumerable.Repeat(block + "<p class=\"row\">It's #1 { </p>\n", count));
+        var text = string.Concat(Enumerable.Repeat("[% var s = $\"{ x %]<p class=\"row\">It's #1 { </p>\n", count));
 
         var result = TemplateParser.Parse(text, CancellationToken.None);
 
         await Assert.That(result.Tokens.Count(token => token.Type != TokenType.Literal)).IsEqualTo(count);
         await Assert.That(result.Errors).IsEmpty();
+    }
+
+    // Broken C# that never finds a closer the scanner accepts stops after the last window, reports the first opener, and
+    // consumes the rest, so thousands of them parse in milliseconds instead of lexing to the end once per block
+    [Test]
+    [Arguments("[[ a[0 ]]", "]]")]
+    [Arguments("[% var s = @\"x %]", "%]")]
+    [Arguments("[% /* x %]", "%]")]
+    public async Task Parse_ManyBrokenBlocks_ReportsFirstOpener(string block, string closingDelimiter)
+    {
+        var text = string.Concat(Enumerable.Repeat(block + "<p class=\"row\">It's #1 { </p>\n", 3000));
+
+        var result = TemplateParser.Parse(text, CancellationToken.None);
+        var error = result.Errors.Single();
+
+        await Assert.That(result.Tokens).IsEmpty();
+        await Assert.That(error.Descriptor).IsEqualTo(DiagnosticDescriptors.UnclosedBlock);
+        await Assert.That(error.Span.Start).IsEqualTo(0);
+        await Assert.That(error.Arguments).IsEquivalentTo(new[] { closingDelimiter });
     }
 
     [Test]

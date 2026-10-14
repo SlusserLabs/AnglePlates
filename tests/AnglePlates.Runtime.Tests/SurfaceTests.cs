@@ -107,13 +107,39 @@ public sealed class SurfaceTests
     [Test]
     public async Task WriteAsync_Overloads_MatchWriteOverloads()
     {
-        // Write has a string overload and an unconstrained generic overload, and WriteAsync mirrors them
+        // Write has a string overload, an unconstrained generic overload, and a T? overload that keeps nullable values from
+        // boxing, and WriteAsync mirrors them
         var write = Array.FindAll(typeof(Utf8Template<string>).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic), method => method.Name == "Write");
         var writeAsync = Array.FindAll(typeof(Utf8Template<string>).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic), method => method.Name == "WriteAsync");
+        var textWrite = Array.FindAll(typeof(TextTemplate<string>).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic), method => method.Name == "Write");
 
-        await Assert.That(write.Length).IsEqualTo(2);
-        await Assert.That(writeAsync.Length).IsEqualTo(2);
-        await Assert.That(Array.Exists(write, method => method.IsGenericMethodDefinition && method.GetGenericArguments()[0].GetGenericParameterConstraints().Length == 0)).IsTrue();
-        await Assert.That(Array.Exists(writeAsync, method => method.IsGenericMethodDefinition && method.GetGenericArguments()[0].GetGenericParameterConstraints().Length == 0)).IsTrue();
+        await Assert.That(write.Length).IsEqualTo(3);
+        await Assert.That(writeAsync.Length).IsEqualTo(3);
+        await Assert.That(textWrite.Length).IsEqualTo(3);
+        foreach (var overloads in new[] { write, writeAsync, textWrite })
+        {
+            await Assert.That(Array.Exists(overloads, IsUnconstrainedGeneric)).IsTrue();
+            await Assert.That(Array.Exists(overloads, IsNullableGeneric)).IsTrue();
+        }
+    }
+
+    private static bool IsUnconstrainedGeneric(MethodInfo method)
+    {
+        return method.IsGenericMethodDefinition && method.GetGenericArguments()[0].GenericParameterAttributes == GenericParameterAttributes.None;
+    }
+
+    // A T? parameter with T constrained to struct, which binds before the unconstrained overload for nullable values
+    private static bool IsNullableGeneric(MethodInfo method)
+    {
+        if (!method.IsGenericMethodDefinition)
+        {
+            return false;
+        }
+
+        var typeParameter = method.GetGenericArguments()[0];
+        var valueType = method.GetParameters()[0].ParameterType;
+        var isStruct = typeParameter.GenericParameterAttributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint);
+
+        return isStruct && valueType.IsGenericType && valueType.GetGenericTypeDefinition() == typeof(Nullable<>) && valueType.GetGenericArguments()[0] == typeParameter;
     }
 }

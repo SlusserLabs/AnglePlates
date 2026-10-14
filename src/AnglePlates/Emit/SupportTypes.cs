@@ -161,6 +161,25 @@ internal static class SupportTypes
             }
 
             /// <summary>
+            /// Writes a nullable value like <see cref="Write{T}(T, global::System.IO.TextWriter)" /> without boxing it. A null value
+            /// writes <see cref="TemplateOptions.NullVariable" /> instead.
+            /// </summary>
+            /// <typeparam name="T">The value type inside the <see cref="global::System.Nullable{T}" />.</typeparam>
+            /// <param name="value">The value to write.</param>
+            /// <param name="writer">The writer that receives the output.</param>
+            protected void Write<T>(T? value, global::System.IO.TextWriter writer) where T : struct
+            {
+                if (value.HasValue)
+                {
+                    Write(value.GetValueOrDefault(), writer);
+                }
+                else
+                {
+                    Write((string?)null, writer);
+                }
+            }
+
+            /// <summary>
             /// Writes literal template text.
             /// </summary>
             /// <param name="value">The text to write.</param>
@@ -172,7 +191,7 @@ internal static class SupportTypes
 
             // Matches the pre-1.0 Convert.ToString(value, CultureInfo.InvariantCulture): IConvertible first, then IFormattable,
             // then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below are on T rather
-            // than on pattern variables, so the JIT drops the box for most value types; a nullable value type is still boxed.
+            // than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in Write(T?) first.
             private static string? ToInvariantString<T>(T value)
             {
                 if (value is null)
@@ -293,6 +312,25 @@ internal static class SupportTypes
             }
 
             /// <summary>
+            /// Writes a nullable value like <see cref="Write{T}(T, global::System.Buffers.IBufferWriter{byte})" /> without boxing it. A
+            /// null value writes <see cref="TemplateOptions.NullVariable" /> instead.
+            /// </summary>
+            /// <typeparam name="T">The value type inside the <see cref="global::System.Nullable{T}" />.</typeparam>
+            /// <param name="value">The value to write.</param>
+            /// <param name="writer">The buffer writer that receives the output.</param>
+            protected void Write<T>(T? value, global::System.Buffers.IBufferWriter<byte> writer) where T : struct
+            {
+                if (value.HasValue)
+                {
+                    Write(value.GetValueOrDefault(), writer);
+                }
+                else
+                {
+                    Write((string?)null, writer);
+                }
+            }
+
+            /// <summary>
             /// Writes literal template text that's already UTF-8.
             /// </summary>
             /// <param name="value">The bytes to write.</param>
@@ -340,6 +378,19 @@ internal static class SupportTypes
             }
 
             /// <summary>
+            /// Writes a nullable value like <c>Write</c> without boxing it, then flushes if enough output is waiting.
+            /// </summary>
+            /// <typeparam name="T">The value type inside the <see cref="global::System.Nullable{T}" />.</typeparam>
+            /// <param name="value">The value to write.</param>
+            /// <param name="writer">The pipe writer that receives the output.</param>
+            /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+            private protected global::System.Threading.Tasks.ValueTask WriteAsync<T>(T? value, global::System.IO.Pipelines.PipeWriter writer, global::System.Threading.CancellationToken cancellationToken) where T : struct
+            {
+                Write(value, writer);
+                return FlushIfNeededAsync(writer, cancellationToken);
+            }
+
+            /// <summary>
             /// Flushes <paramref name="writer" /> and stops the render if the reader completed or the flush was canceled.
             /// </summary>
             /// <param name="writer">The pipe writer to flush.</param>
@@ -375,7 +426,7 @@ internal static class SupportTypes
 
             // Matches the pre-1.0 Convert.ToString(value, CultureInfo.InvariantCulture): IConvertible first, then IFormattable,
             // then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below are on T rather
-            // than on pattern variables, so the JIT drops the box for most value types; a nullable value type is still boxed.
+            // than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in Write(T?) first.
             private static string? ToInvariantString<T>(T value)
             {
                 if (value is null)
