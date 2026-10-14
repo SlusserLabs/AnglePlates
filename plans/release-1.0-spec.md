@@ -99,7 +99,7 @@ These were considered and left out of 1.0 on purpose. None of them blocks a late
 | Owner inputs | The GitHub plan, NuGet secrets and policies, the agent credential, the CODEOWNERS handle, and similar inputs are collected at the very end (Phase 8). Nothing earlier waits on them. |
 | First stable version | 1.0.0. |
 | Delimiter scanning | C# variables and C# blocks become C#-aware through Roslyn's lexer. |
-| Icon | The recommended option from the follow-up question: frontal-oblique, flat-shaded, solid angle-plate brackets with bolt holes and a soft blue glow. The owner hasn't seen the renders, so they're in [plans/icon-draft](icon-draft) for review. |
+| Icon | The recommended option from the follow-up question: frontal-oblique, flat-shaded, solid angle-plate brackets with bolt holes and a soft blue glow. **Approved by the owner on 2026-10-14** as committed in Phase 5 (`icon.svg` and the 256x256 `icon.png` at the repo root). |
 | `TemplateOptions` | Becomes `sealed` with `init`-only properties. `BufferPool` and the hand-rolled encode loop are removed. |
 | C# variable emission | One-line `Write(value, writer);` calls against a base-class overload set. `[[ null ]]` compiles and writes `NullVariable`. |
 | `Model` alias | **Kept.** The generated `Model` local stays next to `model`. |
@@ -116,13 +116,14 @@ These were considered and left out of 1.0 on purpose. None of them blocks a late
 
 ### Owner decisions (2026-10-14)
 
-The owner answered four questions raised during implementation.
+The owner answered four questions raised during implementation and approved the icon.
 
 | Topic | Decision |
 | --- | --- |
 | Benchmark slowdown | **Accepted.** Writing a value that needs escaping got about 19% slower (577 to 686 ns for a 220-character encoded string) in exchange for the simpler framework-call encoding. The owner prefers the code that's easier to maintain. HTML encoding stays the default ([8.1](#81-adopted-changes)). |
 | Scanner fallback | **Removed** (overturns S15). When the scanner can't find a closer it accepts, the parser reports SLAP004 at the opener, like a block with no closer at all. The 16-closer window stays as it is. A template that hits the limit fails to compile, and the user refactors their C# ([7.4](#74-fallbacks)). |
 | Duplicate template classes | **Keep the current behavior** (S21). The generator reports nothing; it numbers the hint names so `AddSource` never throws, and the compiler reports CS0111, CS0102, and CS0121. Those errors point at the generated files, because class declarations aren't mapped to templates. |
+| Icon | **Approved** as committed in Phase 5: `icon.svg` and the 256x256 `icon.png` at the repo root ([13](#13-icon)). |
 | Snapshot file names | **Done.** Snapshot files get short names through a `GeneratorSnapshot` helper, and `RepositoryPathTests` holds every repository path to 100 characters, which leaves 160 for the clone folder ([10.2](#102-generator-tests)). |
 
 ### Decisions made by this spec
@@ -1160,7 +1161,7 @@ The owner's AssemblyInfo package took 17 commits and four public betas to reach 
 
 The new mark is two square brackets, `[` and `]` (AnglePlates' block delimiters), drawn as solid steel angle plates. The left bracket is blue and the right one silver, each has bolt holes, and a soft blue glow sits behind both. It keeps the current icon's palette and frontal 3D view, and drops the `< >`, which isn't an AnglePlates delimiter.
 
-**Review the draft:** [plans/icon-draft](icon-draft) has these files:
+**Approved:** the owner approved the committed icon on 2026-10-14. The draft and its review renders stay in [plans/icon-draft](icon-draft) until the release-prep pull request deletes `plans/`:
 
 - `icon.svg`, the draft source.
 - `icon-512.png`, a large render.
@@ -1614,7 +1615,7 @@ This is where the owner provides everything in [19](#19-owner-only-tasks-and-rem
 As of 2026-10-14, in order:
 
 1. Install and authenticate the GitHub CLI (`winget install GitHub.cli`, then `gh auth login`), or have the owner open the pull request from `release-1.0`. Then get all four CI legs green and fix whatever CI finds. Native AOT on Windows has never run locally, so expect that leg to need attention. This closes the GitHub-only acceptance items in [Implementation status](#implementation-status), including the deliberate-failure binlog upload, the `sdk-floor` log, and a dispatched `release.yml` run that stops at `publish-int`.
-2. The owner does the consolidated Phase 4 snapshot review in that pull request and records it there, and reviews the icon ([19](#19-owner-only-tasks-and-remaining-inputs), items 1 and 2).
+2. The owner does the consolidated Phase 4 snapshot review in that pull request and records it there ([19](#19-owner-only-tasks-and-remaining-inputs), item 2).
 3. The owner answers the open questions in [19](#19-owner-only-tasks-and-remaining-inputs).
 4. Phase 8: the owner's inputs, then the preview preflight and the int.nugettest.org rehearsal.
 5. Phase 9: the stable 1.0.0 release, gated by the owner.
@@ -1641,7 +1642,7 @@ The AI disclosure and the copyright string are settled ([2](#2-decision-log)). E
 
 **Reviews during Phases 0-7.**
 
-1. Review this spec and the icon draft in [plans/icon-draft](icon-draft). The owner answered the four open questions from the last revision on 2026-10-14 ([2](#2-decision-log)). The icon review and the rest of the spec are still open; Phase 5 committed the draft icon to the repo root, but the owner hasn't accepted it.
+1. Review this spec. The owner answered the four open questions from the last revision and ~~reviewed the icon~~ approved it on 2026-10-14 ([2](#2-decision-log)); the rest of the spec is still open for review.
 2. Review the Phase 4 snapshot batch in the pull request from `release-1.0`, and record the review there (Phase 4's acceptance needs it). ~~Review any benchmark regression.~~ **Done:** the owner accepted the encoded-value slowdown on 2026-10-14 ([8.1](#81-adopted-changes)).
 3. The voice sign-off moved to the open questions below (Q2).
 

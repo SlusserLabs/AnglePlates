@@ -41,6 +41,12 @@ function Assert-NativeAotPrerequisites {
         if (-not $installation) {
             throw "Native AOT validation needs the Visual Studio 'Desktop development with C++' workload ($component). Install it, or pass -SkipNativeAot to validate everything else."
         }
+
+        # Visual Studio's vcvarsall.bat runs vswhere.exe by name, but the installer doesn't always put its folder on PATH.
+        # Without it, the Native AOT link step gets an error message where it expects the linker's path.
+        if (-not (Get-Command vswhere.exe -ErrorAction SilentlyContinue)) {
+            $env:Path = (Split-Path -Parent $vswhere) + [System.IO.Path]::PathSeparator + $env:Path
+        }
     }
     elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)) {
         if (-not (Get-Command clang -ErrorAction SilentlyContinue)) {
@@ -61,7 +67,13 @@ if (-not $SkipNativeAot) {
 }
 
 # A relative -KeepOutput resolves against the PowerShell location, which Set-Location doesn't share with .NET path APIs
-$validationRoot = if ($KeepOutput) { $PSCmdlet.GetUnresolvedProviderPathFromPSPath($KeepOutput) } else { Join-Path ([System.IO.Path]::GetTempPath()) "AnglePlates.PackageValidation.$([Guid]::NewGuid().ToString('N'))" }
+$validationRoot = if ($KeepOutput) { $PSCmdlet.GetUnresolvedProviderPathFromPSPath($KeepOutput) } else { Join-Path ([System.IO.Path]::GetTempPath()) "apv-$([Guid]::NewGuid().ToString('N').Substring(0, 8))" }
+
+# Restored runtime packs nest files about 150 characters below the validation folder, and Windows tools stop at 260.
+# Past that, NuGet skips the long names without an error and the Native AOT publish fails much later.
+if ($IsWindows -and $validationRoot.Length -gt 100) {
+    throw "The validation folder '$validationRoot' is $($validationRoot.Length) characters long, so package files inside it would pass Windows' 260-character path limit. Pass a folder of 100 characters or fewer to -KeepOutput."
+}
 
 # Consumers under the repository would import its Directory.Build.props and Directory.Build.targets
 $repositoryPrefix = $repositoryRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
