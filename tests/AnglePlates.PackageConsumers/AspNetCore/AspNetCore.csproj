@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <LangVersion>11.0</LangVersion>
+    <!-- The README's greeting template has no #namespace, so this puts its classes in the README's MyApp.Templates -->
+    <RootNamespace>MyApp</RootNamespace>
     <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
   </PropertyGroup>
   <ItemGroup>

@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace MyApp;
 
-// The README's order line model, in the README's namespace
+// The order line model from the order example in docs/templates.md, in that example's namespace
 [ExcludeFromCodeCoverage]
 public sealed class OrderLineModel
 {

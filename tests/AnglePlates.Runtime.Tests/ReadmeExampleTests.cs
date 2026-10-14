@@ -7,13 +7,15 @@ using System.Threading.Tasks;
 using MyApp;
 using MyApp.Templates;
 using SlusserLabs.AnglePlates.Runtime.Tests.Infrastructure;
+using SlusserLabs.AnglePlates.Runtime.Tests.Templates.Readme;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
 using TUnit.Core;
 
 namespace SlusserLabs.AnglePlates.Runtime.Tests;
 
-// Renders the README's examples from verbatim copies and checks that the copies still match the README
+// Renders the examples from the README and docs/templates.md from verbatim copies and checks that the copies still match
+// the documents. The greeting has no #namespace, so its classes land in this project's Templates.Readme namespace.
 [ExcludeFromCodeCoverage]
 public sealed class ReadmeExampleTests
 {
@@ -22,14 +24,12 @@ public sealed class ReadmeExampleTests
     private static readonly Regex _sampleBlock = new(
         @"^<!-- sample: (?<path>\S+) -->\n```[^\n]*\n(?<body>.*?)\n```$", RegexOptions.Multiline | RegexOptions.Singleline);
 
-    // Every README block that has a copy here, as a path relative to this project
-    private static readonly string[] _samples =
-    [
-        "Templates/Readme/greeting.html",
-        "Templates/Readme/order-line.html",
-        "Templates/Readme/order.html",
-        "Readme/OrderTextTemplate.cs",
-    ];
+    // Each document with marked blocks, and the copies of those blocks here as paths relative to this project
+    private static readonly Dictionary<string, string[]> _samples = new(StringComparer.Ordinal)
+    {
+        ["README.md"] = ["Templates/Readme/greeting.html"],
+        ["docs/templates.md"] = ["Templates/Readme/order-line.html", "Templates/Readme/order.html", "Readme/OrderTextTemplate.cs"],
+    };
 
     [Test]
     public async Task Render_GreetingWithMessage_WritesEncodedNameAndMessage()
@@ -67,7 +67,7 @@ public sealed class ReadmeExampleTests
     }
 
     [Test]
-    public async Task Render_Order_WritesReadmeOutput()
+    public async Task Render_Order_WritesDocumentedOutput()
     {
         var order = new OrderModel { Number = "1001" };
         order.Lines.Add(new OrderLineModel { Name = "Fish & Chips", Quantity = 2 });
@@ -90,13 +90,15 @@ public sealed class ReadmeExampleTests
     }
 
     [Test]
-    public async Task Readme_SampleBlocks_MatchFilesOnDisk()
+    [Arguments("README.md")]
+    [Arguments("docs/templates.md")]
+    public async Task Document_SampleBlocks_MatchFilesOnDisk(string document)
     {
         var root = FindRepositoryRoot();
-        var readme = Normalize(File.ReadAllText(Path.Combine(root, "README.md")));
+        var text = Normalize(File.ReadAllText(Path.Combine(root, document)));
         var found = new List<string>();
 
-        foreach (Match match in _sampleBlock.Matches(readme))
+        foreach (Match match in _sampleBlock.Matches(text))
         {
             var path = match.Groups["path"].Value;
             found.Add(path);
@@ -105,13 +107,13 @@ public sealed class ReadmeExampleTests
             var expected = match.Groups["body"].Value + "\n";
             var actual = Normalize(File.ReadAllText(Path.Combine(root, "tests", "AnglePlates.Runtime.Tests", path)));
 
-            await Assert.That(actual).IsEqualTo(expected).Because($"{path} must match its README block");
+            await Assert.That(actual).IsEqualTo(expected).Because($"{path} must match its block in {document}");
         }
 
-        await Assert.That(found).IsEquivalentTo(_samples);
+        await Assert.That(found).IsEquivalentTo(_samples[document]);
     }
 
-    // The README is checked out with CRLF line endings and the template copies keep LF bytes, so only line endings are normalized
+    // The documents are checked out with CRLF line endings and the template copies keep LF bytes, so only line endings are normalized
     private static string Normalize(string text)
     {
         return text.Replace("\r\n", "\n", StringComparison.Ordinal);

@@ -125,7 +125,7 @@ The checks call helpers on `Utf8Template<TModel>`. `WriteLiteralAsync` writes a 
 
 The base classes keep their surface small. `Options`, `Render`, and `RenderAsync` are public. `Write` and `WriteRaw` are `protected`, because template C# calls them. The constructors, `WriteLiteral`, `WriteLiteralAsync`, `WriteAsync`, and `FlushAsync` are `private protected`: compiled templates always live in the same assembly as their support types, so they can call them, but another assembly that derives from public support types can't.
 
-Because C# blocks also land in an async method, a UTF-8 template can't hold a ref struct local across a flush check or put a check inside `lock` or `unsafe`. The generator doesn't look for these; the compiler reports them at the template location, and the README lists the errors.
+Because C# blocks also land in an async method, a UTF-8 template can't hold a ref struct local across a flush check or put a check inside `lock` or `unsafe`. The generator doesn't look for these; the compiler reports them at the template location, and [Compiler errors](templates.md#compiler-errors) lists them.
 
 Emitted code follows a few rules that keep it safe to drop into any consumer project:
 

@@ -1,6 +1,6 @@
 # Project lexicon
 
-This lexicon gives each AnglePlates concept one name. Use it when you write documentation, code comments, diagnostic messages, or issues, so similar ideas don't end up with three names. Template syntax and package usage are in the [README](../README.md).
+This lexicon gives each AnglePlates concept one name. Use it when you write documentation, code comments, diagnostic messages, or issues, so similar ideas don't end up with three names. Package usage is in the [README](../README.md), and template syntax is in [Writing templates](templates.md).
 
 When a term below fits, use it instead of a synonym. Write `AnglePlate` (singular) in MSBuild names, the way MSBuild names `Compile`, and AnglePlates (plural) for the product, the package, and prose.
 
