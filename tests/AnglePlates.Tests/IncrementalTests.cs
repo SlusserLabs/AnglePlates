@@ -131,6 +131,31 @@ public sealed class IncrementalTests
     }
 
     [Test]
+    public async Task Rerun_PropsImportedRemovedThenRestored_GeneratesNothingThenGeneratesFromCachedTemplates()
+    {
+        var template = RenderingTestHelper.Template("props");
+        var broken = new TemplateAdditionalText(TemplateText.Header + "a\r\n[[ model", "Templates/broken.html");
+        var compilation = GeneratorTestHelper.CreateCompilation();
+        var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([template, broken]));
+
+        var removed = GeneratorTestHelper.Run(compilation, before.Driver.WithUpdatedAnalyzerConfigOptions(TestAnalyzerConfigOptionsProvider.WithoutProps()));
+        var removedReasons = removed.StepReasons(TemplateGenerator.TemplateResultsStep);
+        var restored = GeneratorTestHelper.Run(compilation, removed.Driver.WithUpdatedAnalyzerConfigOptions(new TestAnalyzerConfigOptionsProvider()));
+
+        await Assert.That(before.RunResult.Diagnostics.Length).IsEqualTo(1);
+        await Assert.That(removedReasons).IsEquivalentTo(new[] { IncrementalStepRunReason.Cached, IncrementalStepRunReason.Cached });
+        await Assert.That(removed.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(removed.RunResult.GeneratedTrees.Length).IsEqualTo(0);
+        await Assert.That(restored.StepReasons(TemplateGenerator.TemplateResultsStep))
+            .IsEquivalentTo(new[] { IncrementalStepRunReason.Cached, IncrementalStepRunReason.Cached });
+        await Assert.That(restored.RunResult.Diagnostics.Select(diagnostic => diagnostic.Id)).IsEquivalentTo(before.RunResult.Diagnostics.Select(diagnostic => diagnostic.Id));
+        await Assert.That(restored.HintNames()).IsEqualTo(before.HintNames());
+        await Assert.That(template.GetTextCount).IsEqualTo(1);
+        await Assert.That(broken.GetTextCount).IsEqualTo(1);
+        await RenderingTestHelper.AssertRendersAsync(restored.Compilation, "Consumer.Example", "props");
+    }
+
+    [Test]
     public async Task Rerun_ProjectDirChanged_RewritesTemplatesWithoutRereadingThem()
     {
         var template = RenderingTestHelper.Template("folder", path: "C:/src/App/Templates/example.html");

@@ -29,7 +29,7 @@ internal sealed record GeneratorSetting
 
     public static GeneratorSetting ReadChoice(AnalyzerConfigOptions globalOptions, string name, string defaultValue, string expected, params string[] choices)
     {
-        // Unit tests and hand-built compilations don't import the props file, so a missing value means the default
+        // The props file fills in every default, but a project can clear a property and tests can leave it out, so a missing value means the default
         if (!globalOptions.TryGetValue("build_property." + name, out var rawValue) || rawValue.Trim().Length == 0)
         {
             return new GeneratorSetting(name, defaultValue, null, expected);

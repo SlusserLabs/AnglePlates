@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using SlusserLabs.AnglePlates.Tests.Infrastructure;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
@@ -105,6 +107,56 @@ public sealed class MSBuildOptionTests
             $"MSBuild property 'AnglePlateBaseAccessModifier' has invalid value '{value}'; expected 'public' or 'internal'");
         await Assert.That(diagnostic.Location).IsEqualTo(Location.None);
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments(null, false)]
+    [Arguments("", false)]
+    [Arguments("false", false)]
+    [Arguments("yes", false)]
+    [Arguments("1", false)]
+    [Arguments(null, true)]
+    [Arguments("false", true)]
+    public async Task PropsImported_MissingOrNotTrue_GeneratesAndReportsNothing(string? value, bool invalidSettings)
+    {
+        // With the props, the files report SLAP008 and SLAP004, and the invalid settings report SLAP009 and SLAP010 instead
+        List<KeyValuePair<string, string>> options = [];
+        if (invalidSettings)
+        {
+            options.Add(new KeyValuePair<string, string>("build_property.AnglePlateBaseAccessModifier", "private"));
+        }
+
+        if (value is not null)
+        {
+            options.Add(new KeyValuePair<string, string>("build_property.AnglePlatePropsImported", value));
+        }
+
+        var provider = new TestAnalyzerConfigOptionsProvider(options, propsImported: false);
+        var languageVersion = invalidSettings ? LanguageVersion.CSharp10 : LanguageVersion.CSharp11;
+        var compilation = GeneratorTestHelper.CreateCompilation(languageVersion: languageVersion);
+        var driver = GeneratorTestHelper.CreateDriver(
+            [RenderingTestHelper.Template("ignored"), new TemplateAdditionalText("<p>No directives</p>", "Emails/a.html", TemplateAdditionalText.Explicit),
+                new TemplateAdditionalText(TemplateText.Header + "[[ model", "Templates/broken.html")],
+            provider,
+            languageVersion);
+
+        var result = GeneratorTestHelper.Run(compilation, driver).RunResult;
+
+        await Assert.That(result.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments("true")]
+    [Arguments("True")]
+    [Arguments(" TRUE ")]
+    public async Task PropsImported_TrueInAnyCase_Generates(string value)
+    {
+        var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithPropsImported(value), RenderingTestHelper.Template("enabled"));
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(6);
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", "enabled");
     }
 
     // TemplatePathTests holds the path edge cases; these rows check that the result reaches the generated sources

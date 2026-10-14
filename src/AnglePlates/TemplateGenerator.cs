@@ -29,6 +29,7 @@ public sealed class TemplateGenerator : IIncrementalGenerator
     private const string _projectDirKey = "build_property.ProjectDir";
     private const string _rootNamespaceKey = "build_property.RootNamespace";
     private const string _baseAccessModifierProperty = "AnglePlateBaseAccessModifier";
+    private const string _propsImportedKey = "build_property.AnglePlatePropsImported";
     private const string _anglePlateMetadataKey = "build_metadata.AdditionalFiles.AnglePlate";
     private static readonly GenerationTarget[] _generationTargets = [GenerationTarget.Text, GenerationTarget.Utf8];
 
@@ -40,11 +41,13 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         // compare equal between runs and would re-run every step after them.
 
         // 1. Read the project-wide settings, which decide whether anything is generated
-        var accessModifier = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
-            GeneratorSetting.ReadChoice(
-                options.GlobalOptions, _baseAccessModifierProperty, _defaultAccessModifier, DirectiveReader.ExpectedAccessModifier, "public", "internal"));
+        var projectSettings = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) => (
+            IsEnabled: IsPropsImported(options.GlobalOptions),
+            AccessModifier: GeneratorSetting.ReadChoice(
+                options.GlobalOptions, _baseAccessModifierProperty, _defaultAccessModifier, DirectiveReader.ExpectedAccessModifier, "public", "internal")));
         var languageVersion = context.ParseOptionsProvider.Select(static (options, cancellationToken) => ((CSharpParseOptions)options).LanguageVersion);
-        var settings = accessModifier.Combine(languageVersion).Select(static (pair, cancellationToken) => new GeneratorSettings(pair.Left, pair.Right));
+        var settings = projectSettings.Combine(languageVersion)
+            .Select(static (pair, cancellationToken) => new GeneratorSettings(pair.Left.IsEnabled, pair.Left.AccessModifier, pair.Right));
 
         // 2. Read the project values every template needs
         var templateContext = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) => new TemplateContext(
@@ -86,11 +89,16 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(duplicates.Combine(settings), AddNumberedSources);
     }
 
-    // Every project gets all four support types, and trimming removes the ones an app doesn't use. A class with the wrong
-    // accessibility isn't a safe fallback, and code for an older C# version can't compile, so either problem generates
-    // nothing at all.
+    // Every project that imports the package props gets all four support types, and trimming removes the ones an app doesn't
+    // use. A class with the wrong accessibility isn't a safe fallback, and code for an older C# version can't compile, so either
+    // problem generates nothing at all. A project without the package props gets no support types and no diagnostics.
     private static void AddSupportTypes(SourceProductionContext context, GeneratorSettings settings)
     {
+        if (!settings.IsEnabled)
+        {
+            return;
+        }
+
         if (!settings.IsLanguageVersionSupported)
         {
             context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.LanguageVersionTooOld, Location.None, settings.LanguageVersion.ToDisplayString()));
@@ -183,6 +191,13 @@ public sealed class TemplateGenerator : IIncrementalGenerator
             .ToArray();
 
         return new DuplicateTemplates(prefixes, sources);
+    }
+
+    // The package props set AnglePlatePropsImported to true. A project that reaches the generator through a library
+    // referenced without PrivateAssets doesn't get the props, so it can't have templates and the generator skips it.
+    private static bool IsPropsImported(AnalyzerConfigOptions globalOptions)
+    {
+        return globalOptions.TryGetValue(_propsImportedKey, out var value) && string.Equals(value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
     }
 
     // Reads the AnglePlate metadata the targets file puts on each additional file it adds; any other file isn't a template

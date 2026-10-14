@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- Older than the .NET 10 that AnglePlates supports; eng/validate-package.ps1 expects this build to fail with exactly ExpectedErrors.txt -->
+    <!-- Older than the .NET 10 that AnglePlates supports; eng/validate-package.ps1 expects this build to fail with exactly
+         ExpectedErrors.txt, apart from the SDK's NETSDK1138 end-of-support warning, which the script ignores -->
     <TargetFramework>net8.0</TargetFramework>
-    <!-- Keeps the exact check stable once SDKs flag net8.0 as out of support with NETSDK1138 -->
-    <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>

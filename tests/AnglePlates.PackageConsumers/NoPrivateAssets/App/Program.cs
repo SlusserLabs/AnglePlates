@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using NoPrivateAssets.Library;
 
 namespace NoPrivateAssets.App;
@@ -10,20 +11,21 @@ internal static class Program
 {
     private static int Main()
     {
-        // The app's own Templates folder must not generate anything, so look the classes up by name
-        var assembly = typeof(Program).Assembly;
-        var hasPage = assembly.GetType("NoPrivateAssets.App.PageTextTemplate") is not null;
+        // The generator reaches the app without the package props, so it must add nothing: no template classes from the
+        // app's Templates folder and no support types to collide with the library's public ones. The project file turns
+        // CS0436 into an error, so a collision would also fail the build.
+        var generated = typeof(Program).Assembly.GetTypes()
+            .Where(type => type.Namespace == "SlusserLabs.AnglePlates" || type.Name.EndsWith("Template", StringComparison.Ordinal))
+            .Select(type => type.FullName)
+            .ToArray();
         using var writer = new StringWriter(CultureInfo.InvariantCulture);
         ReceiptTextTemplate.Default.Render("<plain>", writer);
 
-        // Without PrivateAssets the generator itself still reaches this project, and it always adds the support types.
-        // They're internal because the build files that would set AnglePlateBaseAccessModifier don't reach it, and they
-        // collide with the library's public copies with CS0436 warnings. This pins that leak, which the README warns about.
-        var appOptions = assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions");
-
-        if (hasPage || appOptions is null || appOptions.IsPublic || !string.Equals(writer.ToString(), "Receipt &lt;plain&gt;!", StringComparison.Ordinal))
+        if (generated.Length > 0 || !string.Equals(writer.ToString(), "Receipt &lt;plain&gt;!", StringComparison.Ordinal))
         {
-            Console.Error.WriteLine("NoPrivateAssets failed: expected no template classes in the app, internal support types from the leaked generator, and the library template to render.");
+            Console.Error.WriteLine("NoPrivateAssets failed: expected no generated types in the app and the library template to render.");
+            Console.Error.WriteLine($"Generated in the app: {string.Join(", ", generated)}");
+            Console.Error.WriteLine($"Library output: {writer}");
             return 1;
         }
 

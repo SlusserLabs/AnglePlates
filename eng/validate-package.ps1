@@ -106,7 +106,7 @@ $consumers = @(
     @{ Name = 'DefaultNames'; Source = 'tests/AnglePlates.PackageConsumers/DefaultNames'; Project = 'DefaultNames.csproj'; Arguments = @() },
     @{ Name = 'ScannerParity'; Source = 'tests/AnglePlates.PackageConsumers/ScannerParity'; Project = 'ScannerParity.csproj'; Arguments = @() },
     @{ Name = 'AspNetCore'; Source = 'tests/AnglePlates.PackageConsumers/AspNetCore'; Project = 'AspNetCore.csproj'; Arguments = @() },
-    @{ Name = 'UnsupportedFramework'; Source = 'tests/AnglePlates.PackageConsumers/UnsupportedFramework'; Project = 'UnsupportedFramework.csproj'; ExpectedErrors = 'Exact' },
+    @{ Name = 'UnsupportedFramework'; Source = 'tests/AnglePlates.PackageConsumers/UnsupportedFramework'; Project = 'UnsupportedFramework.csproj'; ExpectedErrors = 'Exact'; IgnoredWarnings = @('NETSDK1138') },
     @{ Name = 'BuildErrors'; Source = 'tests/AnglePlates.PackageConsumers/BuildErrors'; BuildErrors = $true },
     @{ Name = 'NativeAot'; Source = 'tests/AnglePlates.PackageConsumers/NativeAot'; Project = 'NativeAot.csproj'; NativeAot = $true; Arguments = @('JIT') }
 )
@@ -135,8 +135,9 @@ function Get-DiagnosticMessage([string] $Line) {
 
 # Restores and builds a project that must fail. Every line in ExpectedErrors.txt has to appear, either as a whole
 # normalized line or, for a line that starts with 'error' or 'warning', as a message at any location. -Exact also fails
-# on any error or warning the file doesn't list.
-function Assert-BuildFails([string] $Name, [string] $ProjectPath, [string] $LogPrefix, [string[]] $BuildArguments, [switch] $Exact) {
+# on any error or warning the file doesn't list, except warnings whose codes are in -IgnoredWarnings, such as the SDK's
+# NETSDK1138 end-of-support warning, which appears for net8.0 only once an SDK marks it out of support.
+function Assert-BuildFails([string] $Name, [string] $ProjectPath, [string] $LogPrefix, [string[]] $BuildArguments, [switch] $Exact, [string[]] $IgnoredWarnings = @()) {
     $projectRoot = Split-Path -Parent $ProjectPath
     $expectedPath = Join-Path $projectRoot 'ExpectedErrors.txt'
     if (-not (Test-Path -LiteralPath $expectedPath)) {
@@ -151,7 +152,10 @@ function Assert-BuildFails([string] $Name, [string] $ProjectPath, [string] $LogP
 
     $output = @(& dotnet build $ProjectPath --no-restore -tl:off -p:AnglePlatesPackageVersion=$Version "-bl:$LogPrefix.build.binlog" @BuildArguments 2>&1 | ForEach-Object { "$_" })
     $exitCode = $LASTEXITCODE
-    $actual = @(Get-BuildDiagnostics $output $projectRoot)
+    $actual = @(Get-BuildDiagnostics $output $projectRoot | Where-Object {
+            $line = $_
+            -not ($IgnoredWarnings | Where-Object { $_ -and $line -cmatch "\bwarning $([regex]::Escape($_)):" })
+        })
     $actualMessages = @($actual | ForEach-Object { Get-DiagnosticMessage $_ })
     $missing = @($expected | Where-Object { $_ -cnotin $actual -and -not ($_ -cmatch '^(error|warning) ' -and $_ -cin $actualMessages) })
     $unexpected = if ($Exact) { @($actual | Where-Object { $_ -cnotin $expected -and (Get-DiagnosticMessage $_) -cnotin $expected }) } else { @() }
@@ -260,7 +264,7 @@ try {
 
         $projectPath = Join-Path $consumerRoot $consumer.Project
         if ($consumer.ExpectedErrors) {
-            Assert-BuildFails $consumer.Name $projectPath $logPrefix @() -Exact:($consumer.ExpectedErrors -eq 'Exact')
+            Assert-BuildFails $consumer.Name $projectPath $logPrefix @() -Exact:($consumer.ExpectedErrors -eq 'Exact') -IgnoredWarnings @($consumer.IgnoredWarnings)
             continue
         }
 
@@ -367,3 +371,7 @@ finally {
 if ($notRun.Count -gt 0) {
     Write-Warning "Not run because of -SkipNativeAot: $($notRun -join ', ')."
 }
+
+# Every failure above throws. Builds that are meant to fail (BuildErrors, the AOT canary) leave a nonzero
+# $LASTEXITCODE behind, and GitHub Actions' pwsh steps exit with it, so report success explicitly.
+exit 0

@@ -7,6 +7,9 @@
     <IsPackable>false</IsPackable>
     <LangVersion>11.0</LangVersion>
     <AnglePlatesPackageVersion Condition="'$(AnglePlatesPackageVersion)' == ''">0.0.0-local</AnglePlatesPackageVersion>
+
+    <!-- Support types generated here would collide with the library's public ones as CS0436 warnings -->
+    <WarningsAsErrors>$(WarningsAsErrors);CS0436</WarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Library\Library.csproj" />

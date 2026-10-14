@@ -6,11 +6,16 @@ namespace SlusserLabs.AnglePlates;
 // The project-wide settings that decide whether and how the support types and template classes are generated
 internal sealed record GeneratorSettings
 {
-    public GeneratorSettings(GeneratorSetting accessModifier, LanguageVersion languageVersion)
+    public GeneratorSettings(bool isEnabled, GeneratorSetting accessModifier, LanguageVersion languageVersion)
     {
+        IsEnabled = isEnabled;
         AccessModifier = accessModifier;
         LanguageVersion = languageVersion;
     }
+
+    // True only when the package props set AnglePlatePropsImported. A project without the props can't have templates, so
+    // the generator stays silent there instead of adding support types that collide with a referenced library's copies.
+    public bool IsEnabled { get; }
 
     public GeneratorSetting AccessModifier { get; }
 
@@ -23,5 +28,5 @@ internal sealed record GeneratorSettings
     public bool HasPublicSupportTypes => string.Equals(AccessModifier.Value, "public", StringComparison.Ordinal);
 
     // The support types report why generation stopped; the template outputs only skip their sources
-    public bool CanGenerate => AccessModifier.IsValid && IsLanguageVersionSupported;
+    public bool CanGenerate => IsEnabled && AccessModifier.IsValid && IsLanguageVersionSupported;
 }

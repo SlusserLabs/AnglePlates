@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 
@@ -9,6 +10,7 @@ namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 // Stands in for the MSBuild properties and file metadata the generator reads in a real build
 internal sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsProvider
 {
+    private const string _propsImportedKey = "build_property.AnglePlatePropsImported";
     private const string _baseAccessModifierKey = "build_property.AnglePlateBaseAccessModifier";
     private const string _projectDirKey = "build_property.ProjectDir";
     private const string _rootNamespaceKey = "build_property.RootNamespace";
@@ -17,17 +19,37 @@ internal sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsP
     private readonly TestAnalyzerConfigOptions _empty = new();
     private readonly ImmutableDictionary<string, TestAnalyzerConfigOptions> _fileOptions;
 
+    // Sets AnglePlatePropsImported to true, as the package props do, unless propsImported is false or the options set it
     public TestAnalyzerConfigOptionsProvider(
         IEnumerable<KeyValuePair<string, string>>? globalOptions = null,
-        IEnumerable<KeyValuePair<string, TestAnalyzerConfigOptions>>? fileOptions = null)
+        IEnumerable<KeyValuePair<string, TestAnalyzerConfigOptions>>? fileOptions = null,
+        bool propsImported = true)
     {
-        GlobalOptions = new TestAnalyzerConfigOptions(globalOptions);
+        var options = (globalOptions ?? []).ToList();
+        if (propsImported && !options.Any(option => string.Equals(option.Key, _propsImportedKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            options.Add(new KeyValuePair<string, string>(_propsImportedKey, "true"));
+        }
+
+        GlobalOptions = new TestAnalyzerConfigOptions(options);
         _fileOptions = (fileOptions ?? []).ToImmutableDictionary(StringComparer.Ordinal);
     }
 
     public override AnalyzerConfigOptions GlobalOptions { get; }
 
-    // Sets AnglePlateBaseAccessModifier; null leaves it unset, as in a project that doesn't import the props file
+    // Leaves AnglePlatePropsImported unset, as in a project that gets the analyzer without the package props
+    public static TestAnalyzerConfigOptionsProvider WithoutProps()
+    {
+        return new TestAnalyzerConfigOptionsProvider(propsImported: false);
+    }
+
+    // Sets AnglePlatePropsImported to a value other than the props' true
+    public static TestAnalyzerConfigOptionsProvider WithPropsImported(string value)
+    {
+        return new TestAnalyzerConfigOptionsProvider([new KeyValuePair<string, string>(_propsImportedKey, value)]);
+    }
+
+    // Sets AnglePlateBaseAccessModifier; null leaves it unset, as in a project that clears it after the props file
     public static TestAnalyzerConfigOptionsProvider WithAccessModifier(string? value)
     {
         return new TestAnalyzerConfigOptionsProvider(value is null ? [] : [new KeyValuePair<string, string>(_baseAccessModifierKey, value)]);

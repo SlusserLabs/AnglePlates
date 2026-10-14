@@ -3,6 +3,10 @@
 
   <!-- Defaults for the AnglePlates properties; MSBuild evaluates every property before any item -->
   <PropertyGroup>
+    <!-- Tells the generator this project imported these props. A project that only gets the analyzer, through a library
+         referenced without PrivateAssets, can't have templates, so the generator adds nothing there. -->
+    <AnglePlatePropsImported>true</AnglePlatePropsImported>
+
     <!-- Access modifier of the generated support types: public or internal -->
     <AnglePlateBaseAccessModifier Condition="'$(AnglePlateBaseAccessModifier)' == ''">internal</AnglePlateBaseAccessModifier>
 
@@ -21,6 +25,8 @@
 
   <!-- What the generator can read through the compiler's editorconfig -->
   <ItemGroup>
+    <!-- The marker without which the generator emits nothing -->
+    <CompilerVisibleProperty Include="AnglePlatePropsImported" />
     <!-- The support types' access modifier, which the generator validates and reports as SLAP009 when it's wrong -->
     <CompilerVisibleProperty Include="AnglePlateBaseAccessModifier" />
     <!-- A template without #namespace gets RootNamespace plus its folders -->

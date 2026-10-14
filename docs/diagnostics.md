@@ -4,7 +4,7 @@ AnglePlates reports template and project mistakes while it generates code, so th
 
 Every rule uses category `SlusserLabs.AnglePlates` and is enabled by default. All of them are errors except `SLAP011`, which is a warning. Template diagnostics point at a line and column in the template file, whether it uses CRLF, LF, or CR line endings.
 
-A template with an error doesn't generate, but the project's other templates still do. `SLAP009` and `SLAP010` are the exceptions: each one stops generation for the whole project, support types included.
+A template with an error doesn't generate, but the project's other templates still do. `SLAP009` and `SLAP010` are the exceptions: each one stops generation for the whole project, support types included. A project that gets the generator without the package's build files, through a library that references AnglePlates without `PrivateAssets`, gets no diagnostics and no generated code at all, because it can't have templates.
 
 ## SLAP001
 
