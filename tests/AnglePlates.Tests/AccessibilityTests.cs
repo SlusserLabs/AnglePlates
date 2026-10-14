@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -16,21 +17,58 @@ namespace SlusserLabs.AnglePlates.Tests;
 public sealed class AccessibilityTests
 {
     [Test]
-    public async Task Access_PublicTemplateWithInternalSupportTypes_ReportsInconsistentAccessibility()
+    [Arguments(null)]
+    [Arguments("internal")]
+    public async Task Access_PublicTemplateWithInternalSupportTypes_ReportsPublicTemplateNeedsPublicSupportTypes(string? baseAccessModifier)
     {
-        var template = RenderingTestHelper.Template("#access public\r\n#generate Text\r\npublic");
-        const string file = "Consumer.ExampleTextTemplate.g.cs";
-        var expected = new[]
+        // SLAP005 replaces the compiler's CS0060 and CS0051, so the public template generates nothing and the other one still renders
+        var template = RenderingTestHelper.Template("#access public\r\n#generate Text\r\npublic", type: "Public", path: "Templates/public.html");
+        var other = RenderingTestHelper.Template("other");
+
+        var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithAccessModifier(baseAccessModifier), template, other);
+
+        await Assert.That(result.RunResult.Diagnostics.Select(diagnostic => diagnostic.Id)).IsEquivalentTo(new[] { "SLAP005" });
+        await Assert.That(result.TemplateSources.Any(source => source.Contains("PublicTextTemplate", StringComparison.Ordinal))).IsFalse();
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", "other");
+    }
+
+    [Test]
+    [Arguments("internal", "SLAP005,SLAP005", "")]
+    [Arguments("public", "", "Consumer.ExampleTextTemplate.g.cs,Consumer.EXAMPLETextTemplate.2.g.cs")]
+    public async Task Access_PublicTemplatesSharingHintName_AddNumberedSourcesOnlyWithPublicSupportTypes(string baseAccessModifier, string ids, string hintNames)
+    {
+        // Class names that differ only by case share a hint name, so they take the numbered path, which skips public
+        // classes the same way
+        var first = RenderingTestHelper.Template("#access public\r\n#generate Text\r\nfirst", path: "Templates/a.html");
+        var second = RenderingTestHelper.Template("#access public\r\n#generate Text\r\nsecond", type: "EXAMPLE", path: "Templates/b.html");
+
+        var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithAccessModifier(baseAccessModifier), first, second);
+        var templates = GeneratedSources.Templates(result.RunResult).Select(source => source.HintName);
+
+        await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(diagnostic => diagnostic.Id))).IsEqualTo(ids);
+        await Assert.That(string.Join(",", templates)).IsEqualTo(hintNames);
+    }
+
+    [Test]
+    [Arguments("public", "public")]
+    [Arguments("PUBLIC", "public")]
+    [Arguments("Public", "public")]
+    [Arguments("Internal", "internal")]
+    [Arguments("INTERNAL", "internal")]
+    public async Task Access_AnyCasing_EmitsLowercaseKeyword(string value, string keyword)
+    {
+        var template = RenderingTestHelper.Template($"#access {value}\r\nbody");
+
+        var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithAccessModifier("public"), template);
+
+        await Assert.That(result.RunResult.Diagnostics).IsEmpty();
+        await Assert.That(result.TemplateSources.Length).IsEqualTo(2);
+        foreach (var source in result.TemplateSources)
         {
-            ExpectedCompilerDiagnostic.Generated("CS0060",
-                "Inconsistent accessibility: base class 'TextTemplate<string>' is less accessible than class 'ExampleTextTemplate'", file),
-            ExpectedCompilerDiagnostic.Generated("CS0051",
-                "Inconsistent accessibility: parameter type 'TemplateOptions' is less accessible than method 'ExampleTextTemplate.ExampleTextTemplate(TemplateOptions?)'", file)
-        };
+            await Assert.That(source).Contains($"{keyword} sealed partial class Example");
+        }
 
-        var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
-
-        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", "body");
     }
 
     [Test]

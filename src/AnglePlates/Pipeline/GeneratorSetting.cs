@@ -49,6 +49,6 @@ internal sealed record GeneratorSetting
 
     public Diagnostic CreateDiagnostic()
     {
-        return Diagnostic.Create(DiagnosticDescriptors.InvalidMSBuildProperty, Location.None, Name, InvalidValue, Expected);
+        return Diagnostic.Create(DiagnosticDescriptors.InvalidMSBuildSetting, Location.None, Name, InvalidValue, Expected);
     }
 }

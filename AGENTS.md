@@ -8,7 +8,7 @@
 - If a skill causes a permission request, pause, unfinished work, or departure from user intent, link the exact `SKILL.md`, quote the relevant instruction, and explain its application; distinguish requirements from interpretation
 - Use [README.md](README.md) for package usage and things consumers should know, [docs/development.md](docs/development.md) for contributor setup and architecture, and [docs/roadmap.md](docs/roadmap.md) for known defects and release plans; verify affected code before relying on historical findings
 - Update affected documentation when behavior or repository structure changes, including README files; keep implemented behavior separate from planned work
-- Use [docs/lexicon.md](docs/lexicon.md) for project terminology, [docs/testing.md](docs/testing.md) for test helpers, snapshot review, and current regression coverage, and [docs/diagnostics.md](docs/diagnostics.md) for diagnostic IDs and release tracking
+- Use [docs/lexicon.md](docs/lexicon.md) for project terminology, [docs/testing.md](docs/testing.md) for test helpers, snapshot review, and current regression coverage, [docs/diagnostics.md](docs/diagnostics.md) for diagnostic IDs, and [docs/releasing.md](docs/releasing.md#diagnostic-release-tracking) for diagnostic release tracking
 
 ## Skill Routing
 
@@ -76,6 +76,10 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - Preserve direct streaming; do not add whole-output buffering without a requirement
 - Preserve the analyzer-only package contract unless compatibility testing justifies a deliberate change: a development dependency with generated support types, no runtime assets or dependencies, and analyzer/XML assets under `analyzers/dotnet/cs/netstandard2.0`
 - Keep `buildTransitive` discovery and MSBuild options working as described in [How MSBuild hands over templates](docs/development.md#how-msbuild-hands-over-templates); the generator reads only tagged files, and invalid generator settings report `SLAP009`
+
+## Diagnostics
+
+- Assign diagnostic IDs only through the registry in `docs/diagnostics.md`. Never reuse or rename a `## SLAPnnn` heading.
 
 ## Testing Conventions
 

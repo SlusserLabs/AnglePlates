@@ -7,6 +7,7 @@
       Descriptor: {
         Id: SLAP004,
         Title: Unclosed template block,
+        HelpLink: https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap004,
         MessageFormat: Template block is missing its closing delimiter '{0}',
         Category: SlusserLabs.AnglePlates,
         DefaultSeverity: Error,

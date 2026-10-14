@@ -44,7 +44,7 @@ public sealed class GeneratorSettingTests
     }
 
     [Test]
-    public async Task CreateDiagnostic_InvalidValue_ReportsInvalidMSBuildProperty()
+    public async Task CreateDiagnostic_InvalidValue_ReportsInvalidMSBuildSetting()
     {
         var diagnostic = Read(" third ").CreateDiagnostic();
 

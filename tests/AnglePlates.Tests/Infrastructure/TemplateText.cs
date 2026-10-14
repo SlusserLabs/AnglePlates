@@ -3,14 +3,14 @@ using System.Linq;
 
 namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 
-// Builds template text around the three required directives, which declare Consumer.Example with a string model
+// Builds template text around #type, #model, and #namespace, which declare Consumer.Example with a string model
 internal static class TemplateText
 {
     public const string Header = "#type Example\r\n#model string\r\n#namespace Consumer\r\n";
 
     public const string Path = "Templates/example.html";
 
-    // The required directives with another line break style
+    // The same directives with another line break style
     public static string HeaderWith(string newline)
     {
         return Header.Replace("\r\n", newline, StringComparison.Ordinal);

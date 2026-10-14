@@ -27,6 +27,7 @@ public sealed class TemplateGenerator : IIncrementalGenerator
 
     private const string _defaultAccessModifier = "internal";
     private const string _projectDirKey = "build_property.ProjectDir";
+    private const string _rootNamespaceKey = "build_property.RootNamespace";
     private const string _baseAccessModifierProperty = "AnglePlateBaseAccessModifier";
     private const string _anglePlateMetadataKey = "build_metadata.AdditionalFiles.AnglePlate";
     private static readonly GenerationTarget[] _generationTargets = [GenerationTarget.Text, GenerationTarget.Utf8];
@@ -46,8 +47,9 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         var settings = accessModifier.Combine(languageVersion).Select(static (pair, cancellationToken) => new GeneratorSettings(pair.Left, pair.Right));
 
         // 2. Read the project values every template needs
-        var templateContext = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
-            new TemplateContext(options.GlobalOptions.TryGetValue(_projectDirKey, out var value) ? value : string.Empty));
+        var templateContext = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) => new TemplateContext(
+            options.GlobalOptions.TryGetValue(_projectDirKey, out var projectDir) ? projectDir : string.Empty,
+            options.GlobalOptions.TryGetValue(_rootNamespaceKey, out var rootNamespace) ? rootNamespace : string.Empty));
 
         // 3. Keep only the additional files AnglePlates added, before reading any text, so other tools' files are never read
         var anglePlateFiles = context.AdditionalTextsProvider
@@ -62,8 +64,8 @@ public sealed class TemplateGenerator : IIncrementalGenerator
                 new TemplateFile(file.Text.Path, file.Text.GetText(cancellationToken)?.ToString() ?? string.Empty, file.Origin))
             .WithTrackingName(TemplateFilesStep);
 
-        // 5. Parse and write each template on its own, so editing one leaves the others cached. A future setting that
-        // changes how every template parses belongs in TemplateContext.
+        // 5. Parse and write each template on its own, so editing one leaves the others cached. A project value that
+        // changes how every template is read, such as RootNamespace, belongs in TemplateContext.
         var templateResults = templateFiles
             .Combine(templateContext)
             .Select(static (pair, cancellationToken) => ProcessTemplate(pair.Left, pair.Right, cancellationToken))
@@ -91,7 +93,7 @@ public sealed class TemplateGenerator : IIncrementalGenerator
     {
         if (!settings.IsLanguageVersionSupported)
         {
-            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedLanguageVersion, Location.None, settings.LanguageVersion.ToDisplayString()));
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.LanguageVersionTooOld, Location.None, settings.LanguageVersion.ToDisplayString()));
         }
 
         if (!settings.AccessModifier.IsValid)
@@ -126,6 +128,13 @@ public sealed class TemplateGenerator : IIncrementalGenerator
             context.ReportDiagnostic(diagnostic.ToDiagnostic());
         }
 
+        // A public class can't derive from internal support types, so SLAP005 replaces the compiler's accessibility errors
+        if (result.PublicAccess is not null && !settings.HasPublicSupportTypes)
+        {
+            context.ReportDiagnostic(result.PublicAccess.ToDiagnostic());
+            return;
+        }
+
         foreach (var source in result.Sources)
         {
             if (!sharedPrefixes.Contains(source.HintPrefix, StringComparer.OrdinalIgnoreCase))
@@ -146,7 +155,8 @@ public sealed class TemplateGenerator : IIncrementalGenerator
 
         // Roslyn compares hint names ignoring case, so names that differ only by case are numbered too
         var hintNameCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var source in duplicates.Sources)
+        // AddTemplateSources reports SLAP005 for a public class that internal support types can't hold
+        foreach (var source in duplicates.Sources.Where(source => !source.IsPublic || settings.HasPublicSupportTypes))
         {
             context.AddSource(CreateHintName(source.HintPrefix, hintNameCounts), source.Source);
         }
@@ -199,21 +209,36 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         var diagnostics = new List<TemplateDiagnostic>();
         var sources = new List<GeneratedTemplate>();
 
+        // A misspelled directive either ends the directive section or keeps the file from being a template, so the first
+        // line after the directives, or the first line of a file without any, gets checked for one
+        var lineStart = parsed.Directives.Count == 0 ? 0 : parsed.BodyStart;
+        var checkedLine = TextSpan.FromBounds(lineStart, TemplateSyntax.LineEnd(template.Content, lineStart));
+        var lineText = template.Content.Substring(checkedLine.Start, checkedLine.Length);
+        var intended = DirectiveSpellCheck.FindIntendedDirective(lineText, out var misspelled);
+        if (intended is not null)
+        {
+            diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.PossibleMisspelledDirective, template.Path, lines, checkedLine, misspelled, intended));
+        }
+
         // A file is a template when it starts with a known directive. The default folder picks up notes and other
         // files, so those are skipped quietly, but a file the project added explicitly was meant to be a template.
         if (parsed.Directives.Count == 0)
         {
             if (template.Origin == TemplateOrigin.Explicit)
             {
-                diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.NoDirectives, template.Path, lines, lines[0].Span, template.Path));
+                diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.NotATemplate, template.Path, lines, lines[0].Span));
             }
 
             return new TemplateResult(template, diagnostics, sources);
         }
 
+        // Paths relative to the project folder keep class docs and file headers the same on every machine, and they're
+        // what #type and #namespace are derived from
+        var relativePath = TemplatePath.GetRelativePath(template.Path, templateContext.ProjectDirectory);
+
         // Errors skip only this template
         var errors = new List<TemplateError>();
-        var directives = DirectiveReader.Read(parsed, template.Path, errors);
+        var directives = DirectiveReader.Read(parsed, relativePath, templateContext, errors);
         errors.AddRange(parsed.Errors);
         if (directives is null || errors.Count > 0)
         {
@@ -225,19 +250,22 @@ public sealed class TemplateGenerator : IIncrementalGenerator
             return new TemplateResult(template, diagnostics, sources);
         }
 
-        // Paths relative to the project folder keep class docs and file headers the same on every machine
-        var relativePath = TemplatePath.GetRelativePath(template.Path, templateContext.ProjectDirectory);
+        var isPublic = string.Equals(directives.AccessModifier, "public", StringComparison.Ordinal);
         foreach (var target in _generationTargets)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if ((directives.GenerationTarget & target) != 0)
             {
                 var source = TemplateClassWriter.Write(relativePath, template.Path, lines, parsed, directives, target);
-                sources.Add(new GeneratedTemplate(CreateHintPrefix(directives, target), source));
+                sources.Add(new GeneratedTemplate(CreateHintPrefix(directives, target), source, isPublic));
             }
         }
 
-        return new TemplateResult(template, diagnostics, sources);
+        var publicAccess = isPublic
+            ? CreateDiagnostic(DiagnosticDescriptors.PublicTemplateNeedsPublicSupportTypes, template.Path, lines, directives.AccessSpan)
+            : null;
+
+        return new TemplateResult(template, diagnostics, sources, publicAccess);
     }
 
     private static TemplateDiagnostic CreateDiagnostic(

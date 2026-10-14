@@ -69,12 +69,21 @@ internal ref struct TemplateReader
         return TryAdvanceBy(_text.Slice(_position).IndexOfAny(delimiters));
     }
 
-    // Moves past the delimiter; returns false without moving when it isn't found
-    public bool TryAdvancePast(char delimiter)
+    // Moves past the end of the current line, including its CR, LF, or CRLF; the last line may have none
+    public void AdvancePastLine()
     {
-        int index = _text.Slice(_position).IndexOf(delimiter);
+        int index = _text.Slice(_position).IndexOfAny(TemplateSyntax.LineBreaks.AsSpan());
+        if (index < 0)
+        {
+            AdvanceToEnd();
+            return;
+        }
 
-        return TryAdvanceBy(index < 0 ? index : index + 1);
+        Advance(index + 1);
+        if (_text[_position - 1] == '\r')
+        {
+            IsNext('\n', advancePast: true);
+        }
     }
 
     private bool TryAdvanceBy(int index)

@@ -12,8 +12,9 @@ using TUnit.Core;
 
 namespace SlusserLabs.AnglePlates.Tests;
 
-// Every directive: where the directive section ends, valid and invalid values, duplicates, and what each one generates
-public sealed class DirectiveTests
+// Every directive: where the directive section ends, defaults and derived names, casing, valid and invalid values,
+// duplicates, and what each one generates
+public sealed class DirectiveReaderTests
 {
     [Test]
     [Arguments("", true, true, 6)]
@@ -37,8 +38,6 @@ public sealed class DirectiveTests
 
     [Test]
     [Arguments("#typeGreeting")]
-    [Arguments("#models X")]
-    [Arguments("#Type X")]
     [Arguments("# Heading")]
     [Arguments("#Heading")]
     [Arguments("#!/bin/sh")]
@@ -47,7 +46,6 @@ public sealed class DirectiveTests
     [Arguments("#")]
     [Arguments(" #type Other")]
     [Arguments("\r\n#type Other")]
-    [Arguments("#acess internal")]
     [Arguments("#not directive")]
     [Arguments("</html>\r\n#not directive")]
     public async Task DirectiveSection_NonDirectiveLine_EndsSectionAsLiteral(string body)
@@ -74,7 +72,8 @@ public sealed class DirectiveTests
 
     public static IEnumerable<(string template, string expected)> LineConsumptionCases()
     {
-        foreach (var newline in new[] { "\n", "\r\n" })
+        string[] newlines = ["\n", "\r\n", "\r"];
+        foreach (var newline in newlines)
         {
             var header = $"#type Example{newline}#model string{newline}#namespace Consumer";
             yield return (header + newline + "body", "body");
@@ -89,9 +88,12 @@ public sealed class DirectiveTests
     }
 
     [Test]
-    public async Task DirectiveErrors_WithLfLineBreaks_ReportOnTheirLines()
+    [Arguments("\n")]
+    [Arguments("\r")]
+    public async Task DirectiveErrors_WithLfOrCrLineBreaks_ReportOnTheirLines(string newline)
     {
-        var template = "#type Example\n#model string\n#namespace Consumer\n#access privat\n#model int\nbody";
+        // A lone CR ends a directive, so the later lines aren't swallowed into the first directive's value
+        var template = string.Join(newline, "#type Example", "#model string", "#namespace Consumer", "#access privat", "#model int", "body");
         var diagnostics = GenerateDiagnostics(template);
 
         await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP007,SLAP006");
@@ -102,35 +104,162 @@ public sealed class DirectiveTests
     [Test]
     [Arguments("\n")]
     [Arguments("\r\n")]
-    public async Task MissingDirective_AfterTypo_ReportsAtTypo(string newline)
+    [Arguments("\r")]
+    public async Task MissingModel_AfterTypo_ReportsAtTypo(string newline)
     {
-        var template = $"#type Example{newline}#namspace Consumer{newline}#model string{newline}body";
+        var template = $"#type Example{newline}#namespace Consumer{newline}#mdoel string{newline}body";
         var diagnostics = GenerateDiagnostics(template);
 
-        await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP002,SLAP003");
+        await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP011,SLAP003");
         foreach (var diagnostic in diagnostics)
         {
-            await AssertLocation(diagnostic, template, 1, 0, "#namspace Consumer".Length);
+            await AssertLocation(diagnostic, template, 2, 0, "#mdoel string".Length);
         }
     }
 
     [Test]
-    [Arguments("#type", "\r\nbody", "SLAP001")]
-    [Arguments("#type  \t", "\r\nbody", "SLAP001")]
-    [Arguments("#model", "\r\nbody", "SLAP003")]
-    [Arguments("#namespace ", "\r\nbody", "SLAP002")]
-    [Arguments("#type", "", "SLAP001")]
-    [Arguments("#type", "\n", "SLAP001")]
-    [Arguments("#type", "\r\n", "SLAP001")]
-    public async Task RequiredDirective_BlankValue_ReportsAtDirectiveName(string line, string tail, string id)
+    [Arguments("#type", "\r\nbody", "a C# identifier")]
+    [Arguments("#type  \t", "\r\nbody", "a C# identifier")]
+    [Arguments("#model", "\r\nbody", "a C# type name")]
+    [Arguments("#namespace ", "\r\nbody", "a namespace name such as 'MyApp.Templates'")]
+    [Arguments("#type", "", "a C# identifier")]
+    [Arguments("#type", "\n", "a C# identifier")]
+    [Arguments("#type", "\r\n", "a C# identifier")]
+    [Arguments("#type", "\r", "a C# identifier")]
+    public async Task Directive_BlankValue_ReportsInvalidValueAtDirectiveName(string line, string tail, string expected)
     {
-        // The blank directive is last so the tail can end the line, the text, or neither
+        // A blank directive is there, so it isn't derived or missing; it's an invalid value. It's last so the tail can end
+        // the line, the text, or neither.
         var template = TemplateText.WithDirective(line, last: true).TrimEnd('\r', '\n') + tail;
         var diagnostic = GenerateDiagnostics(template).Single();
         var name = line.TrimEnd();
 
-        await Assert.That(diagnostic.Id).IsEqualTo(id);
+        await Assert.That(diagnostic.Id).IsEqualTo("SLAP007");
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo($"Directive '{name}' has invalid value ''; expected {expected}");
         await AssertLocation(diagnostic, template, 2, 0, name.Length);
+    }
+
+    [Test]
+    public async Task Defaults_OnlyModel_GeneratesInternalHtmlClassesForBothTargets()
+    {
+        var template = new TemplateAdditionalText("#model string\r\n[[ model ]]", "Templates/greeting.html");
+
+        var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithRootNamespace("MyApp"), template);
+        var sources = result.TemplateSources;
+
+        await Assert.That(result.RunResult.Diagnostics).IsEmpty();
+        await Assert.That(sources.Length).IsEqualTo(2);
+        await Assert.That(sources[0]).Contains("namespace MyApp.Templates;");
+        await Assert.That(sources[0]).Contains("internal sealed partial class GreetingTextTemplate");
+        await Assert.That(sources[1]).Contains("internal sealed partial class GreetingUtf8Template");
+        await Assert.That(sources.All(source => source.Contains("TemplateOptions.Html)", StringComparison.Ordinal))).IsTrue();
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "MyApp.Templates.Greeting", "&lt;value&gt;");
+    }
+
+    [Test]
+    [Arguments("Templates/order-line.html", "OrderLine")]
+    [Arguments("Templates/hello-world.html", "HelloWorld")]
+    [Arguments("Templates/welcomeEmail.txt", "WelcomeEmail")]
+    [Arguments("Templates/order.line.html", "Order")]
+    [Arguments("Templates/my_report card.html", "MyReportCard")]
+    [Arguments("Templates/--a__b  c.html", "ABC")]
+    [Arguments("Templates/receipt", "Receipt")]
+    [Arguments("Templates/Receipt.HTML", "Receipt")]
+    [Arguments("Templates/_x1.html", "X1")]
+    [Arguments("Templates\\Emails\\welcome.html", "Welcome")]
+    public async Task DeriveType_FileName_GeneratesPascalCasedClass(string path, string type)
+    {
+        var template = new TemplateAdditionalText("#model string\r\n#namespace Consumer\r\n[[ model ]]", path);
+
+        var result = GeneratorTestHelper.Run(template);
+
+        await Assert.That(result.RunResult.Diagnostics).IsEmpty();
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer." + type, "&lt;value&gt;");
+    }
+
+    [Test]
+    [Arguments("Templates/2fa-code.html", "2faCode")]
+    [Arguments("Templates/.html", "")]
+    [Arguments("Templates/a+b.html", "A+b")]
+    [Arguments("Templates/-.html", "")]
+    public async Task DeriveType_InvalidIdentifier_ReportsClassNameNotDerivedAtFirstLine(string path, string type)
+    {
+        var template = "#model string\r\n#namespace Consumer\r\nbody";
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template, path)).RunResult;
+        var diagnostic = result.Diagnostics.Single();
+
+        await Assert.That(diagnostic.Id).IsEqualTo("SLAP001");
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo(
+            $"The file name gives the class name '{type}', which isn't a C# identifier; add a directive such as '#type MyTemplate'");
+        await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(path, new LinePosition(0, 0), new LinePosition(0, 13)));
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
+    }
+
+    [Test]
+    [Arguments("C:/src/App/Templates/Emails/welcome.html", "C:/src/App", "MyApp", "MyApp.Templates.Emails")]
+    [Arguments("C:\\src\\App\\welcome.html", "C:\\src\\App\\", "MyApp", "MyApp")]
+    [Arguments("/src/app/Templates/a.html", "/src/app/", "My.App", "My.App.Templates")]
+    [Arguments("/src/app/Templates/my_folder/a.html", "/src/app", "Root", "Root.Templates.my_folder")]
+    [Arguments("/src/app/templates/Var/a.html", "/src/app", "Root", "Root.templates.Var")]
+    [Arguments("C:/src/App/Templates/a.html", "C:/src/App", " MyApp ", "MyApp.Templates")]
+    // Without ProjectDir, as in a hand-built compilation, a relative path is used as it is
+    [Arguments("Templates/a.html", "", "Root", "Root.Templates")]
+    public async Task DeriveNamespace_RootNamespaceAndFolders_GeneratesNamespace(string path, string projectDir, string rootNamespace, string expected)
+    {
+        var template = new TemplateAdditionalText("#type Example\r\n#model string\r\n[[ model ]]", path);
+
+        var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithRootNamespace(rootNamespace, projectDir), template);
+
+        await Assert.That(result.RunResult.Diagnostics).IsEmpty();
+        await Assert.That(result.TemplateSources[0]).Contains($"namespace {expected};");
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, expected + ".Example", "&lt;value&gt;");
+    }
+
+    [Test]
+    [Arguments("C:/src/App/Templates/a.html", "C:/src/App", "", "RootNamespace is empty")]
+    [Arguments("C:/src/App/Templates/a.html", "C:/src/App", "  ", "RootNamespace is empty")]
+    [Arguments("C:/src/App/Templates/a.html", "C:/src/App", "My-App", "RootNamespace 'My-App' isn't a namespace name")]
+    [Arguments("C:/src/App/Templates/a.html", "C:/src/App", "global::App", "RootNamespace 'global::App' isn't a namespace name")]
+    [Arguments("C:/src/App/my-folder/a.html", "C:/src/App", "MyApp", "the folder 'my-folder' isn't a C# identifier")]
+    [Arguments("C:/src/App/Templates/class/a.html", "C:/src/App", "MyApp", "the folder 'class' isn't a C# identifier")]
+    [Arguments("C:/src/App/Templates/2024/a.html", "C:/src/App", "MyApp", "the folder '2024' isn't a C# identifier")]
+    [Arguments("C:/src/Shared/a.html", "C:/src/App", "MyApp", "the template is outside the project folder")]
+    [Arguments("D:/Shared/a.html", "C:/src/App", "MyApp", "the template is outside the project folder")]
+    [Arguments("/srv/a.html", "", "MyApp", "the template is outside the project folder")]
+    [Arguments("C:/src/a.html", "", "MyApp", "the template is outside the project folder")]
+    public async Task DeriveNamespace_Invalid_ReportsNamespaceNotDerivedAtFirstLine(string path, string projectDir, string rootNamespace, string reason)
+    {
+        var template = "#type Example\r\n#model string\r\nbody";
+        var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithRootNamespace(rootNamespace, projectDir), new TemplateAdditionalText(template, path)).RunResult;
+        var diagnostic = result.Diagnostics.Single();
+
+        await Assert.That(diagnostic.Id).IsEqualTo("SLAP002");
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo(
+            $"The template's namespace can't be derived, because {reason}; add a directive such as '#namespace MyApp.Templates'");
+        await Assert.That(diagnostic.Location.GetLineSpan()).IsEqualTo(new FileLinePositionSpan(path, new LinePosition(0, 0), new LinePosition(0, 13)));
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
+    }
+
+    [Test]
+    public async Task Derive_TypeNamespaceAndModelAllFail_ReportsEachInOrder()
+    {
+        var template = "#generate Text\r\n#access privat\r\nbody";
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template, "Templates/2fa.html")).RunResult;
+
+        // Derivation and missing-model errors come before the per-directive errors
+        await Assert.That(string.Join(",", result.Diagnostics.Select(d => d.Id))).IsEqualTo("SLAP001,SLAP002,SLAP003,SLAP007");
+        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
+    }
+
+    [Test]
+    public async Task Derive_ExplicitTypeAndNamespace_WinOverFileNameAndFolders()
+    {
+        var template = new TemplateAdditionalText("#type Receipt\r\n#namespace Other.Place\r\n#model string\r\n[[ model ]]", "C:/src/App/Templates/2fa-code.html");
+
+        var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithRootNamespace(string.Empty, "C:/src/App"), template);
+
+        await Assert.That(result.RunResult.Diagnostics).IsEmpty();
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Other.Place.Receipt", "&lt;value&gt;");
     }
 
     [Test]
@@ -145,10 +274,10 @@ public sealed class DirectiveTests
     [Arguments("#type\t", "#type")]
     public async Task Directive_Repeated_ReportsDuplicate(string line, string label)
     {
-        // Required directives already appear once, so only optional ones need a first occurrence
+        // TemplateText.Header already has #type, #model, and #namespace once, so only the other directives need a first occurrence
         var name = line.Split(' ', '\t')[0];
-        var isRequired = TemplateText.Header.Contains(name + " ", StringComparison.Ordinal);
-        var template = TemplateText.Header + (isRequired ? string.Empty : line + "\r\n") + line + "\r\nbody";
+        var inHeader = TemplateText.Header.Contains(name + " ", StringComparison.Ordinal);
+        var template = TemplateText.Header + (inHeader ? string.Empty : line + "\r\n") + line + "\r\nbody";
         var diagnostic = GenerateDiagnostics(template).Single();
 
         await Assert.That(diagnostic.Id).IsEqualTo("SLAP006");
@@ -166,9 +295,8 @@ public sealed class DirectiveTests
         var template = TemplateText.Header + $"#generate {target}\r\n#generate Text\r\nbody";
         var diagnostics = GenerateDiagnostics(template);
 
-        await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP005,SLAP006");
-        await Assert.That(diagnostics[0].GetMessage()).IsEqualTo(
-            $"Template file 'Templates/example.html' has invalid generation target '{target}'; expected 'Text' or 'Utf8'");
+        await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP007,SLAP006");
+        await Assert.That(diagnostics[0].GetMessage()).IsEqualTo($"Directive '#generate' has invalid value '{target}'; expected 'Text' or 'Utf8'");
         await AssertLocation(diagnostics[0], template, 3, "#generate ".Length, target.Length);
         await AssertLocation(diagnostics[1], template, 4, 0, "#generate Text".Length);
     }
@@ -186,7 +314,7 @@ public sealed class DirectiveTests
     [Arguments("#namespace My Consumer", "a namespace name such as 'MyApp.Templates'")]
     [Arguments("#namespace class", "a namespace name such as 'MyApp.Templates'")]
     [Arguments("#access privat", "'public' or 'internal'")]
-    [Arguments("#access Public", "'public' or 'internal'")]
+    [Arguments("#access protected internal", "'public' or 'internal'")]
     [Arguments("#access", "'public' or 'internal'")]
     [Arguments("#generate", "'Text' or 'Utf8'")]
     [Arguments("#encode htm", "'html', 'none', 'javascript', or 'url'")]

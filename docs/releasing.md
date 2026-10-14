@@ -47,3 +47,11 @@ Every leg builds the solution in Release with `-warnaserror` and the CI version,
 When a leg fails, it uploads a `failure-<leg>` artifact with any `*.received.*` snapshot files, the test results, and the consumer binlogs. The `ubuntu` leg uploads the package pair as `ci-package`. That name is deliberately not `package`, because a workflow that calls `ci.yml` shares its run, and artifact names have to be unique within a run.
 
 The actions are pinned to full commit SHAs with the version in a comment next to each one.
+
+## Diagnostic release tracking
+
+Diagnostic IDs come from the registry in [diagnostics](diagnostics.md), and each one keeps its ID forever. Don't reuse an ID for a different rule, and don't rename or remove a `## SLAPnnn` heading, because it's the target of that rule's help link. A retired rule keeps its heading and says which release retired it.
+
+Record new rules and rule changes in [AnalyzerReleases.Unshipped.md](../src/AnglePlates/AnalyzerReleases.Unshipped.md). When a release ships, move its entries into a versioned section of [AnalyzerReleases.Shipped.md](../src/AnglePlates/AnalyzerReleases.Shipped.md). The shipped file stays empty until the first stable release.
+
+The generator project passes both files to Roslyn's release-tracking analyzers as `AdditionalFiles`, so a rule that's missing from them gets the `RS2000` warning. That warning fails CI and any other build run with `-warnaserror`; a plain local `dotnet build` only warns. They're inputs to that one build. They aren't packaged, and they don't reach consuming projects.

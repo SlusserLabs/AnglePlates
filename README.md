@@ -89,13 +89,15 @@ The first line that isn't a directive starts the template body. That includes a 
 
 | Directive | Required | Purpose and default | Sample value |
 | --- | --- | --- | --- |
-| `#type` | Yes | Generated class name prefix, with `TextTemplate` or `Utf8Template` appended. Must be a C# identifier. | `#type Greeting` |
+| `#type` | No | Generated class name prefix, with `TextTemplate` or `Utf8Template` appended. Must be a C# identifier. Defaults to the file name in PascalCase. | `#type Greeting` |
 | `#model` | Yes | Model's C# type. Use a fully qualified name or add a matching `#using`. | `#model MyApp.GreetingModel` |
-| `#namespace` | Yes | Namespace for compiled template classes, as a dotted name. | `#namespace MyApp.Templates` |
+| `#namespace` | No | Namespace for compiled template classes, as a dotted name. Defaults to the project's `RootNamespace` plus the template's folders. | `#namespace MyApp.Templates` |
 | `#generate` | No | Omit it to generate both compiled templates. Set it to the case-insensitive value `Text` or `Utf8` to generate only that template type. | `#generate Utf8` |
 | `#access` | No | Compiled template accessibility, `public` or `internal`; defaults to `internal`. See [Public templates](#public-templates). | `#access public` |
 | `#encode` | No | How C# variables are encoded when you don't pass options: `html` (the default), `none`, `javascript`, or `url`, in any casing. See [Encoding and options](#encoding-and-options). | `#encode none` |
 | `#using` | No | Adds a `using` directive for the template's C# and the `#model` type. Plain namespace names only; no `static`, aliases, or `global::`. | `#using System.Linq` |
+
+Only `#model` is required. Leave out `#type` and AnglePlates takes the file name up to its first `.`, splits it on `-`, `_`, and spaces, and capitalizes each part, so `order-line.html` becomes `OrderLine`. Leave out `#namespace` and it starts with `RootNamespace` and adds each folder between the project and the template, unchanged, so `Templates/Emails/welcome.html` in `MyApp` lands in `MyApp.Templates.Emails`. If either one doesn't come out as valid C#, say for `2fa-code.html` or a `my-emails` folder, the build tells you to add the directive yourself.
 
 ### Template syntax
 
@@ -341,7 +343,7 @@ AnglePlates generates `TemplateOptions` and the template base classes into your 
 </PropertyGroup>
 ```
 
-Then add `#access public` to each template you want to expose. Templates without it stay `internal`. The other way around doesn't work: a `#access public` template on top of `internal` support types fails to compile with `CS0060` and `CS0051`, because a public class can't expose internal base types.
+Then add `#access public` to each template you want to expose. Templates without it stay `internal`. The other way around doesn't work: a `#access public` template on top of `internal` support types reports `SLAP005` and doesn't generate, because a public class can't expose internal base types. `#access` takes `public` or `internal` in any casing.
 
 The support types always use the `SlusserLabs.AnglePlates` namespace, so a project that can see another assembly's copies, because they're `public` or shared through `InternalsVisibleTo`, has two of everything. If that project uses AnglePlates too, it gets `CS0436` warnings and can't pass its own `TemplateOptions` to the other assembly's templates; if it doesn't, and it sees copies from two assemblies, it gets `CS0433` errors wherever it names `TemplateOptions`.
 
@@ -361,15 +363,14 @@ Two things are up to you:
 ## Good to know
 
 - Templates are trusted C# code. Everything in a C# variable or C# block compiles into your application and runs with the same permissions as the rest of your code. HTML encoding protects the values a template writes, not your application from the template, so only compile templates you'd trust as source files.
-- Order your directives with the required ones last. A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. When a required directive comes after the typo, its missing-directive error (`SLAP001` through `SLAP003`) points right at the typo, so required-last ordering catches every misspelling after the first line.
-- A misspelled first line leaves the file with no directives at all. In the `Templates` folder, that file is skipped without an error, just like a `README.md` would be. A file you added with an `Include` reports `SLAP008` instead.
+- A misspelled directive just becomes the first line of the body, so it and anything after it end up in the output. A misspelled first line is worse: the file has no directives at all, so a file in the `Templates` folder is skipped like a `README.md` would be, and a file you added with an `Include` reports `SLAP008`. Either way, the build warns with `SLAP011` when that line looks like a directive, such as `#modle` or `#Model`.
 - If the C# in a block is broken, say a string is missing its closing quote, the block ends at the first closer, and the compiler points at the typo in the template. It won't swallow the HTML that follows.
 - A C# variable can end in a `//` comment. `[[ model.Name // display name ]]` works, because the generated code starts a new line after the comment.
 - Compiler errors in C# variables and C# blocks point at the template's path, line, and column, because the generated code maps them back with `#line`. An error in the code AnglePlates wraps around a C# variable, such as a `Span<char>` value it can't convert to a string, points at the whole C# variable. A UTF-8 template compiles your C# twice, once in `Render` and once in `RenderAsync`, so you may see the same error twice at the same spot.
 - The generated render methods already declare `model`, `Model`, and `writer`, and `RenderAsync` adds `cancellationToken`, so don't reuse those names for locals in your C# blocks.
 - `RenderAsync` is an async method, and your C# blocks go into it, so UTF-8 templates pick up the usual async rules. With C# 11 or 12, a ref struct local such as a `Span<char>` in a C# block reports `CS9058`. From C# 13, it's fine unless the local is still in use after a flush check, which reports `CS4007`. A `lock` or `unsafe` block that contains a write right after a C# block reports `CS1996` or `CS4004`, because that write awaits. Text templates have none of these rules, so if you need one of these constructs, use `#generate Text`.
 - Two templates that generate the same class name in the same namespace cause C# compiler errors, the same as two hand-written classes would.
-- Template mistakes are build errors. A missing or blank `#type`, `#model`, or `#namespace` reports `SLAP001` through `SLAP003`, and an unclosed block reports `SLAP004`. An invalid `#generate` value reports `SLAP005`, and a repeated directive reports `SLAP006`. Any other invalid directive value reports `SLAP007`, including a blank `#generate`, `#access`, `#encode`, or `#using`. An explicit file with no directives reports `SLAP008`. Each error stops that template from generating, but your other templates still generate. An invalid `AnglePlateBaseAccessModifier` and a C# version below 11 are the exceptions: they report `SLAP009` and `SLAP010` and stop everything. See [diagnostics](docs/diagnostics.md).
+- Template mistakes are build errors with `SLAP` IDs, and each one stops only its own template from generating. An invalid `AnglePlateBaseAccessModifier` (`SLAP009`) and a C# version below 11 (`SLAP010`) stop everything. [Diagnostics](docs/diagnostics.md) lists every rule and how to fix it.
 
 For an application model and a loop, see the [HelloWorld sample](samples/HelloWorld/README.md).
 

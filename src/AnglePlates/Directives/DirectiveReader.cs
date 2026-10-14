@@ -8,7 +8,8 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace SlusserLabs.AnglePlates;
 
-// Validates a template's directives and turns them into TemplateDirectives, or reports why it can't
+// Validates a template's directives, derives #type and #namespace when they're left out, and turns the result into
+// TemplateDirectives, or reports why it can't
 internal sealed class DirectiveReader
 {
     // Shared with the AnglePlateBaseAccessModifier property so SLAP007 and SLAP009 use the same wording
@@ -21,6 +22,8 @@ internal sealed class DirectiveReader
     private const string _expectedGenerationTarget = "'Text' or 'Utf8'";
     private const string _expectedEncoding = "'html', 'none', 'javascript', or 'url'";
 
+    private static readonly char[] _fileNameSeparators = ['-', '_', ' '];
+
     private static readonly (string Name, TemplateEncoding Encoding)[] _encodings =
     [
         ("html", TemplateEncoding.Html),
@@ -30,7 +33,6 @@ internal sealed class DirectiveReader
     ];
 
     private readonly string _text;
-    private readonly string _path;
     private readonly List<TemplateError> _errors = [];
     private readonly HashSet<DirectiveKind> _seen = [];
     private readonly HashSet<string> _distinctUsings = new(StringComparer.Ordinal);
@@ -41,38 +43,50 @@ internal sealed class DirectiveReader
     private string? _modelType;
     private GenerationTarget _generationTarget = GenerationTarget.Text | GenerationTarget.Utf8;
     private string _accessModifier = "internal";
+    private TextSpan _accessSpan;
     private TemplateEncoding _encoding = TemplateEncoding.Html;
 
-    // A blank required directive is reported as missing at its name, so the reader remembers where each one was
-    private TextSpan? _blankType;
-    private TextSpan? _blankNamespace;
-    private TextSpan? _blankModelType;
-
-    private DirectiveReader(string text, string path)
+    private DirectiveReader(string text)
     {
         _text = text;
-        _path = path;
     }
 
-    // Adds any errors to the list and returns null when there are some
-    public static TemplateDirectives? Read(ParsedTemplate template, string path, List<TemplateError> errors)
+    // Adds any errors to the list and returns null when there are some. The relative path is the template's path from the
+    // project folder with '/' separators, which is what #type and #namespace are derived from.
+    public static TemplateDirectives? Read(ParsedTemplate template, string relativePath, TemplateContext context, List<TemplateError> errors)
     {
-        var reader = new DirectiveReader(template.Text, path);
+        var reader = new DirectiveReader(template.Text);
         foreach (var directive in template.Directives)
         {
             reader.ReadDirective(directive);
         }
 
-        // Missing-directive errors go first and the per-directive errors follow, which keeps the reported diagnostic order
+        // Derivation and missing-directive errors go first and the per-directive errors follow, which keeps the reported
+        // diagnostic order
         int errorCount = errors.Count;
-        reader.ReportMissingDirectives(template.BodyStart, errors);
+        if (!reader._seen.Contains(DirectiveKind.Type))
+        {
+            reader.DeriveType(relativePath, errors);
+        }
+
+        if (!reader._seen.Contains(DirectiveKind.Namespace))
+        {
+            reader.DeriveNamespace(relativePath, context.RootNamespace, errors);
+        }
+
+        if (!reader._seen.Contains(DirectiveKind.Model))
+        {
+            reader.ReportMissingModel(template.BodyStart, errors);
+        }
+
         errors.AddRange(reader._errors);
         if (errors.Count > errorCount)
         {
             return null;
         }
 
-        return new TemplateDirectives(reader._type!, reader._namespace!, reader._modelType!, reader._generationTarget, reader._accessModifier, reader._encoding, [.. reader._usings]);
+        return new TemplateDirectives(
+            reader._type!, reader._namespace!, reader._modelType!, reader._generationTarget, reader._accessModifier, reader._accessSpan, reader._encoding, [.. reader._usings]);
     }
 
     private void ReadDirective(DirectiveToken directive)
@@ -91,7 +105,7 @@ internal sealed class DirectiveReader
             return;
         }
 
-        // An invalid value reports SLAP005 or SLAP007 at the value, or at the name when the value is blank
+        // An invalid value reports SLAP007 at the value, or at the name when the value is blank
         switch (directive.Kind)
         {
             case DirectiveKind.Type:
@@ -129,11 +143,7 @@ internal sealed class DirectiveReader
 
     private void ReadType(DirectiveToken directive, string value)
     {
-        if (value.Length == 0)
-        {
-            _blankType = directive.Name;
-        }
-        else if (SyntaxFacts.IsValidIdentifier(value))
+        if (SyntaxFacts.IsValidIdentifier(value))
         {
             _type = value;
         }
@@ -145,11 +155,7 @@ internal sealed class DirectiveReader
 
     private void ReadModel(DirectiveToken directive, string value)
     {
-        if (value.Length == 0)
-        {
-            _blankModelType = directive.Name;
-        }
-        else if (IsTypeName(value))
+        if (value.Length > 0 && IsTypeName(value))
         {
             _modelType = value;
         }
@@ -161,11 +167,7 @@ internal sealed class DirectiveReader
 
     private void ReadNamespace(DirectiveToken directive, string value)
     {
-        if (value.Length == 0)
-        {
-            _blankNamespace = directive.Name;
-        }
-        else if (IsNamespaceName(value))
+        if (value.Length > 0 && IsNamespaceName(value))
         {
             _namespace = value;
         }
@@ -185,21 +187,24 @@ internal sealed class DirectiveReader
         {
             _generationTarget = GenerationTarget.Utf8;
         }
-        else if (value.Length == 0)
+        else
         {
             AddInvalidValue(directive, value, _expectedGenerationTarget);
         }
-        else
-        {
-            _errors.Add(new TemplateError(DiagnosticDescriptors.InvalidGenerationTarget, directive.Value, _path, value));
-        }
     }
 
+    // Any casing works, but the generated class always gets the lowercase keyword
     private void ReadAccess(DirectiveToken directive, string value)
     {
-        if (string.Equals(value, "public", StringComparison.Ordinal) || string.Equals(value, "internal", StringComparison.Ordinal))
+        if (string.Equals(value, "public", StringComparison.OrdinalIgnoreCase))
         {
-            _accessModifier = value;
+            _accessModifier = "public";
+            _accessSpan = directive.Value;
+        }
+        else if (string.Equals(value, "internal", StringComparison.OrdinalIgnoreCase))
+        {
+            _accessModifier = "internal";
+            _accessSpan = directive.Value;
         }
         else
         {
@@ -234,25 +239,80 @@ internal sealed class DirectiveReader
         }
     }
 
-    // Missing required directives point at the line that ended the directive section, because that line is often a
-    // misspelled directive. A value that's present but invalid already has its own error.
-    private void ReportMissingDirectives(int bodyStart, List<TemplateError> errors)
+    // The class name comes from the file name up to its first '.', with each part between '-', '_', and spaces
+    // capitalized: order-line.html becomes OrderLine
+    private void DeriveType(string relativePath, List<TemplateError> errors)
     {
-        var sectionEndLine = new TextSpan(bodyStart, LineLength(bodyStart));
-        if (_type is null && (_blankType is not null || !_seen.Contains(DirectiveKind.Type)))
+        var fileName = relativePath.Substring(relativePath.LastIndexOf('/') + 1);
+        var dot = fileName.IndexOf('.');
+        var stem = dot < 0 ? fileName : fileName.Substring(0, dot);
+        var parts = stem.Split(_fileNameSeparators, StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => char.ToUpperInvariant(part[0]) + part.Substring(1));
+        var type = string.Concat(parts);
+        if (SyntaxFacts.IsValidIdentifier(type))
         {
-            errors.Add(new TemplateError(DiagnosticDescriptors.MissingType, _blankType ?? sectionEndLine, _path));
+            _type = type;
+        }
+        else
+        {
+            errors.Add(new TemplateError(DiagnosticDescriptors.ClassNameNotDerived, FirstLine(), type));
+        }
+    }
+
+    // The namespace is RootNamespace followed by each folder between the project folder and the template, unchanged:
+    // Templates/Emails/welcome.html in MyApp becomes MyApp.Templates.Emails
+    private void DeriveNamespace(string relativePath, string rootNamespace, List<TemplateError> errors)
+    {
+        var root = rootNamespace.Trim();
+        var reason = FindNamespaceProblem(relativePath, root, out var folders);
+        if (reason is null)
+        {
+            _namespace = string.Join(".", [root, .. folders]);
+        }
+        else
+        {
+            errors.Add(new TemplateError(DiagnosticDescriptors.NamespaceNotDerived, FirstLine(), reason));
+        }
+    }
+
+    // Returns why the namespace can't be derived, or null when it can
+    private static string? FindNamespaceProblem(string relativePath, string rootNamespace, out string[] folders)
+    {
+        var segments = relativePath.Split('/');
+        folders = segments.Take(segments.Length - 1).ToArray();
+
+        // TemplatePath falls back to the full path when the template shares no root with the project folder
+        var first = segments[0];
+        if (first == ".." || first.Length == 0 || first.IndexOf(':') >= 0)
+        {
+            return "the template is outside the project folder";
         }
 
-        if (_namespace is null && (_blankNamespace is not null || !_seen.Contains(DirectiveKind.Namespace)))
+        if (rootNamespace.Length == 0)
         {
-            errors.Add(new TemplateError(DiagnosticDescriptors.MissingNamespace, _blankNamespace ?? sectionEndLine, _path));
+            return "RootNamespace is empty";
         }
 
-        if (_modelType is null && (_blankModelType is not null || !_seen.Contains(DirectiveKind.Model)))
+        if (!IsNamespaceName(rootNamespace))
         {
-            errors.Add(new TemplateError(DiagnosticDescriptors.MissingModelType, _blankModelType ?? sectionEndLine, _path));
+            return $"RootNamespace '{rootNamespace}' isn't a namespace name";
         }
+
+        foreach (var folder in folders)
+        {
+            if (!SyntaxFacts.IsValidIdentifier(folder) || SyntaxFacts.GetKeywordKind(folder) != SyntaxKind.None)
+            {
+                return $"the folder '{folder}' isn't a C# identifier";
+            }
+        }
+
+        return null;
+    }
+
+    // A missing #model points at the line that ended the directive section, because that line is often a misspelled directive
+    private void ReportMissingModel(int bodyStart, List<TemplateError> errors)
+    {
+        errors.Add(new TemplateError(DiagnosticDescriptors.MissingModel, new TextSpan(bodyStart, LineLength(bodyStart))));
     }
 
     private void AddInvalidValue(DirectiveToken directive, string value, string expected)
@@ -280,14 +340,13 @@ internal sealed class DirectiveReader
             && type.DescendantTrivia().All(trivia => trivia.IsKind(SyntaxKind.WhitespaceTrivia));
     }
 
+    private TextSpan FirstLine()
+    {
+        return new TextSpan(0, LineLength(0));
+    }
+
     private int LineLength(int start)
     {
-        int end = start;
-        while (end < _text.Length && !TemplateSyntax.IsLineBreak(_text[end]))
-        {
-            end++;
-        }
-
-        return end - start;
+        return TemplateSyntax.LineEnd(_text, start) - start;
     }
 }

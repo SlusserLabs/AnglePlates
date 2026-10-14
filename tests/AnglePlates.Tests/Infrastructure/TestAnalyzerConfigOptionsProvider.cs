@@ -11,6 +11,7 @@ internal sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsP
 {
     private const string _baseAccessModifierKey = "build_property.AnglePlateBaseAccessModifier";
     private const string _projectDirKey = "build_property.ProjectDir";
+    private const string _rootNamespaceKey = "build_property.RootNamespace";
     private const string _anglePlateKey = "build_metadata.AdditionalFiles.AnglePlate";
 
     private readonly TestAnalyzerConfigOptions _empty = new();
@@ -35,6 +36,18 @@ internal sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsP
     public static TestAnalyzerConfigOptionsProvider WithProjectDir(string projectDir)
     {
         return new TestAnalyzerConfigOptionsProvider([new KeyValuePair<string, string>(_projectDirKey, projectDir)]);
+    }
+
+    // Sets RootNamespace, and ProjectDir when it's given, the way a real build supplies both
+    public static TestAnalyzerConfigOptionsProvider WithRootNamespace(string rootNamespace, string? projectDir = null)
+    {
+        List<KeyValuePair<string, string>> options = [new(_rootNamespaceKey, rootNamespace)];
+        if (projectDir is not null)
+        {
+            options.Add(new KeyValuePair<string, string>(_projectDirKey, projectDir));
+        }
+
+        return new TestAnalyzerConfigOptionsProvider(options);
     }
 
     public override AnalyzerConfigOptions GetOptions(SyntaxTree tree)

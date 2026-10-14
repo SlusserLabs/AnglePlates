@@ -17,6 +17,9 @@ public sealed class TemplateParserTests
     [Arguments("a [[- b -]] c", "Literal 0-2, Variable 6-7 trim-previous trim-next, Literal 11-13")]
     [Arguments("a\r\n[%- x %]", "Literal 0-3, Code 7-8 trim-previous")]
     [Arguments("#type X\nbody", "Directive 6-7, Literal 8-12")]
+    [Arguments("#type X\rbody", "Directive 6-7, Literal 8-12")]
+    [Arguments("#type X\r\nbody", "Directive 6-7, Literal 9-13")]
+    [Arguments("#type X\r\rbody", "Directive 6-7, Literal 8-13")]
     [Arguments("plain", "Literal 0-5")]
     [Arguments("", "")]
     // C# strings and comments hide closers, and an unmatched "[" falls back to the plain search
@@ -54,6 +57,9 @@ public sealed class TemplateParserTests
 
     [Test]
     [Arguments("#type X\r\n#model string\r\nbody", 24)]
+    // A lone CR ends a directive line too, so the rest of the file doesn't become the first directive's value
+    [Arguments("#type X\r#model string\rbody", 22)]
+    [Arguments("#type X\n#model string\nbody", 22)]
     [Arguments("#type X", 7)]
     [Arguments("body", 0)]
     public async Task Parse_DirectiveSection_EndsAtFirstBodyLine(string text, int bodyStart)
@@ -66,6 +72,8 @@ public sealed class TemplateParserTests
     [Test]
     [Arguments("#type X\r\n", "Type #type 0-5 value 6-7")]
     [Arguments("#model\r\n#using A.B", "Model #model 0-6 value 6-6, Using #using 8-14 value 15-18")]
+    [Arguments("#type X\r#model Y\r", "Type #type 0-5 value 6-7, Model #model 8-14 value 15-16")]
+    [Arguments("#model\r#using A.B", "Model #model 0-6 value 6-6, Using #using 7-13 value 14-17")]
     public async Task Parse_Directives_ReturnsNameAndValueSpans(string text, string expected)
     {
         var result = TemplateParser.Parse(text, CancellationToken.None);

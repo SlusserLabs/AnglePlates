@@ -37,7 +37,7 @@ The sample sets `EmitCompilerGeneratedFiles`, so after a build you can read the 
 | --- | --- |
 | `Pipeline` | The values passed between pipeline steps, such as `TemplateFile`, `TemplateContext`, `TemplateResult`, and `GeneratorSettings`, plus helpers like `TemplatePath` and `EquatableArray`. |
 | `Parsing` | `TemplateParser`, `TemplateReader`, `TemplateSyntax`, `CSharpBlockScanner`, and what the parser returns: `ParsedTemplate`, `Token`, and `DirectiveToken`. |
-| `Directives` | `DirectiveReader`, the `TemplateDirectives` it produces, and the `DirectiveKind` and `GenerationTarget` enums. |
+| `Directives` | `DirectiveReader`, the `TemplateDirectives` it produces, `DirectiveSpellCheck` for `SLAP011`, and the `DirectiveKind` and `GenerationTarget` enums. |
 | `Emit` | `TemplateClassWriter`, which writes template classes, and `SupportTypes`, which holds the support types' source. |
 | `Diagnostics` | `DiagnosticDescriptors`, `TemplateError`, `TemplateDiagnostic`, and `UnexpectedValue`, the one helper that throws for an enum value a switch doesn't handle. |
 | `buildTransitive` | The MSBuild files described in [How MSBuild hands over templates](#how-msbuild-hands-over-templates). |
@@ -55,9 +55,9 @@ The smallest useful thing AnglePlates does is turn the text of one template into
 // 1. Split the text into directives and body tokens: literals, C# variables, C# blocks, and comments
 var parsed = TemplateParser.Parse(content, cancellationToken);
 
-// 2. Read and validate the directives (#type, #model, #namespace, #generate, #access, #using)
+// 2. Read and validate the directives, deriving #type and #namespace when they're left out
 var errors = new List<TemplateError>();
-var directives = DirectiveReader.Read(parsed, path, errors);
+var directives = DirectiveReader.Read(parsed, relativePath, templateContext, errors);
 
 // 3. Write one class for each generation target the directives allow
 foreach (var target in new[] { GenerationTarget.Text, GenerationTarget.Utf8 })
@@ -86,7 +86,7 @@ The generator is built against Roslyn 4.14, but at build time it runs on the com
 
 ### Directives
 
-`DirectiveReader.Read` turns the directive tokens into an immutable `TemplateDirectives` with the class name, model type, namespace, generation target, accessibility, encoding, and `#using` list. The encoding is a `TemplateEncoding` value whose names match the `TemplateOptions` presets (`#encode none` reads as `Unencoded`), so the writer emits the name as it is. Each directive kind has its own private method in the reader. Missing, repeated, and invalid directives become `TemplateError` values, and then `Read` returns `null`. The generator converts directive errors and parse errors in one loop. When a template has any errors, the generator reports them and skips that template, so one broken template doesn't stop the rest of the project from building.
+`DirectiveReader.Read` turns the directive tokens into an immutable `TemplateDirectives` with the class name, model type, namespace, generation target, accessibility, encoding, and `#using` list. The encoding is a `TemplateEncoding` value whose names match the `TemplateOptions` presets (`#encode none` reads as `Unencoded`), so the writer emits the name as it is. Each directive kind has its own private method in the reader. When `#type` or `#namespace` is left out, the reader derives it from the template's path relative to the project folder: the class name from the file name, and the namespace from `RootNamespace` plus the folders. A name that can't be derived, a missing `#model`, and repeated or invalid directives become `TemplateError` values, and then `Read` returns `null`. Before any of that, the generator runs `DirectiveSpellCheck` on the first body line, or on the first line of a file with no directives, and reports `SLAP011` when it looks like a misspelled directive. The generator converts directive errors and parse errors in one loop. When a template has any errors, the generator reports them and skips that template, so one broken template doesn't stop the rest of the project from building.
 
 ### Emitting C#
 
@@ -144,7 +144,7 @@ flowchart TD
     A[AdditionalFiles] -->|keep files tagged AnglePlate| B[AnglePlateFiles]
     B -->|read text| C[TemplateFiles]
     C -->|parse, validate, write| D[TemplateResults]
-    P[TemplateContext: project folder] --> D
+    P[TemplateContext: project folder, RootNamespace] --> D
     D --> E[Template sources and diagnostics]
     D -->|collect| G[DuplicateTemplates]
     G --> N[Numbered sources]
@@ -155,9 +155,9 @@ flowchart TD
 
 The generator starts from every additional file in the compilation but keeps only the ones the AnglePlates targets file tagged, before it reads any text. Files from other tools, like `PublicAPI.Shipped.txt`, are never opened. It then reads each tagged file into a `TemplateFile`.
 
-`TemplateResults` runs the three steps from the previous section for each template on its own, with the `TemplateFile` and a `TemplateContext` as its input. Editing one template reruns only that template, and the rest stay cached. `TemplateContext` holds the project values that every template needs, which today is just the project folder. `TemplatePath` uses it to turn the template's full path into a path relative to the project folder, which keeps the generated class documentation and the `<auto-generated>` header the same on every machine. The header names that relative path and no version number, so a package update doesn't touch every generated file. Changing the project folder reruns every template but leaves the file reads and the support types cached. A future setting that changes how every template parses belongs in `TemplateContext` too.
+`TemplateResults` runs the three steps from the previous section for each template on its own, with the `TemplateFile` and a `TemplateContext` as its input. Editing one template reruns only that template, and the rest stay cached. `TemplateContext` holds the project values that every template needs: the project folder and `RootNamespace`. `TemplatePath` uses the folder to turn the template's full path into a path relative to the project folder, which keeps the generated class documentation and the `<auto-generated>` header the same on every machine. The header names that relative path and no version number, so a package update doesn't touch every generated file. The relative path and `RootNamespace` are also where a derived `#type` and `#namespace` come from. Changing either value reruns every template but leaves the file reads and the support types cached. A future setting that changes how every template is read belongs in `TemplateContext` too.
 
-Three output methods turn the results into sources. `AddSupportTypes` adds the support types, `AddTemplateSources` reports each template's diagnostics and adds its sources, and `AddNumberedSources` adds the sources whose hint names collide.
+Three output methods turn the results into sources. `AddSupportTypes` adds the support types. `AddTemplateSources` reports each template's diagnostics and adds its sources. It also decides `SLAP005`, because it's the step that sees both a public template and the support types' access modifier. `AddNumberedSources` adds the sources whose hint names collide, and it skips public classes the same way when the support types are internal.
 
 Each generated file is named after the class it declares, so a text template for `MyApp.Templates.Greeting` becomes `MyApp.Templates.GreetingTextTemplate.g.cs`, and the support types become `SlusserLabs.AnglePlates.TemplateOptions.g.cs` and so on. Roslyn compares these hint names without case and throws on a repeat, so one small collected step looks across all templates. `DuplicateTemplates` finds sources whose names match when case is ignored, sorts them by template path, and numbers the second and later ones `.2`, `.3`, and so on, as in `MyApp.Templates.GreetingTextTemplate.2.g.cs`. Two templates that declare the same class still compile into conflicting members, so the compiler reports those errors; classes that differ only by case, like `App.Page` and `app.page`, are legal and only get numbered names. The step rarely changes, so ordinary template edits leave it cached.
 

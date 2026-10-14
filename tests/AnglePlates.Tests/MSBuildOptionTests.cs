@@ -90,7 +90,7 @@ public sealed class MSBuildOptionTests
     [Arguments("protected internal")]
     [Arguments("Internal;")]
     [Arguments("pub lic")]
-    public async Task BaseAccessModifier_InvalidValue_ReportsInvalidMSBuildPropertyAndGeneratesNothing(string value)
+    public async Task BaseAccessModifier_InvalidValue_ReportsInvalidMSBuildSettingAndGeneratesNothing(string value)
     {
         var result = GeneratorTestHelper.Run(TestAnalyzerConfigOptionsProvider.WithAccessModifier(value),
             RenderingTestHelper.Template("ignored"), new TemplateAdditionalText("<p>No directives</p>", "Emails/a.html", TemplateAdditionalText.Explicit));
@@ -98,7 +98,7 @@ public sealed class MSBuildOptionTests
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(1);
         var diagnostic = result.RunResult.Diagnostics[0];
         await Assert.That(diagnostic.Id).IsEqualTo("SLAP009");
-        await Assert.That(diagnostic.Descriptor.Title.ToString()).IsEqualTo("Invalid AnglePlates MSBuild property");
+        await Assert.That(diagnostic.Descriptor.Title.ToString()).IsEqualTo("Invalid MSBuild setting");
         await Assert.That(diagnostic.Descriptor.Category).IsEqualTo("SlusserLabs.AnglePlates");
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
         await Assert.That(diagnostic.GetMessage()).IsEqualTo(

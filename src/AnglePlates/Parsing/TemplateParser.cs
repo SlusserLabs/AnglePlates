@@ -216,11 +216,8 @@ internal static class TemplateParser
 
             reader.Advance(prefix.Length);
 
-            // Consume the whole line, including its terminator, so the body starts on the next line; the last line may have none
-            if (!reader.TryAdvancePast('\n'))
-            {
-                reader.AdvanceToEnd();
-            }
+            // Consume the whole line, including its terminator, so the body starts on the next line
+            reader.AdvancePastLine();
 
             // Trimming a blank value runs past the line break, so keep its empty span right after the name
             var value = Trim(reader.Text, nameEnd, reader.Position);

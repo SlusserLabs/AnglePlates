@@ -15,7 +15,7 @@ public sealed class LanguageVersionTests
     [Test]
     [Arguments(LanguageVersion.CSharp9, "9.0")]
     [Arguments(LanguageVersion.CSharp10, "10.0")]
-    public async Task LanguageVersion_BelowFloor_ReportsUnsupportedLanguageVersionAndGeneratesNothing(LanguageVersion languageVersion, string displayVersion)
+    public async Task LanguageVersion_BelowFloor_ReportsLanguageVersionTooOldAndGeneratesNothing(LanguageVersion languageVersion, string displayVersion)
     {
         var templates = new[] { RenderingTestHelper.Template("ignored"), new TemplateAdditionalText("<p>No directives</p>", "Emails/a.html", TemplateAdditionalText.Explicit) };
         var compilation = GeneratorTestHelper.CreateCompilation(languageVersion: languageVersion);
@@ -25,7 +25,7 @@ public sealed class LanguageVersionTests
         await Assert.That(result.Diagnostics.Length).IsEqualTo(1);
         var diagnostic = result.Diagnostics[0];
         await Assert.That(diagnostic.Id).IsEqualTo("SLAP010");
-        await Assert.That(diagnostic.Descriptor.Title.ToString()).IsEqualTo("Unsupported C# language version");
+        await Assert.That(diagnostic.Descriptor.Title.ToString()).IsEqualTo("C# version too old");
         await Assert.That(diagnostic.Descriptor.Category).IsEqualTo("SlusserLabs.AnglePlates");
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
         await Assert.That(diagnostic.Descriptor.IsEnabledByDefault).IsTrue();

@@ -15,6 +15,20 @@ internal static class TemplateSyntax
     // Trim markers and directive values trim these characters, and a directive name must be followed by one of them
     public const string Whitespace = " \t\r\n";
 
-    // Used to find the end of the line that follows the directive section
+    // CR, LF, and CRLF all end a line, in directives and everywhere else
+    public const string LineBreaks = "\r\n";
+
     public static bool IsLineBreak(char value) => value is '\r' or '\n';
+
+    // Where the line that starts at the position ends, before its line break
+    public static int LineEnd(string text, int start)
+    {
+        int end = start;
+        while (end < text.Length && !IsLineBreak(text[end]))
+        {
+            end++;
+        }
+
+        return end;
+    }
 }

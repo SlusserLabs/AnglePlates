@@ -151,6 +151,33 @@ public sealed class IncrementalTests
     }
 
     [Test]
+    public async Task Rerun_RootNamespaceChanged_ReprocessesEveryTemplateButNotSupportTypes()
+    {
+        // Neither template has #namespace, so both derive it from RootNamespace and the Templates folder
+        var first = new TemplateAdditionalText("#model string\r\nfirst", "Templates/first.html");
+        var second = new TemplateAdditionalText("#model string\r\nsecond", "Templates/second.html");
+        var compilation = GeneratorTestHelper.CreateCompilation();
+        var before = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([first, second], TestAnalyzerConfigOptionsProvider.WithRootNamespace("Before")));
+
+        var after = GeneratorTestHelper.Run(compilation, before.Driver.WithUpdatedAnalyzerConfigOptions(TestAnalyzerConfigOptionsProvider.WithRootNamespace("After")));
+
+        await Assert.That(after.StepReasons(TemplateGenerator.TemplateFilesStep))
+            .IsEquivalentTo(new[] { IncrementalStepRunReason.Cached, IncrementalStepRunReason.Cached });
+        await Assert.That(after.StepReasons(TemplateGenerator.TemplateResultsStep))
+            .IsEquivalentTo(new[] { IncrementalStepRunReason.Modified, IncrementalStepRunReason.Modified });
+        await Assert.That(first.GetTextCount).IsEqualTo(1);
+        await Assert.That(second.GetTextCount).IsEqualTo(1);
+        foreach (var hintName in GeneratedSources.SupportHintNames)
+        {
+            await Assert.That(ReferenceEquals(after.GeneratedSource(hintName).SourceText, before.GeneratedSource(hintName).SourceText)).IsTrue();
+        }
+
+        await RenderingTestHelper.AssertRendersAsync(before.Compilation, "Before.Templates.First", "first");
+        await RenderingTestHelper.AssertRendersAsync(after.Compilation, "After.Templates.First", "first");
+        await RenderingTestHelper.AssertRendersAsync(after.Compilation, "After.Templates.Second", "second");
+    }
+
+    [Test]
     public async Task Rerun_LanguageVersionRaisedToFloor_GeneratesFromCachedTemplates()
     {
         var template = RenderingTestHelper.Template("version");
