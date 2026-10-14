@@ -1447,29 +1447,31 @@ Every tracked file and the relevant untracked state. "Phase" refers to [17](#17-
 
 ## Implementation status
 
-As of 2026-10-14, Phases 0 through 7 are implemented and committed on the `release-1.0` branch. Nothing has been pushed through a pull request yet, so no CI run has happened on GitHub.
+As of 2026-10-14, Phases 0 through 7 are implemented on the `release-1.0` branch, and [pull request #1](https://github.com/SlusserLabs/AnglePlates/pull/1) carries them to `main`. All four CI legs pass on it.
 
 | Phase | Status | Key commits |
 | --- | --- | --- |
 | 0 | Done | `99864e6` Phase 0: editorconfig, gitattributes, dictionary, and agent rules |
-| 1 | Done locally; CI acceptance pending | `79754a4` Phase 1: CI workflow and package validation hardening |
+| 1 | Done | `79754a4` Phase 1: CI workflow and package validation hardening |
 | 2 | Done | `5a2d162` Phase 2a: readable hint names, versionless header, test reorganization; `138f53e` Phase 2b: restructure the generator by concern |
 | 3 | Done | `c0f0c0d` Phase 3: C#-aware block scanner; `08cc9fc` Apply the owner's 2026-10-14 decisions (fallback removed) |
-| 4 | Done locally; CI acceptance and the owner's consolidated snapshot review pending | `fae6754` Phase 4a: runtime test project and output-parity matrix; `7304b48` Phase 4b: the emitted 1.0 API; `18b7569` Phase 4b2: keep dynamic C# variables working; `506226d` Phase 4c: optional #type and #namespace, and the 1.0 diagnostics registry; `165bd07` Phase 4d: CI coverage gate and README example tests; `08cc9fc` Apply the owner's 2026-10-14 decisions (nullable overload restored) |
-| 5 | Done locally; CI acceptance pending | `0c58972` Phase 5a: build assets, default-items switch, metadata, and icon; `57d5fac` Phase 5b: package consumers and Native AOT proof; `2448260` Phase 5c: generate nothing where the AnglePlates props aren't imported |
+| 4 | Done; the owner's consolidated snapshot review in the pull request is pending | `fae6754` Phase 4a: runtime test project and output-parity matrix; `7304b48` Phase 4b: the emitted 1.0 API; `18b7569` Phase 4b2: keep dynamic C# variables working; `506226d` Phase 4c: optional #type and #namespace, and the 1.0 diagnostics registry; `165bd07` Phase 4d: CI coverage gate and README example tests; `08cc9fc` Apply the owner's 2026-10-14 decisions (nullable overload restored) |
+| 5 | Done | `0c58972` Phase 5a: build assets, default-items switch, metadata, and icon; `57d5fac` Phase 5b: package consumers and Native AOT proof; `2448260` Phase 5c: generate nothing where the AnglePlates props aren't imported |
 | 6 | Done; the owner's voice sign-off is pending | `0cf2609` Phase 6a: README rewrite and consumer docs; `bc15a06` Phase 6b: contributor docs, OSS files, sample, and link tests |
-| 7 | Done locally; a dispatched run is pending | `0129e70` Phase 7: release workflow and publishing guide; `841e3bf` Spec: set the publish switch before publishing the Release |
-| 0-7 | Audit fixes | `9f527d9` Final audit fixes for Phases 0-7; `ffcdf3a` Keep snapshot file names short enough for Windows clones |
+| 7 | Done; a dispatched run waits for `release.yml` to reach `main` | `0129e70` Phase 7: release workflow and publishing guide; `841e3bf` Spec: set the publish switch before publishing the Release |
+| 0-7 | Audit fixes | `9f527d9` Final audit fixes for Phases 0-7; `ffcdf3a` Keep snapshot file names short enough for Windows clones; `268ebf8` Approve the icon and make local Native AOT validation reliable on Windows; `6e69bb7` CI: splat the sdk-floor SDK version as a hashtable |
 | 8, 9 | Not started | Waits on the owner ([19](#19-owner-only-tasks-and-remaining-inputs)) |
 
 The owner's 2026-10-14 answers added two code changes, committed with this revision in `08cc9fc`: the scanner reports SLAP004 instead of falling back to a plain search ([7.4](#74-fallbacks)), and the base classes get the nullable `Write<T>(T?)` overload back ([4.4](#44-support-base-classes)).
 
-**Acceptance items that need GitHub.** These can't be checked locally. They need the GitHub CLI installed and authenticated (it isn't on this machine), or the owner opening the pull request from `release-1.0`:
+**CI evidence** (CI run 38621469699 on the pull request):
 
-- Phase 1: all four CI legs (`windows`, `ubuntu`, `latest-sdk`, `sdk-floor`) green on a pull request, a deliberately broken consumer uploading its binlog from `$RUNNER_TEMP/validation`, and the `sdk-floor` log showing SDK `10.0.100`.
-- Phase 4: Runtime.Tests and the 90% coverage gate running in CI.
-- Phase 5: `validate-package.ps1` passing on all four legs, including Native AOT on Windows, which has never run locally.
-- Phase 7: a dispatched `release.yml` run that passes `validate` and `pack` and stops at `publish-int` with the "owner inputs pending" message.
+- Phase 1: all four legs pass. The `sdk-floor` log reads "with .NET SDK 10.0.100". An earlier run failed on `sdk-floor` because `ci.yml` splatted `-SdkVersion` as an array, which sent the version to `-Source`. That failure uploaded `failure-sdk-floor` with the consumer binlog from `$RUNNER_TEMP/validation`, which proves the failure upload works. The splat is fixed in `6e69bb7`.
+- Phase 4: Runtime.Tests runs on `windows` and `ubuntu` (765 generator tests and 315 runtime tests on each), and the coverage gate passes: generator branch coverage 99.50% and emitted-code branch coverage 99.73%.
+- Phase 5: `validate-package.ps1` passes on all four legs. The Native AOT executable is 1,752,064 bytes on Windows, 1,948,024 bytes on `ubuntu`, and 1,968,544 bytes on `sdk-floor`. The AOT canary fails to publish on every leg, as it should.
+- Locally, the full Windows validation (Native AOT included) passed on 2026-10-14 once the Visual Studio C++ workload was installed. The script puts the Visual Studio Installer folder on `PATH` because `vcvarsall.bat` runs `vswhere.exe` by name.
+
+**Still open:** Phase 7's dispatched `release.yml` run, which has to stop at `publish-int` with the "owner inputs pending" message. GitHub dispatches only workflows that exist on the default branch, so this waits until the owner merges the pull request. The repository has no secrets, variables, or environments, so that run can't publish anything.
 
 ## 17. Execution plan
 
@@ -1614,8 +1616,8 @@ This is where the owner provides everything in [19](#19-owner-only-tasks-and-rem
 
 As of 2026-10-14, in order:
 
-1. Install and authenticate the GitHub CLI (`winget install GitHub.cli`, then `gh auth login`), or have the owner open the pull request from `release-1.0`. Then get all four CI legs green and fix whatever CI finds. Native AOT on Windows has never run locally, so expect that leg to need attention. This closes the GitHub-only acceptance items in [Implementation status](#implementation-status), including the deliberate-failure binlog upload, the `sdk-floor` log, and a dispatched `release.yml` run that stops at `publish-int`.
-2. The owner does the consolidated Phase 4 snapshot review in that pull request and records it there ([19](#19-owner-only-tasks-and-remaining-inputs), item 2).
+1. ~~Install and authenticate the GitHub CLI and get all four CI legs green.~~ **Done** on [pull request #1](https://github.com/SlusserLabs/AnglePlates/pull/1) ([Implementation status](#implementation-status)).
+2. The owner does the consolidated Phase 4 snapshot review in pull request #1, records it there ([19](#19-owner-only-tasks-and-remaining-inputs), item 2), and merges it. After the merge, an agent dispatches `release.yml` from `main` to confirm it stops at `publish-int` with the "owner inputs pending" message.
 3. The owner answers the open questions in [19](#19-owner-only-tasks-and-remaining-inputs).
 4. Phase 8: the owner's inputs, then the preview preflight and the int.nugettest.org rehearsal.
 5. Phase 9: the stable 1.0.0 release, gated by the owner.
