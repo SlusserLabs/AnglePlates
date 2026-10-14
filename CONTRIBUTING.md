@@ -33,7 +33,7 @@ Some tests compare generated code with reviewed snapshots in `tests/AnglePlates.
 - [Developing AnglePlates](docs/development.md) walks through the generator, the MSBuild files, and package validation.
 - [Testing AnglePlates](docs/testing.md) explains the three test layers and their helpers.
 - [Lexicon](docs/lexicon.md) has the names we use for things, so a fourth name for "C# variable" doesn't sneak in.
-- [Releasing AnglePlates](docs/releasing.md) covers versions and CI.
+- [Releasing AnglePlates](docs/releasing.md) covers versions, CI, and publishing.
 
 ## AI-assisted contributions
 

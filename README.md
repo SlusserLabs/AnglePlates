@@ -14,7 +14,7 @@ Add the package:
 dotnet package add SlusserLabs.AnglePlates
 ```
 
-That's the stable package from nuget.org. Previews live only on int.nugettest.org, and [Releasing AnglePlates](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/releasing.md) shows how to install one.
+That's the stable package from nuget.org. Previews live only on int.nugettest.org, and [Releasing AnglePlates](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/releasing.md#publish-a-preview) shows how to install one.
 
 Write a model. It can be any type you like:
 

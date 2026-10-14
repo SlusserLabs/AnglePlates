@@ -1,0 +1,236 @@
+# Packs AnglePlates once and publishes that exact package. A manual run publishes a preview to int.nugettest.org, or
+# with check-nuget-org only proves that nuget.org trusted publishing works. A published GitHub Release publishes the
+# stable version to nuget.org after the owner approves the nuget-org deployment. docs/releasing.md explains every path.
+# Both trusted-publishing policies name this file, so don't rename it.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      check-nuget-org:
+        description: Only check that nuget.org trusted publishing works; builds and publishes nothing
+        type: boolean
+        default: false
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+# Runs for the same ref queue instead of replacing each other, so a publish is never cut off halfway
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Runs the whole CI workflow first: all four legs build and validate the package, and the windows and ubuntu legs also run the tests, the coverage gate, and the sample
+  validate:
+    if: ${{ !inputs.check-nuget-org }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  # Builds and packs the one package that gets published, validates it, and hands it to the publish jobs
+  pack:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DOTNET_NOLOGO: true
+    steps:
+      # A release checks out its tag explicitly. The full history and every branch come along, so the tag check can ask
+      # whether the commit is on origin/main. A manual run checks out the commit it was started on.
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || '' }}
+          fetch-depth: 0
+
+      # Fails if the checkout isn't the commit the run was started for, which happens when a tag moves after its release
+      - name: Confirm the checked-out commit
+        run: |
+          head="$(git rev-parse HEAD)"
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "::error::Checked out $head, but the run is for $GITHUB_SHA. Did the tag move after the release was published?"
+            exit 1
+          fi
+
+      # Installs the SDK that global.json asks for
+      - name: Set up the global.json SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Works out the package version. A manual run makes VersionPrefix-preview.<run number>. A release needs a stable
+      # vX.Y.Z tag (previews never go to nuget.org) that equals v$(VersionPrefix) and points at a commit on main.
+      - name: Choose the version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          prefix="$(dotnet msbuild src/AnglePlates/AnglePlates.csproj -getProperty:VersionPrefix)"
+          prefix="$(echo "$prefix" | tr -d '[:space:]')"
+          if [ -z "$prefix" ]; then
+            echo "::error::Couldn't read VersionPrefix from Directory.Build.props."
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "release" ]; then
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::The tag '$TAG' isn't a stable vX.Y.Z tag. Previews go to int.nugettest.org from a manual run, never from a release."
+              exit 1
+            fi
+            if [ "$TAG" != "v$prefix" ]; then
+              echo "::error::The tag '$TAG' doesn't match VersionPrefix $prefix, which expects v$prefix."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "::error::The tag '$TAG' points at $GITHUB_SHA, which isn't on main."
+              exit 1
+            fi
+            version="${TAG#v}"
+          else
+            version="$prefix-preview.$GITHUB_RUN_NUMBER"
+          fi
+
+          echo "Package version: $version"
+          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+
+      # Restores every project in the solution
+      - name: Restore
+        run: dotnet restore AnglePlates.slnx
+
+      # Builds in Release with the package version, failing on any warning
+      - name: Build
+        run: dotnet build AnglePlates.slnx -c Release --no-restore -warnaserror -p:Version="$PACKAGE_VERSION"
+
+      # Packs the .nupkg and .snupkg pair from the build above
+      - name: Pack
+        run: dotnet pack src/AnglePlates/AnglePlates.csproj -c Release --no-build -o artifacts/package -p:Version="$PACKAGE_VERSION"
+
+      # Installs the Native AOT linker and zlib headers, which validate-package.ps1 checks for
+      - name: Install Native AOT prerequisites
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # Runs every registered consumer against this exact package, including Native AOT, and checks that the package
+      # records the commit being published
+      - name: Validate the package
+        shell: pwsh
+        run: ./eng/validate-package.ps1 -Version $env:PACKAGE_VERSION -ExpectedCommit $env:GITHUB_SHA -KeepOutput "$env:RUNNER_TEMP/validation"
+
+      # Hands the validated pair to the publish jobs; ci.yml's artifacts use other names, so they don't clash in this run
+      - name: Upload the package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-package
+          if-no-files-found: error
+          path: |
+            artifacts/package/*.nupkg
+            artifacts/package/*.snupkg
+
+      # Keeps the consumer binlogs when the build, pack, or validation fails
+      - name: Upload failure details
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failure-pack
+          if-no-files-found: ignore
+          path: ${{ runner.temp }}/validation/**/*.binlog
+
+  # Publishes a preview to int.nugettest.org. It has no environment, because the int trusted-publishing policy names none.
+  publish-int:
+    needs: pack
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.check-nuget-org }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Stops with a clear message until the owner has added the NuGet profile name, instead of failing inside NuGet/login
+      - name: Check for owner inputs
+        env:
+          NUGET_LOGIN_USER: ${{ secrets.NUGET_INT_USER || secrets.NUGET_USER }}
+        run: |
+          if [ -z "$NUGET_LOGIN_USER" ]; then
+            echo "::error title=Owner inputs pending::owner inputs pending; see Phase 8. The NUGET_USER secret (or NUGET_INT_USER) is empty. The owner-input checklist is in docs/releasing.md: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/releasing.md#owner-inputs"
+            exit 1
+          fi
+
+      # Gets the package pair the pack job validated; this job builds nothing
+      - name: Download the package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-package
+          path: package
+
+      # Trades the run's OIDC token for an int.nugettest.org API key, which lasts an hour, right before the push
+      - name: Log in to int.nugettest.org
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_INT_USER || secrets.NUGET_USER }}
+          token-service-url: https://int.nugettest.org/api/v2/token
+          audience: https://int.nugettest.org
+
+      # Pushes only the .nupkg; the matching .snupkg goes along on its own. A reused version fails instead of being skipped.
+      - name: Push to int.nugettest.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "package/*.nupkg" --api-key "$NUGET_API_KEY" --source https://apiint.nugettest.org/v3/index.json
+
+  # Publishes the stable version to nuget.org. The owner sets the variable and approves the nuget-org environment first.
+  publish-nuget:
+    needs: pack
+    if: ${{ github.event_name == 'release' && vars.NUGET_ORG_PUBLISH_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: nuget-org
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      # Gets the package pair the pack job validated; this job builds nothing
+      - name: Download the package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-package
+          path: package
+
+      # Trades the run's OIDC token for a nuget.org API key, which lasts an hour, right before the push
+      - name: Log in to nuget.org
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # Pushes only the .nupkg; the matching .snupkg goes along on its own. A reused version fails instead of being skipped.
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "package/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+
+      # Attaches the package pair and its checksums to the GitHub Release
+      - name: Upload to the GitHub Release
+        working-directory: package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          sha256sum -- *.nupkg *.snupkg > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$TAG" ./*.nupkg ./*.snupkg SHA256SUMS
+
+  # Proves the nuget.org trusted-publishing policy hands out a key, and pushes nothing. It waits for the owner's approval.
+  verify-nuget-login:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.check-nuget-org }}
+    runs-on: ubuntu-latest
+    environment: nuget-org
+    permissions:
+      id-token: write
+    steps:
+      # Gets a nuget.org API key and stops; the key expires on its own within the hour
+      - name: Log in to nuget.org
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_USER }}
