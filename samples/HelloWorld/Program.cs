@@ -19,9 +19,10 @@ internal static class Program
         HelloWorldTextTemplate.Default.Render(model, Console.Out);
         Console.WriteLine();
 
-        // The email template says #encode none, so its Default instance writes the model's text unchanged.
-        // RenderToString buffers the whole output, which is fine for something email-sized.
-        string email = WelcomeEmailTextTemplate.Default.RenderToString(model);
+        // Encoder = null turns encoding off, so the email writes the model's text unchanged. RenderToString buffers the
+        // whole output, which is fine for something email-sized.
+        var emailTemplate = new WelcomeEmailTextTemplate(new TemplateOptions { Encoder = null });
+        string email = emailTemplate.RenderToString(model);
         Console.Write(email);
     }
 }

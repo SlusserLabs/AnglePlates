@@ -17,7 +17,7 @@ public sealed class ChildTemplateTests
     [Test]
     public async Task Render_UnencodedParent_RendersUnencodedChild()
     {
-        var parent = new OrderTextTemplate(TemplateOptions.Unencoded);
+        var parent = new OrderTextTemplate(new TemplateOptions { Encoder = null });
 
         var output = parent.RenderToString(_order);
 

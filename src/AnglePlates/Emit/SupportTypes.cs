@@ -40,27 +40,6 @@ internal static class SupportTypes
         {{accessModifier}} sealed class TemplateOptions
         {
             /// <summary>
-            /// Gets options that HTML-encode C# variables with <see cref="global::System.Text.Encodings.Web.HtmlEncoder.Default" />.
-            /// Templates use these unless their <c>#encode</c> directive picks another preset.
-            /// </summary>
-            public static TemplateOptions Html { get; } = new();
-
-            /// <summary>
-            /// Gets options that write C# variables as they are, with no encoding.
-            /// </summary>
-            public static TemplateOptions Unencoded { get; } = new() { Encoder = null };
-
-            /// <summary>
-            /// Gets options that encode C# variables for JavaScript strings with <see cref="global::System.Text.Encodings.Web.JavaScriptEncoder.Default" />.
-            /// </summary>
-            public static TemplateOptions JavaScript { get; } = new() { Encoder = global::System.Text.Encodings.Web.JavaScriptEncoder.Default };
-
-            /// <summary>
-            /// Gets options that encode C# variables for URLs with <see cref="global::System.Text.Encodings.Web.UrlEncoder.Default" />.
-            /// </summary>
-            public static TemplateOptions Url { get; } = new() { Encoder = global::System.Text.Encodings.Web.UrlEncoder.Default };
-
-            /// <summary>
             /// Gets the encoder for C# variables, or <see langword="null" /> to write them unencoded.
             /// The default is <see cref="global::System.Text.Encodings.Web.HtmlEncoder.Default" />.
             /// </summary>

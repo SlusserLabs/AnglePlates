@@ -47,6 +47,7 @@ public sealed class DirectiveReaderTests
     [Arguments(" #type Other")]
     [Arguments("\r\n#type Other")]
     [Arguments("#not directive")]
+    [Arguments("#encode none")]
     [Arguments("</html>\r\n#not directive")]
     public async Task DirectiveSection_NonDirectiveLine_EndsSectionAsLiteral(string body)
     {
@@ -152,7 +153,7 @@ public sealed class DirectiveReaderTests
         await Assert.That(sources[0]).Contains("namespace MyApp.Templates;");
         await Assert.That(sources[0]).Contains("internal sealed partial class GreetingTextTemplate");
         await Assert.That(sources[1]).Contains("internal sealed partial class GreetingUtf8Template");
-        await Assert.That(sources.All(source => source.Contains("TemplateOptions.Html)", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(sources.All(source => source.Contains(": base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())", StringComparison.Ordinal))).IsTrue();
         await RenderingTestHelper.AssertRendersAsync(result.Compilation, "MyApp.Templates.Greeting", "&lt;value&gt;");
     }
 
@@ -279,7 +280,6 @@ public sealed class DirectiveReaderTests
     [Arguments("#namespace Other", "#namespace")]
     [Arguments("#generate Text", "#generate")]
     [Arguments("#access public", "#access")]
-    [Arguments("#encode none", "#encode")]
     [Arguments("#using System", "#using System")]
     [Arguments("#type\t", "#type")]
     public async Task Directive_Repeated_ReportsDuplicate(string line, string label)
@@ -319,10 +319,6 @@ public sealed class DirectiveReaderTests
     [Arguments("#access protected internal", "'public' or 'internal'")]
     [Arguments("#access", "'public' or 'internal'")]
     [Arguments("#generate", "'Text' or 'Utf8'")]
-    [Arguments("#encode htm", "'html', 'none', 'javascript', or 'url'")]
-    [Arguments("#encode raw", "'html', 'none', 'javascript', or 'url'")]
-    [Arguments("#encode html none", "'html', 'none', 'javascript', or 'url'")]
-    [Arguments("#encode", "'html', 'none', 'javascript', or 'url'")]
     [Arguments("#using", "a namespace name such as 'System.Linq'")]
     public async Task Directive_InvalidValue_ReportsAtValue(string line, string expected)
     {
@@ -399,27 +395,6 @@ public sealed class DirectiveReaderTests
             await Assert.That(output.text).IsEqualTo("&lt;value&gt;");
             await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(output.text))).IsTrue();
         }
-    }
-
-    [Test]
-    [Arguments("", "Html", "&lt;b&gt; &amp;")]
-    [Arguments("#encode html\r\n", "Html", "&lt;b&gt; &amp;")]
-    [Arguments("#encode HTML\r\n", "Html", "&lt;b&gt; &amp;")]
-    [Arguments("#encode none\r\n", "Unencoded", "<b> &")]
-    [Arguments("#encode None\r\n", "Unencoded", "<b> &")]
-    [Arguments("#encode javascript\r\n", "JavaScript", "\\u003Cb\\u003E \\u0026")]
-    [Arguments("#encode JavaScript\r\n", "JavaScript", "\\u003Cb\\u003E \\u0026")]
-    [Arguments("#encode url\r\n", "Url", "%3Cb%3E%20%26")]
-    [Arguments("#encode URL\r\n", "Url", "%3Cb%3E%20%26")]
-    public async Task Encode_AnyCasing_FallsBackToMatchingPreset(string encodeDirective, string preset, string expected)
-    {
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(TemplateText.Header + encodeDirective + "[[ model ]]"));
-        var sources = result.TemplateSources;
-
-        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(sources.Length).IsEqualTo(2);
-        await Assert.That(sources.All(source => source.Contains($": base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.{preset})", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(RenderingTestHelper.Render(result.Compilation, model: "<b> &").text).IsEqualTo(expected);
     }
 
     [Test]

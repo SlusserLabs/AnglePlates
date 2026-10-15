@@ -25,7 +25,6 @@ public sealed class DirectiveSpellCheckTests
     [Arguments("#nmaespace Consumer", "#namespace")]
     [Arguments("#acess internal", "#access")]
     [Arguments("#genrate Text", "#generate")]
-    [Arguments("#encdoe none", "#encode")]
     [Arguments("#usign System", "#using")]
     [Arguments("#tpye\tExample", "#type")]
     [Arguments("#modle", "#model")]

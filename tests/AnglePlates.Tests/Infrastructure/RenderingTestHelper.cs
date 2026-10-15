@@ -24,7 +24,7 @@ internal static class RenderingTestHelper
     {
         using var generated = GeneratedAssembly.Load(compilation);
 
-        // Without a NullVariable the templates use their own default options, which is the preset #encode picked.
+        // Without a NullVariable the templates fall back to default options.
         // Reflection can still call the init accessor.
         object? options = null;
         if (nullVariable is not null)

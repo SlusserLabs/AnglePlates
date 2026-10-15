@@ -84,7 +84,7 @@ public sealed class ReadmeExampleTests
         var order = new OrderModel { Number = "1001" };
         order.Lines.Add(new OrderLineModel { Name = "Fish & Chips", Quantity = 2 });
 
-        var output = TemplateOutput.RenderText(new OrderTextTemplate(TemplateOptions.Unencoded), order);
+        var output = TemplateOutput.RenderText(new OrderTextTemplate(new TemplateOptions { Encoder = null }), order);
 
         await Assert.That(output).IsEqualTo("<h1>Order 1001</h1>\n<ul>\n<li>2 x Fish & Chips</li>\n</ul>\n");
     }

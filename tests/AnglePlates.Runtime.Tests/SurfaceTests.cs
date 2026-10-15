@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using SlusserLabs.AnglePlates.Runtime.Tests.Templates;
 using TUnit.Assertions;
@@ -50,8 +51,13 @@ public sealed class SurfaceTests
     public async Task Constructor_NullOptionsToBase_FallsBackInsteadOfThrowing()
     {
         // The generated constructor never passes null to the base class, which would throw
-        await Assert.That(new VariableTextTemplate(null).Options).IsSameReferenceAs(TemplateOptions.Html);
-        await Assert.That(new OrderTextTemplate(null).Options).IsSameReferenceAs(TemplateOptions.Html);
+        var variable = new VariableTextTemplate(null).Options;
+        var order = new OrderTextTemplate(null).Options;
+
+        await Assert.That(variable.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
+        await Assert.That(variable.NullVariable).IsNull();
+        await Assert.That(order.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
+        await Assert.That(order.NullVariable).IsNull();
     }
 
     [Test]

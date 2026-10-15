@@ -121,8 +121,8 @@ internal sealed class TemplateClassWriter
         _writer.Indent++;
     }
 
-    // The constructor falls back to the preset that #encode picked, so creating a template allocates no options, and
-    // Default is a shared instance that uses that preset
+    // The constructor falls back to default options, so only a template created without options allocates one small
+    // immutable object, and Default is a shared instance that uses them
     private void WriteConstructorAndDefault()
     {
         _writer.WriteLine("/// <summary>");
@@ -131,7 +131,7 @@ internal sealed class TemplateClassWriter
         _writer.WriteLine("/// <param name=\"options\">The options that control how C# variables are written, or <see langword=\"null\" /> for the template's default options.</param>");
         _writer.WriteLine($"public {_typeName}(global::SlusserLabs.AnglePlates.TemplateOptions? options = null)");
         _writer.Indent++;
-        _writer.WriteLine($": base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.{_directives.Encoding})");
+        _writer.WriteLine($": base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())");
         _writer.Indent--;
         _writer.WriteLine("{");
         _writer.WriteLine("}");
@@ -207,8 +207,6 @@ internal sealed class TemplateClassWriter
             }
         }
 
-        // Unbalanced braces in C# blocks can leave the indent anywhere, so finish the method where it started
-        _writer.Indent = indent + 1;
         if (isAsync)
         {
             WriteBlankLine();
@@ -219,9 +217,9 @@ internal sealed class TemplateClassWriter
         _writer.WriteLine("}");
     }
 
-    // Finds where a run of literal text ends. Escaped openers split literal text into adjacent tokens, and comments and
-    // empty blocks sit between literals without writing anything, so all of them join the run. A trim marker on one of
-    // those tokens ends the run, because it trims the literal next to it. The run ends after its last literal token.
+    // Finds where a run of literal text ends. Comments and empty blocks sit between literals without writing anything,
+    // so literals merge across them. A trim marker on one of those tokens ends the run, because it trims the literal
+    // next to it. The run ends after its last literal token.
     private int FindLiteralRunEnd(int start)
     {
         var tokens = _template.Tokens;
@@ -252,30 +250,18 @@ internal sealed class TemplateClassWriter
         bool trimStart = start > 0 && tokens[start - 1].TrimNext;
         bool trimEnd = end < tokens.Count && tokens[end].TrimPrevious;
 
-        // A trim marker reaches only the literal tokens next to it, so trimming stops at a comment or empty block inside
-        // the run, the same as it does when they aren't merged. The head and tail are the literal tokens at each edge.
-        int headEnd = start + 1;
-        while (headEnd < end && tokens[headEnd].Type == TokenType.Literal)
-        {
-            headEnd++;
-        }
-
+        // A trim marker reaches only the literal token next to it, so trimming stops at a comment or empty block inside
+        // the run, the same as it does when they aren't merged. The head and tail are the literals at each edge.
         ReadOnlySpan<char> literal;
-        if (headEnd == end)
+        if (end == start + 1)
         {
-            literal = Trim(JoinLiterals(start, end), trimStart, trimEnd);
+            literal = Trim(Slice(tokens[start].Span), trimStart, trimEnd);
         }
         else
         {
-            int tailStart = end - 1;
-            while (tokens[tailStart - 1].Type == TokenType.Literal)
-            {
-                tailStart--;
-            }
-
-            var head = Trim(JoinLiterals(start, headEnd), trimStart, trimEnd: false).ToString();
-            var tail = Trim(JoinLiterals(tailStart, end), trimStart: false, trimEnd).ToString();
-            literal = (head + ConcatenateLiterals(headEnd, tailStart) + tail).AsSpan();
+            var head = Trim(Slice(tokens[start].Span), trimStart, trimEnd: false).ToString();
+            var tail = Trim(Slice(tokens[end - 1].Span), trimStart: false, trimEnd).ToString();
+            literal = (head + ConcatenateLiterals(start + 1, end - 1) + tail).AsSpan();
         }
 
         if (literal.IsEmpty)
@@ -302,25 +288,32 @@ internal sealed class TemplateClassWriter
     }
 
     // Writes one C# variable as one call. The base class overloads pick the conversion, and an expression that isn't one
-    // argument, such as "1, 2", fails to compile at the template location.
+    // argument, such as "1, 2", fails to compile at the template location. Every line sits at column 0, so the #line
+    // offset is the call's length; see WriteCodeBlock for why that maps every line.
     private void WriteVariable(Token token, bool checkFlush)
     {
-        var variable = Slice(token.Span).ToString();
         var (call, end) = checkFlush ? (_flushingWrite, _flushingWriteEnd) : (_write, _writeEnd);
         BeginStatement();
+        int indent = _writer.Indent;
+        _writer.Indent = 0;
         WriteLineMapping(token.Span, call.Length);
-        _writer.WriteLine($"{call}{variable}{end}");
+        _writer.WriteLine($"{call}{Slice(token.Span).ToString()}{end}");
         WriteDefaultLineMapping();
+        _writer.Indent = indent;
     }
 
-    // Copies a C# block as it is
+    // Copies the C# at the generated type's indent (column 0). Nothing reads it; the template's own line breaks and
+    // columns are kept, so #line maps every line exactly. WriteLine(string) indents only before its first character,
+    // which is none at indent 0, and writes the embedded line breaks as they are, so the block needs no splitting.
     private void WriteCodeBlock(Token token)
     {
-        var code = Slice(token.Span).ToString();
         BeginStatement();
+        int indent = _writer.Indent;
+        _writer.Indent = 0;
         WriteLineMapping(token.Span, 0);
-        _writer.WriteLine(code);
+        _writer.WriteLine(Slice(token.Span).ToString());
         WriteDefaultLineMapping();
+        _writer.Indent = indent;
     }
 
     // Separates the first statement of a render method from the method's prelude
@@ -361,8 +354,11 @@ internal sealed class TemplateClassWriter
             end = new LinePosition(start.Line, start.Character + 1);
         }
 
+        // The compiler rejects an offset of 0 (CS8938), but a directive without an offset means the same thing: the span
+        // starts at the first column of the generated line, which is where a C# block starts at column 0
         int offset = _writer.Indent * _indentString.Length + prefixLength;
-        _source.WriteLine($"#line ({start.Line + 1}, {start.Character + 1}) - ({end.Line + 1}, {end.Character}) {offset} \"{_absolutePath}\"");
+        var offsetText = offset == 0 ? string.Empty : $" {offset}";
+        _source.WriteLine($"#line ({start.Line + 1}, {start.Character + 1}) - ({end.Line + 1}, {end.Character}){offsetText} \"{_absolutePath}\"");
     }
 
     // Ends a mapping so the generated lines after it report their own locations
@@ -383,12 +379,6 @@ internal sealed class TemplateClassWriter
     private ReadOnlySpan<char> Slice(TextSpan span)
     {
         return _template.Text.AsSpan(span.Start, span.Length);
-    }
-
-    // Joins literal tokens without copying when there's only one
-    private ReadOnlySpan<char> JoinLiterals(int start, int end)
-    {
-        return end == start + 1 ? Slice(_template.Tokens[start].Span) : ConcatenateLiterals(start, end).AsSpan();
     }
 
     private static ReadOnlySpan<char> Trim(ReadOnlySpan<char> literal, bool trimStart, bool trimEnd)

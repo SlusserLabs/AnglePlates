@@ -108,12 +108,18 @@ public sealed class OutputTests
     }
 
     [Test]
-    public async Task Constructor_WithoutOptions_UsesSharedHtmlPreset()
+    public async Task Constructor_WithoutOptions_UsesDefaultValuedOptions()
     {
-        // A template without #encode falls back to the Html preset instead of allocating options per instance
-        await Assert.That(new VariableTextTemplate().Options).IsSameReferenceAs(TemplateOptions.Html);
-        await Assert.That(new VariableUtf8Template(null).Options).IsSameReferenceAs(TemplateOptions.Html);
-        await Assert.That(VariableTextTemplate.Default.Options).IsSameReferenceAs(TemplateOptions.Html);
-        await Assert.That(VariableUtf8Template.Default.Options).IsSameReferenceAs(TemplateOptions.Html);
+        // A template created without options gets its own default-valued options; Default shares one instance
+        var text = new VariableTextTemplate();
+        var utf8 = new VariableUtf8Template(null);
+
+        await Assert.That(text.Options).IsNotSameReferenceAs(utf8.Options);
+        await Assert.That(text.Options.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
+        await Assert.That(text.Options.NullVariable).IsNull();
+        await Assert.That(utf8.Options.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
+        await Assert.That(utf8.Options.NullVariable).IsNull();
+        await Assert.That(VariableTextTemplate.Default.Options).IsSameReferenceAs(VariableTextTemplate.Default.Options);
+        await Assert.That(VariableUtf8Template.Default.Options).IsSameReferenceAs(VariableUtf8Template.Default.Options);
     }
 }
