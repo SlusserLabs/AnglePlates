@@ -309,36 +309,18 @@ internal sealed class TemplateClassWriter
         var (call, end) = checkFlush ? (_flushingWrite, _flushingWriteEnd) : (_write, _writeEnd);
         BeginStatement();
         WriteLineMapping(token.Span, call.Length);
-
-        // A // comment at the end of the variable would comment out the rest of its line, so the rest of the call
-        // starts on the next line
-        if (CSharpBlockScanner.EndsWithLineComment(variable))
-        {
-            _writer.WriteLine($"{call}{variable}");
-            _writer.Indent++;
-            _writer.WriteLine(end);
-            _writer.Indent--;
-        }
-        else
-        {
-            _writer.WriteLine($"{call}{variable}{end}");
-        }
-
+        _writer.WriteLine($"{call}{variable}{end}");
         WriteDefaultLineMapping();
     }
 
-    // Copies a C# block as it is. Indenting around braces only affects readability: a block moves out for each brace it
-    // closes from an earlier block, and the code after it moves in for each brace it leaves open.
+    // Copies a C# block as it is
     private void WriteCodeBlock(Token token)
     {
         var code = Slice(token.Span).ToString();
-        var (closed, opened) = CSharpBlockScanner.CountBraces(code);
         BeginStatement();
-        _writer.Indent -= closed;
         WriteLineMapping(token.Span, 0);
         _writer.WriteLine(code);
         WriteDefaultLineMapping();
-        _writer.Indent += opened;
     }
 
     // Separates the first statement of a render method from the method's prelude

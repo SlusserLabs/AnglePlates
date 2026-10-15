@@ -84,12 +84,12 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 
 ### Phase B1: the parser and the directives ([details](#phase-b1-the-parser-and-the-directives))
 
-- [ ] `TemplateSyntax` rewritten ([7.4](#74-templatesyntax)).
-- [ ] `TemplateParser` rewritten ([7](#7-the-bracket-level-parser)).
-- [ ] `CSharpBlockScanner.cs`, `TemplateReader.cs`, and `CSharpBlockScannerTests.cs` deleted; the class writer's two scanner calls removed with no other writer change.
-- [ ] `TemplateParserTests` rewritten with every [11.2](#112-generator-tests) row, including the adjacent-literal invariant and the two linear-time guards.
-- [ ] `DiagnosticTests` updated for SLAP004 levels ([11.2](#112-generator-tests)).
-- [ ] `TemplateParser` and `TemplateSyntax` at 100% line and branch coverage (apart from a `GetCloser` switch default arm), measured as in Phase B1 step 5.
+- [x] `TemplateSyntax` rewritten ([7.4](#74-templatesyntax)).
+- [x] `TemplateParser` rewritten ([7](#7-the-bracket-level-parser)).
+- [x] `CSharpBlockScanner.cs`, `TemplateReader.cs`, and `CSharpBlockScannerTests.cs` deleted; the class writer's two scanner calls removed with no other writer change.
+- [x] `TemplateParserTests` rewritten with every [11.2](#112-generator-tests) row, including the adjacent-literal invariant and the two linear-time guards. (Appendix A sketch used; `GetCloser` uses precomputed closer tables, so no switch default arm.)
+- [x] `DiagnosticTests` updated for SLAP004 levels ([11.2](#112-generator-tests)). (`Slap001_*` and `Slap002_*` stay until the descriptors go in B1 steps 6 to 8.)
+- [x] `TemplateParser` and `TemplateSyntax` at 100% line and branch coverage (apart from a `GetCloser` switch default arm), measured as in Phase B1 step 5. (Measured on the whole generator suite: both classes line-rate 1 and branch-rate 1; 52 expected failures elsewhere: `BlockSyntaxTests`, `LineMappingTests`, and the `RenderAsync`, `MergedLiteralRuns`, and `EscapedOpeners` snapshots. No `.verified` file touched.)
 - [ ] `DirectiveReader` simplified: no Roslyn checks, collapsed `Read*` methods, plain derivation, blank check, empty-derived-`#type` SLAP007 ([6.2](#62-class-responsibilities), [S49](#26-spec-decisions-for-11)).
 - [ ] `ClassNameNotDerived` and `NamespaceNotDerived` deleted; SLAP001 and SLAP002 rows deleted from `AnalyzerReleases.Unshipped.md`; no RS20xx warning under `-warnaserror` ([S51](#26-spec-decisions-for-11)).
 - [ ] `TemplateGenerator.CreateHintPrefix` sanitizes hint names without `ParseName` ([S50](#26-spec-decisions-for-11)).

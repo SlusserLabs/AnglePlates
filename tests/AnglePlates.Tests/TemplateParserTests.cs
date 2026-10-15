@@ -22,38 +22,88 @@ public sealed class TemplateParserTests
     [Arguments("#type X\r\rbody", "Directive 6-7, Literal 8-13")]
     [Arguments("plain", "Literal 0-5")]
     [Arguments("", "")]
-    // C# strings and comments hide closers
-    [Arguments("[[ \"]]\" ]]", "Variable 3-7")]
-    [Arguments("[% var s = \"%]\"; %]x", "Code 3-16, Literal 19-20")]
+    // A block ends at the first exact closer, so a closer inside a C# string needs a higher level
+    [Arguments("[[ \"]]\" ]]", "Variable 3-4, Literal 6-10")]
+    [Arguments("[% var s = \"%]\"; %]x", "Code 3-12, Literal 14-20")]
     [Arguments("[% // note %]tail", "Code 3-10, Literal 13-17")]
     [Arguments("[[ a-- -]]", "Variable 3-6 trim-next")]
+    [Arguments("x[[ a[ ]]y", "Literal 0-1, Variable 4-6, Literal 9-10")]
+    // Bracket levels
+    [Arguments("[[[ x ]]]", "Variable 4-5")]
+    [Arguments("[[[[ x ]]]]", "Variable 5-6")]
+    [Arguments("[% x %]", "Code 3-4")]
+    [Arguments("[[% x %]]", "Code 4-5")]
+    [Arguments("[[[% x %]]]", "Code 5-6")]
+    [Arguments("[[[[% x %]]]]", "Code 6-7")]
+    [Arguments("[* c *]", "Comment 3-4")]
+    [Arguments("[[* c *]]", "Comment 4-5")]
+    [Arguments("[[[* c *]]]", "Comment 5-6")]
+    [Arguments("[[[[* c *]]]]", "Comment 6-7")]
+    // Only the last four brackets of a longer run open a block
+    [Arguments("[[[[[ x ]]]]]", "Literal 0-1, Variable 6-7, Literal 12-13")]
+    [Arguments("[[[[[% x %]]]]]", "Literal 0-1, Code 7-8, Literal 14-15")]
+    [Arguments("[[[[[[[[ x ]]]]", "Literal 0-4, Variable 9-10")]
+    [Arguments("[ x ]", "Literal 0-5")]
+    [Arguments("a[b", "Literal 0-3")]
+    [Arguments("[", "Literal 0-1")]
+    [Arguments("[[*ptr*]]", "Comment 3-6")]
+    [Arguments("[[* [% x(); %] [[ y ]] *]]", "Comment 4-22")]
+    [Arguments("a [[[- x -]]] b", "Literal 0-2, Variable 7-8 trim-previous trim-next, Literal 13-15")]
+    [Arguments("[[[[%- x -%]]]]", "Code 7-8 trim-previous trim-next")]
+    [Arguments("[[[*- c -*]]]", "Comment 6-7 trim-previous trim-next")]
+    [Arguments("[[ count--]]", "Variable 3-9 trim-next")]
+    [Arguments("[[-]]", "Variable 3-3 trim-previous")]
+    [Arguments("[[ a[b[0]] ]]", "Variable 3-8, Literal 10-13")]
+    [Arguments("[[% var s = \"%]\"; %]]", "Code 4-17")]
+    [Arguments("[[ x ]]]", "Variable 3-4, Literal 7-8")]
+    [Arguments("[[]]", "Variable 2-2")]
+    [Arguments("[[[]]]", "Variable 3-3")]
+    [Arguments("[%%]", "Code 2-2")]
+    [Arguments("[[[[**]]]]", "Comment 5-5")]
+    // Backslashes have no meaning
+    [Arguments("\\[[ x ]]", "Literal 0-1, Variable 4-5")]
+    [Arguments("\\[% x %]", "Literal 0-1, Code 4-5")]
+    [Arguments("]] text ]]]]", "Literal 0-12")]
+    [Arguments("[[% a;\r\nb; %]]", "Code 4-10")]
+    [Arguments("[[% a;\nb; %]]", "Code 4-9")]
+    [Arguments("[[% a;\rb; %]]", "Code 4-9")]
     public async Task Parse_Text_ReturnsTokens(string text, string expected)
     {
         var result = TemplateParser.Parse(text, CancellationToken.None);
 
         await Assert.That(Describe(result)).IsEqualTo(expected);
         await Assert.That(result.Errors).IsEmpty();
+
+        // The class writer relies on the parser never emitting two literals in a row
+        var adjacentLiterals = result.Tokens.Zip(result.Tokens.Skip(1), (a, b) => a.Type == TokenType.Literal && b.Type == TokenType.Literal);
+        await Assert.That(adjacentLiterals.Any(adjacent => adjacent)).IsFalse();
     }
 
     [Test]
-    [Arguments("a[[b", 1, "]]")]
-    [Arguments("[% x", 0, "%]")]
-    [Arguments("ab [* note", 3, "*]")]
-    [Arguments("ab [[", 3, "]]")]
-    [Arguments("[% \"abc", 0, "%]")]
-    [Arguments("[[ a[0", 0, "]]")]
-    // Closers the scanner skips don't close the block, even when the C# around them is broken
-    [Arguments("x[[ a[ ]]y", 1, "]]")]
-    [Arguments("[% /* %] */ x", 0, "%]")]
-    [Arguments("[% var s = \"%]\";", 0, "%]")]
-    public async Task Parse_UnclosedBlock_ReportsOpenerSpanAndCloser(string text, int start, string closingDelimiter)
+    [Arguments("a[[b", 1, 2, "]]")]
+    [Arguments("[% x", 0, 2, "%]")]
+    [Arguments("ab [* note", 3, 2, "*]")]
+    [Arguments("ab [[", 3, 2, "]]")]
+    [Arguments("[% \"abc", 0, 2, "%]")]
+    [Arguments("[[ a[0", 0, 2, "]]")]
+    [Arguments("[[[ x ]]", 0, 3, "]]]")]
+    [Arguments("[[[[ x", 0, 4, "]]]]")]
+    [Arguments("[[[[[ x", 1, 4, "]]]]")]
+    [Arguments("[[% x %]", 0, 3, "%]]")]
+    [Arguments("a[[[[% x %]]]", 1, 5, "%]]]]")]
+    [Arguments("[[* c *]", 0, 3, "*]]")]
+    [Arguments("[[*ptr ]]", 0, 3, "*]]")]
+    [Arguments("[[[]]", 0, 3, "]]]")]
+    [Arguments("[%]", 0, 2, "%]")]
+    [Arguments("[[", 0, 2, "]]")]
+    public async Task Parse_UnclosedBlock_ReportsOpenerSpanAndCloser(string text, int start, int openerLength, string closingDelimiter)
     {
         var result = TemplateParser.Parse(text, CancellationToken.None);
         var error = result.Errors.Single();
 
         await Assert.That(error.Descriptor).IsEqualTo(DiagnosticDescriptors.UnclosedBlock);
         await Assert.That(error.Span.Start).IsEqualTo(start);
-        await Assert.That(error.Span.Length).IsEqualTo(2);
+        await Assert.That(error.Span.Length).IsEqualTo(openerLength);
         await Assert.That(error.Arguments).IsEquivalentTo(new[] { closingDelimiter });
     }
 
@@ -86,13 +136,16 @@ public sealed class TemplateParserTests
         await Assert.That(result.Tokens).IsEmpty();
     }
 
-    // An unclosed interpolation hole that read on through every later block used to overflow the stack. The scanner's
-    // windows stop it within 16 closers, so each broken hole ends at its own closer.
+    // The parser never reads C#, so broken C# can't make it revisit text: every block ends at its first closer
     [Test]
-    public async Task Parse_ManyUnclosedInterpolationHoles_EndsEachAtItsFirstCloser()
+    [Arguments("[% var s = $\"{ x %]")]
+    [Arguments("[[ a[0 ]]")]
+    [Arguments("[% var s = @\"x %]")]
+    [Arguments("[% /* x %]")]
+    public async Task Parse_ManyBlocksWithBrokenCSharp_EndsEachAtFirstCloser(string block)
     {
         const int count = 3000;
-        var text = string.Concat(Enumerable.Repeat("[% var s = $\"{ x %]<p class=\"row\">It's #1 { </p>\n", count));
+        var text = string.Concat(Enumerable.Repeat(block + "<p class=\"row\">It's #1 { </p>\n", count));
 
         var result = TemplateParser.Parse(text, CancellationToken.None);
 
@@ -100,23 +153,16 @@ public sealed class TemplateParserTests
         await Assert.That(result.Errors).IsEmpty();
     }
 
-    // Broken C# that never finds a closer the scanner accepts stops after the last window, reports the first opener, and
-    // consumes the rest, so thousands of them parse in milliseconds instead of lexing to the end once per block
+    // Only the last four brackets open a block, and the rest of the run stays in the literal before it
     [Test]
-    [Arguments("[[ a[0 ]]", "]]")]
-    [Arguments("[% var s = @\"x %]", "%]")]
-    [Arguments("[% /* x %]", "%]")]
-    public async Task Parse_ManyBrokenBlocks_ReportsFirstOpener(string block, string closingDelimiter)
+    public async Task Parse_LongBracketRun_KeepsLastFourAsOpener()
     {
-        var text = string.Concat(Enumerable.Repeat(block + "<p class=\"row\">It's #1 { </p>\n", 3000));
+        var text = new string('[', 100_000) + " x ]]]]";
 
         var result = TemplateParser.Parse(text, CancellationToken.None);
-        var error = result.Errors.Single();
 
-        await Assert.That(result.Tokens).IsEmpty();
-        await Assert.That(error.Descriptor).IsEqualTo(DiagnosticDescriptors.UnclosedBlock);
-        await Assert.That(error.Span.Start).IsEqualTo(0);
-        await Assert.That(error.Arguments).IsEquivalentTo(new[] { closingDelimiter });
+        await Assert.That(Describe(result)).IsEqualTo("Literal 0-99996, Variable 100001-100002");
+        await Assert.That(result.Errors).IsEmpty();
     }
 
     [Test]
