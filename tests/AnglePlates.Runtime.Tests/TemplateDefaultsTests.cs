@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using SlusserLabs.AnglePlates.Runtime.Tests.Templates;
@@ -28,6 +29,8 @@ public sealed class TemplateDefaultsTests
         await Assert.That(created.NullVariable).IsNull();
         await Assert.That(shared.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
         await Assert.That(shared.NullVariable).IsNull();
+        await Assert.That(created.Culture).IsSameReferenceAs(CultureInfo.InvariantCulture);
+        await Assert.That(shared.Culture).IsSameReferenceAs(CultureInfo.InvariantCulture);
 
         // Default is one shared instance, so its options are the same object on every read
         await Assert.That(defaultOptions()).IsSameReferenceAs(shared);

@@ -34,16 +34,29 @@ internal static class SupportTypes
         namespace SlusserLabs.AnglePlates;
 
         /// <summary>
-        /// Controls how compiled templates encode C# variables. Options can't change after they're created,
+        /// Controls how compiled templates convert and encode C# variables. Options can't change after they're created,
         /// so a template and its options are safe to share between threads.
         /// </summary>
         {{accessModifier}} sealed class TemplateOptions
         {
+            private readonly global::System.Globalization.CultureInfo _culture = global::System.Globalization.CultureInfo.InvariantCulture;
+
             /// <summary>
             /// Gets the encoder for C# variables, or <see langword="null" /> to write them unencoded.
             /// The default is <see cref="global::System.Text.Encodings.Web.HtmlEncoder.Default" />.
             /// </summary>
             public global::System.Text.Encodings.Web.TextEncoder? Encoder { get; init; } = global::System.Text.Encodings.Web.HtmlEncoder.Default;
+
+            /// <summary>
+            /// Gets the culture that converts C# variables to text, such as numbers and dates.
+            /// It's <see cref="global::System.Globalization.CultureInfo.InvariantCulture" /> until you set it in a <c>TemplateOptions</c> initializer, so the output doesn't depend on the server's culture.
+            /// </summary>
+            /// <exception cref="global::System.ArgumentNullException">The value is <see langword="null" />.</exception>
+            public global::System.Globalization.CultureInfo Culture
+            {
+                get => _culture;
+                init => _culture = value ?? throw new global::System.ArgumentNullException(nameof(Culture));
+            }
 
             /// <summary>
             /// Gets the text written in place of a C# variable whose value is <see langword="null" />.
@@ -129,14 +142,14 @@ internal static class SupportTypes
             }
 
             /// <summary>
-            /// Converts <paramref name="value" /> to text with the invariant culture, then encodes and writes it like a string.
+            /// Converts <paramref name="value" /> to text with <see cref="TemplateOptions.Culture" />, then encodes and writes it like a string.
             /// </summary>
             /// <typeparam name="T">The type of value, such as a number, date, enum, or your own class.</typeparam>
             /// <param name="value">The value to write.</param>
             /// <param name="writer">The writer that receives the output.</param>
             protected void Write<T>(T value, global::System.IO.TextWriter writer)
             {
-                Write(ToInvariantString(value), writer);
+                Write(ToText(value, Options.Culture), writer);
             }
 
             /// <summary>
@@ -168,10 +181,11 @@ internal static class SupportTypes
                 writer.Write(value);
             }
 
-            // Matches the pre-1.0 Convert.ToString(value, CultureInfo.InvariantCulture): IConvertible first, then IFormattable,
-            // then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below are on T rather
-            // than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in Write(T?) first.
-            private static string? ToInvariantString<T>(T value)
+            // Works like Convert.ToString(value, culture), which the prototype called with the invariant culture: IConvertible first,
+            // then IFormattable, then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below
+            // are on T rather than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in
+            // Write(T?) first.
+            private static string? ToText<T>(T value, global::System.Globalization.CultureInfo culture)
             {
                 if (value is null)
                 {
@@ -180,12 +194,12 @@ internal static class SupportTypes
 
                 if (value is global::System.IConvertible)
                 {
-                    return ((global::System.IConvertible)value).ToString(global::System.Globalization.CultureInfo.InvariantCulture);
+                    return ((global::System.IConvertible)value).ToString(culture);
                 }
 
                 if (value is global::System.IFormattable)
                 {
-                    return ((global::System.IFormattable)value).ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);
+                    return ((global::System.IFormattable)value).ToString(null, culture);
                 }
 
                 return value.ToString();
@@ -280,14 +294,14 @@ internal static class SupportTypes
             }
 
             /// <summary>
-            /// Converts <paramref name="value" /> to text with the invariant culture, then encodes and writes it like a string.
+            /// Converts <paramref name="value" /> to text with <see cref="TemplateOptions.Culture" />, then encodes and writes it like a string.
             /// </summary>
             /// <typeparam name="T">The type of value, such as a number, date, enum, or your own class.</typeparam>
             /// <param name="value">The value to write.</param>
             /// <param name="writer">The buffer writer that receives the output.</param>
             protected void Write<T>(T value, global::System.Buffers.IBufferWriter<byte> writer)
             {
-                Write(ToInvariantString(value), writer);
+                Write(ToText(value, Options.Culture), writer);
             }
 
             /// <summary>
@@ -403,10 +417,11 @@ internal static class SupportTypes
                 return FlushAsync(writer, cancellationToken);
             }
 
-            // Matches the pre-1.0 Convert.ToString(value, CultureInfo.InvariantCulture): IConvertible first, then IFormattable,
-            // then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below are on T rather
-            // than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in Write(T?) first.
-            private static string? ToInvariantString<T>(T value)
+            // Works like Convert.ToString(value, culture), which the prototype called with the invariant culture: IConvertible first,
+            // then IFormattable, then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below
+            // are on T rather than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in
+            // Write(T?) first.
+            private static string? ToText<T>(T value, global::System.Globalization.CultureInfo culture)
             {
                 if (value is null)
                 {
@@ -415,12 +430,12 @@ internal static class SupportTypes
 
                 if (value is global::System.IConvertible)
                 {
-                    return ((global::System.IConvertible)value).ToString(global::System.Globalization.CultureInfo.InvariantCulture);
+                    return ((global::System.IConvertible)value).ToString(culture);
                 }
 
                 if (value is global::System.IFormattable)
                 {
-                    return ((global::System.IFormattable)value).ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);
+                    return ((global::System.IFormattable)value).ToString(null, culture);
                 }
 
                 return value.ToString();
@@ -452,7 +467,7 @@ internal static class SupportTypes
             public static string RenderToString<TModel>(this TextTemplate<TModel> template, TModel model)
             {
                 global::System.ArgumentNullException.ThrowIfNull(template);
-                using var writer = new global::System.IO.StringWriter(global::System.Globalization.CultureInfo.InvariantCulture);
+                using var writer = new global::System.IO.StringWriter(template.Options.Culture);
                 template.Render(model, writer);
 
                 return writer.ToString();

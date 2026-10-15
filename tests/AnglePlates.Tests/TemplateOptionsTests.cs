@@ -11,20 +11,23 @@ namespace SlusserLabs.AnglePlates.Tests;
 public sealed class TemplateOptionsTests
 {
     [Test]
-    public async Task Options_AssignedThroughDefault_ReportsInitOnlyError()
+    [Arguments("Encoder", "null")]
+    [Arguments("Culture", "global::System.Globalization.CultureInfo.InvariantCulture")]
+    public async Task Options_AssignedThroughDefault_ReportsInitOnlyError(string property, string value)
     {
         // A template's shared options can't change after creation, so Default can't be reconfigured for every caller
-        const string consumerSource = """
+        var consumerSource = $$"""
             namespace App;
 
             internal static class Configure
             {
-                public static void Run() => global::Consumer.ExampleTextTemplate.Default.Options.Encoder = null;
+                public static void Run() => global::Consumer.ExampleTextTemplate.Default.Options.{{property}} = {{value}};
             }
             """;
+        // Both property names have seven letters, so the assigned member has the same span in each row
         var span = new LinePositionSpan(new LinePosition(4, 32), new LinePosition(4, 92));
         var expected = ExpectedCompilerDiagnostic.Source(
-            "CS8852", "Init-only property or indexer 'TemplateOptions.Encoder' can only be assigned in an object initializer, or on 'this' or 'base' in an instance constructor or an 'init' accessor.",
+            "CS8852", $"Init-only property or indexer 'TemplateOptions.{property}' can only be assigned in an object initializer, or on 'this' or 'base' in an instance constructor or an 'init' accessor.",
             "Consumer0.cs", span);
         var compilation = GeneratorTestHelper.CreateCompilation([consumerSource]);
 

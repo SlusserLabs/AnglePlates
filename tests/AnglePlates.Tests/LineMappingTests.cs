@@ -21,17 +21,20 @@ public sealed class LineMappingTests
     [Arguments("x [[ model + missing ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 13, 7)]
     [Arguments("<p>[% var count = 1;\r\n  count += missing; %]</p>", "CS0103", "The name 'missing' does not exist in the current context", 6, 11, 7)]
     [Arguments("[% var count = missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 5, 15, 7)]
-    // Closers that the scanner skips inside C# don't move the template lines or columns after them
-    [Arguments("[[ \"]]\" + missing ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 10, 7)]
-    [Arguments("[[ \"]]\" +\r\n  missing ]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
-    [Arguments("[[ model[\r\n  missing[0]] ]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
-    [Arguments("[% var s = \"%]\"; s += missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 5, 22, 7)]
-    [Arguments("[% var s = \"%]\";\r\n  s += missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 6, 7, 7)]
-    [Arguments("[% /* %] */ var s = $\"{\r\n  missing}%]\"; %]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
-    // A C# variable that ends in a // comment closes its call on the next generated line
-    [Arguments("[[ missing // note ]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 3, 7)]
-    [Arguments("[[ model +\r\n  missing // note\r\n]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
-    [Arguments("[[ 1, 2 // note ]]", "CS1501", "No overload for method 'Write' takes 3 arguments", 5, 3, 12)]
+    // A higher bracket level keeps a closer inside C# from ending the block, and the template lines and columns after it still map exactly
+    [Arguments("[[[ \"]]\" + missing ]]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 11, 7)]
+    [Arguments("[[[ \"]]\" +\r\n  missing ]]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
+    [Arguments("[[[ model[\r\n  missing[0]] ]]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
+    [Arguments("[[% var s = \"%]\"; s += missing; %]]", "CS0103", "The name 'missing' does not exist in the current context", 5, 23, 7)]
+    [Arguments("[[% var s = \"%]\";\r\n  s += missing; %]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 7, 7)]
+    [Arguments("[[% /* %] */ var s = $\"{\r\n  missing}%]\"; %]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 2, 7)]
+    // Multi-line blocks and variables keep their template columns on every line, whatever the line break style
+    [Arguments("[% var a = 1;\n  var b = missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 6, 10, 7)]
+    [Arguments("[% var a = 1;\r  var b = missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 6, 10, 7)]
+    [Arguments("[% var a = 1;\r\n\r\n    a += missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 7, 9, 7)]
+    [Arguments("[[% var a = 1;\r\n  var b = missing; %]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 10, 7)]
+    [Arguments("[[[[ model +\r\n   missing ]]]]", "CS0103", "The name 'missing' does not exist in the current context", 6, 3, 7)]
+    [Arguments("<p>x</p>[% var a = 1;\r\n  var b = 2;\r\n  b += missing; %]", "CS0103", "The name 'missing' does not exist in the current context", 7, 7, 7)]
     public async Task InvalidCSharp_InVariableOrBlock_ReportsCompilerErrorAtTemplate(
         string body, string id, string message, int templateLine, int templateColumn, int templateLength)
     {
@@ -55,8 +58,9 @@ public sealed class LineMappingTests
     [Test]
     public async Task BrokenCSharp_UnterminatedString_EndsAtFirstCloserAndReportsAtTemplate()
     {
-        // The string runs to the end of its line, so the block ends at the first closer instead of pulling the HTML after it
-        // into C#, and the compiler reports the typo at the template line. A UTF-8 class reports both errors again from RenderAsync.
+        // The block ends at the first exact closer, and nothing reads the C# inside it, so the HTML after the closer stays HTML.
+        // The string runs to the end of its line, and the compiler reports the typo at the template line. A UTF-8 class reports
+        // both errors again from RenderAsync.
         foreach (var target in new[] { "Text", "Utf8" })
         {
             var template = RenderingTestHelper.Template($"#generate {target}\r\n<p>[% var count = 1;\r\n  var s = \"abc %]</p>\r\n[[ model ]]");
@@ -68,6 +72,168 @@ public sealed class LineMappingTests
             var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
 
             await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        }
+    }
+
+    // The compiler lists a tree's syntax errors in source order before its binding errors, so a UTF-8 file's errors read: Render's
+    // syntax errors, RenderAsync's syntax errors, Render's binding errors, RenderAsync's binding errors. A text file has no RenderAsync.
+    private static ExpectedCompilerDiagnostic[] Order(
+        string target,
+        ExpectedCompilerDiagnostic[] renderSyntax,
+        ExpectedCompilerDiagnostic[] renderBinding,
+        ExpectedCompilerDiagnostic[] renderAsyncSyntax,
+        ExpectedCompilerDiagnostic[] renderAsyncBinding)
+    {
+        return target == "Text"
+            ? [.. renderSyntax, .. renderBinding]
+            : [.. renderSyntax, .. renderAsyncSyntax, .. renderBinding, .. renderAsyncBinding];
+    }
+
+    // Errors on template line 5 (the first body line), given as id, message, and start and end columns
+    private static ExpectedCompilerDiagnostic[] ToMapped((string id, string message, int start, int end)[] errors, string file)
+    {
+        return errors.Select(error => ExpectedCompilerDiagnostic.Mapped(
+            error.id, error.message, TemplateText.Path, new LinePositionSpan(new LinePosition(5, error.start), new LinePosition(5, error.end)), file)).ToArray();
+    }
+
+    [Test]
+    [Arguments("[[ model // note ]]", 5, 8, 5, 16, false)]
+    [Arguments("[[ model // note ]]x", 5, 8, 5, 16, true)]
+    [Arguments("[[ model +\r\n  model // note\r\n]]", 6, 7, 6, 15, false)]
+    public async Task LineCommentVariable_ReportsSyntaxErrors(
+        string body, int templateLine, int templateColumn, int variableEndLine, int variableEndColumn, bool literalFollows)
+    {
+        // A // comment swallows the rest of the generated line, including the call's closing ", writer);". Each missing token is
+        // reported where the compiler expected it: right after the last token before the comment, at templateColumn. The row
+        // uses model rather than a missing name, so only syntax errors appear. When the call is the last statement of a method,
+        // the next token is the closing brace, and the compiler reports the missing ")" and ";" there (CS1026 and CS1002). When
+        // another statement follows (a literal, or the flush in RenderAsync), the compiler reads that statement as a second
+        // argument: it reports the missing "," at the template location (CS1003), the missing ")" after the following call in the
+        // generated file (CS1026), and that call's void result as the second argument (CS1503, also in the generated file). These
+        // generated-file errors are the deliberate exception to "every error maps to the template". A call that lost its closing
+        // parenthesis has one argument, so the compiler also reports the missing overload (CS1501) on the whole variable.
+        var span = new LinePositionSpan(new LinePosition(templateLine, templateColumn), new LinePosition(templateLine, templateColumn));
+        var variable = new LinePositionSpan(new LinePosition(5, 3), new LinePosition(variableEndLine, variableEndColumn));
+        foreach (var target in new[] { "Text", "Utf8" })
+        {
+            var file = $"Consumer.Example{target}Template.g.cs";
+            var writer = target == "Text" ? "System.IO.TextWriter" : "System.Buffers.IBufferWriter<byte>";
+            var closeParen = ExpectedCompilerDiagnostic.Mapped("CS1026", ") expected", TemplateText.Path, span, file);
+            var semicolon = ExpectedCompilerDiagnostic.Mapped("CS1002", "; expected", TemplateText.Path, span, file);
+            var comma = ExpectedCompilerDiagnostic.Mapped("CS1003", "Syntax error, ',' expected", TemplateText.Path, span, file);
+            var oneArgument = ExpectedCompilerDiagnostic.Mapped("CS1501", "No overload for method 'Write' takes 1 arguments", TemplateText.Path, variable, file);
+            var generatedCloseParen = ExpectedCompilerDiagnostic.Generated("CS1026", ") expected", file);
+            var voidArgument = ExpectedCompilerDiagnostic.Generated("CS1503", $"Argument 2: cannot convert from 'void' to '{writer}'", file);
+
+            // The flush after the call in RenderAsync always follows the variable
+            var expected = literalFollows
+                ? Order(target, [comma, generatedCloseParen], [voidArgument], [comma, generatedCloseParen], [voidArgument])
+                : Order(target, [closeParen, semicolon], [oneArgument], [comma, generatedCloseParen], [voidArgument]);
+            var template = RenderingTestHelper.Template($"#generate {target}\r\n{body}");
+
+            var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
+
+            await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(5);
+        }
+    }
+
+    [Test]
+    public async Task ClosersInsideCSharp_CloseAtFirstCloser_ReportCompilerErrorsAtTemplate()
+    {
+        // The parser doesn't read C#, so each block ends at its first exact closer and the compiler reports what is left. None of
+        // these is SLAP004. A missing token is reported on the next token when it shares the line: here the ")" that stands where
+        // "]" belongs, then the ";" that stands where ")" belongs. The spans are the variable's start plus the content's length plus
+        // 2 for ", " and 6 for "writer" (the ")" starts at that column). Semantic errors follow from the broken call.
+        // After a C# block, RenderAsync writes the variable with "await WriteAsync(" and passes the cancellation token, so the
+        // same missing tokens sit at later columns there; without a block before it, both methods use the same columns.
+        var cases = new (string template, (string id, string message, int start, int end)[] syntax, (string id, string message, int start, int end)[] semantic,
+            (string id, string message, int start, int end)[]? asyncSyntax, (string id, string message, int start, int end)[]? asyncSemantic)[]
+        {
+            ("[[ model[0..1]]]",
+            [
+                ("CS1003", "Syntax error, ']' expected", 21, 22),
+                ("CS1026", ") expected", 22, 23),
+            ],
+            [
+                ("CS1501", "No overload for method 'this' takes 2 arguments", 3, 21),
+            ],
+            null,
+            null),
+            ("[% var grid = new[] { 7 }; var row = new[] { 0 }; %][[ grid[row[0]] ]]",
+            [
+                ("CS1003", "Syntax error, ']' expected", 73, 74),
+                ("CS1003", "Syntax error, ']' expected", 74, 75),
+                ("CS1026", ") expected", 74, 75),
+            ],
+            [
+                ("CS0022", "Wrong number of indices inside []; expected 1", 60, 73),
+            ],
+            [
+                ("CS1003", "Syntax error, ']' expected", 92, 93),
+                ("CS1003", "Syntax error, ']' expected", 115, 116),
+                ("CS1026", ") expected", 115, 116),
+            ],
+            [
+                ("CS0022", "Wrong number of indices inside []; expected 1", 60, 92),
+            ]),
+        };
+
+        foreach (var (body, syntax, semantic, asyncSyntax, asyncSemantic) in cases)
+        {
+            foreach (var target in new[] { "Text", "Utf8" })
+            {
+                var file = $"Consumer.Example{target}Template.g.cs";
+                var syntaxErrors = ToMapped(syntax, file);
+                var semanticErrors = ToMapped(semantic, file);
+                var expected = Order(target, syntaxErrors, semanticErrors, ToMapped(asyncSyntax ?? syntax, file), ToMapped(asyncSemantic ?? semantic, file));
+                var template = RenderingTestHelper.Template($"#generate {target}\r\n{body}");
+
+                var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
+
+                await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+            }
+        }
+    }
+
+    [Test]
+    public async Task ClosersInsideCSharp_BlockWithUnterminatedString_ReportsErrorsAtTemplate()
+    {
+        // [% var s = "%]"; %] ends at the first %], so the block holds var s = " and the string loses its end quote. As in
+        // BrokenCSharp_UnterminatedString_*, the newline error sits on the opening quote (column 3 + 8) and the missing ";" after the string
+        foreach (var target in new[] { "Text", "Utf8" })
+        {
+            var file = $"Consumer.Example{target}Template.g.cs";
+            var newline = ExpectedCompilerDiagnostic.Mapped("CS1010", "Newline in constant", TemplateText.Path, new LinePositionSpan(new LinePosition(5, 11), new LinePosition(5, 11)), file);
+            var semicolon = ExpectedCompilerDiagnostic.Mapped("CS1002", "; expected", TemplateText.Path, new LinePositionSpan(new LinePosition(5, 12), new LinePosition(5, 12)), file);
+            var expected = target == "Text" ? new[] { newline, semicolon } : new[] { newline, semicolon, newline, semicolon };
+            var template = RenderingTestHelper.Template($"#generate {target}\r\n[% var s = \"%]\"; %]");
+
+            var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
+
+            await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        }
+    }
+
+    [Test]
+    public async Task ClosersInsideCSharp_VariableWithUnterminatedString_ReportsNewlineAtTemplateAndParenInGeneratedFile()
+    {
+        // [[ "]]" + model ]] ends at the first ]], so the call is Write(", writer); and the string runs to the end of the generated
+        // line. The newline error maps to the variable's start (column 3). The call's next argument would be the following statement,
+        // so the missing "," maps to the end of the string (3 + the 11 characters of ", writer);" = column 14), and the missing ")"
+        // lands after that following statement, in the generated file.
+        foreach (var target in new[] { "Text", "Utf8" })
+        {
+            var file = $"Consumer.Example{target}Template.g.cs";
+            var newline = ExpectedCompilerDiagnostic.Mapped("CS1010", "Newline in constant", TemplateText.Path, new LinePositionSpan(new LinePosition(5, 3), new LinePosition(5, 3)), file);
+            var comma = ExpectedCompilerDiagnostic.Mapped("CS1003", "Syntax error, ',' expected", TemplateText.Path, new LinePositionSpan(new LinePosition(5, 14), new LinePosition(5, 14)), file);
+            var closeParen = ExpectedCompilerDiagnostic.Generated("CS1026", ") expected", file);
+            var errors = new[] { newline, comma, closeParen };
+            var expected = target == "Text" ? errors : errors.Concat(errors).ToArray();
+            var template = RenderingTestHelper.Template($"#generate {target}\r\n[[ \"]]\" + model ]]");
+
+            var result = GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHelper.CreateDriver([template]), expected);
+
+            await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         }
     }
 

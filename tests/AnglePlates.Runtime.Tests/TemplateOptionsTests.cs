@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Encodings.Web;
@@ -23,6 +24,7 @@ public sealed class TemplateOptionsTests
 
         await Assert.That(options.Encoder).IsSameReferenceAs(HtmlEncoder.Default);
         await Assert.That(options.NullVariable).IsNull();
+        await Assert.That(options.Culture).IsSameReferenceAs(CultureInfo.InvariantCulture);
     }
 
     [Test]
@@ -32,7 +34,7 @@ public sealed class TemplateOptionsTests
         var properties = typeof(TemplateOptions).GetProperties().Where(property => property.SetMethod is not null).ToArray();
 
         await Assert.That(typeof(TemplateOptions).IsSealed).IsTrue();
-        await Assert.That(properties.Select(property => property.Name).Order()).IsEquivalentTo(new[] { "Encoder", "NullVariable" });
+        await Assert.That(properties.Select(property => property.Name).Order()).IsEquivalentTo(new[] { "Culture", "Encoder", "NullVariable" });
         foreach (var property in properties)
         {
             await Assert.That(property.SetMethod!.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(IsExternalInit))).IsTrue();

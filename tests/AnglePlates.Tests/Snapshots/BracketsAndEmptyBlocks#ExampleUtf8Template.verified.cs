@@ -20,7 +20,7 @@ internal sealed partial class ExampleUtf8Template : global::SlusserLabs.AnglePla
     /// </summary>
     /// <param name="options">The options that control how C# variables are written, or <see langword="null" /> for the template's default options.</param>
     public ExampleUtf8Template(global::SlusserLabs.AnglePlates.TemplateOptions? options = null)
-        : base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.Html)
+        : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())
     {
     }
 
@@ -36,8 +36,8 @@ internal sealed partial class ExampleUtf8Template : global::SlusserLabs.AnglePla
         string Model = model; // Allows alternate casing
 
         WriteLiteral("[ordinary] "u8, writer);
-#line (5, 15) - (5, 19) 14 "Templates/example.html"
-        Write(model, writer);
+#line (5, 15) - (5, 19) 6 "Templates/example.html"
+Write(model, writer);
 #line default
         WriteLiteral("\r\na"u8, writer);
         WriteLiteral("b"u8, writer);
@@ -50,8 +50,8 @@ internal sealed partial class ExampleUtf8Template : global::SlusserLabs.AnglePla
         string Model = model; // Allows alternate casing
 
         WriteLiteral("[ordinary] "u8, writer);
-#line (5, 15) - (5, 19) 14 "Templates/example.html"
-        Write(model, writer);
+#line (5, 15) - (5, 19) 6 "Templates/example.html"
+Write(model, writer);
 #line default
         WriteLiteral("\r\na"u8, writer);
         WriteLiteral("b"u8, writer);

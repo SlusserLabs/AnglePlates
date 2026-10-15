@@ -20,7 +20,7 @@ internal sealed partial class ExampleUtf8Template : global::SlusserLabs.AnglePla
     /// </summary>
     /// <param name="options">The options that control how C# variables are written, or <see langword="null" /> for the template's default options.</param>
     public ExampleUtf8Template(global::SlusserLabs.AnglePlates.TemplateOptions? options = null)
-        : base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.Html)
+        : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())
     {
     }
 
@@ -36,35 +36,35 @@ internal sealed partial class ExampleUtf8Template : global::SlusserLabs.AnglePla
         string Model = model; // Allows alternate casing
 
         WriteLiteral("<ul>"u8, writer);
-#line (6, 8) - (6, 33) 8 "Templates/example.html"
-        foreach (var c in model) {
+#line (6, 8) - (6, 33) "Templates/example.html"
+foreach (var c in model) {
 #line default
-            WriteLiteral("<li>"u8, writer);
-#line (6, 44) - (6, 44) 18 "Templates/example.html"
-            Write(c, writer);
+        WriteLiteral("<li>"u8, writer);
+#line (6, 44) - (6, 44) 6 "Templates/example.html"
+Write(c, writer);
 #line default
-            WriteLiteral("</li>"u8, writer);
-#line (6, 56) - (6, 56) 8 "Templates/example.html"
-        }
+        WriteLiteral("</li>"u8, writer);
+#line (6, 56) - (6, 56) "Templates/example.html"
+}
 #line default
-#line (6, 73) - (6, 77) 14 "Templates/example.html"
-        Write(model, writer);
+#line (6, 73) - (6, 77) 6 "Templates/example.html"
+Write(model, writer);
 #line default
-#line (6, 84) - (6, 104) 8 "Templates/example.html"
-        if (model.Length > 0)
+#line (6, 84) - (6, 104) "Templates/example.html"
+if (model.Length > 0)
 #line default
         WriteLiteral("a"u8, writer);
-#line (6, 112) - (6, 115) 8 "Templates/example.html"
-        else
+#line (6, 112) - (6, 115) "Templates/example.html"
+else
 #line default
-#line (6, 122) - (6, 133) 14 "Templates/example.html"
-        Write(model.Length, writer);
+#line (6, 122) - (6, 133) 6 "Templates/example.html"
+Write(model.Length, writer);
 #line default
-#line (6, 140) - (6, 149) 8 "Templates/example.html"
-        var n = 1;
+#line (6, 140) - (6, 149) "Templates/example.html"
+var n = 1;
 #line default
-#line (7, 5) - (7, 8) 8 "Templates/example.html"
-        n++;
+#line (7, 5) - (7, 8) "Templates/example.html"
+n++;
 #line default
     }
 
@@ -75,39 +75,39 @@ internal sealed partial class ExampleUtf8Template : global::SlusserLabs.AnglePla
         string Model = model; // Allows alternate casing
 
         WriteLiteral("<ul>"u8, writer);
-#line (6, 8) - (6, 33) 8 "Templates/example.html"
-        foreach (var c in model) {
+#line (6, 8) - (6, 33) "Templates/example.html"
+foreach (var c in model) {
 #line default
-#line (6, 37) - (6, 40) 95 "Templates/example.html"
-            await WriteLiteralAsync("<li>"u8, writer, cancellationToken).ConfigureAwait(false);
+#line (6, 37) - (6, 40) 91 "Templates/example.html"
+        await WriteLiteralAsync("<li>"u8, writer, cancellationToken).ConfigureAwait(false);
 #line default
-#line (6, 44) - (6, 44) 18 "Templates/example.html"
-            Write(c, writer);
+#line (6, 44) - (6, 44) 6 "Templates/example.html"
+Write(c, writer);
 #line default
-            WriteLiteral("</li>"u8, writer);
-#line (6, 56) - (6, 56) 8 "Templates/example.html"
-        }
+        WriteLiteral("</li>"u8, writer);
+#line (6, 56) - (6, 56) "Templates/example.html"
+}
 #line default
-#line (6, 73) - (6, 77) 25 "Templates/example.html"
-        await WriteAsync(model, writer, cancellationToken).ConfigureAwait(false);
+#line (6, 73) - (6, 77) 17 "Templates/example.html"
+await WriteAsync(model, writer, cancellationToken).ConfigureAwait(false);
 #line default
-#line (6, 84) - (6, 104) 8 "Templates/example.html"
-        if (model.Length > 0)
+#line (6, 84) - (6, 104) "Templates/example.html"
+if (model.Length > 0)
 #line default
 #line (6, 108) - (6, 108) 88 "Templates/example.html"
         await WriteLiteralAsync("a"u8, writer, cancellationToken).ConfigureAwait(false);
 #line default
-#line (6, 112) - (6, 115) 8 "Templates/example.html"
-        else
+#line (6, 112) - (6, 115) "Templates/example.html"
+else
 #line default
-#line (6, 122) - (6, 133) 25 "Templates/example.html"
-        await WriteAsync(model.Length, writer, cancellationToken).ConfigureAwait(false);
+#line (6, 122) - (6, 133) 17 "Templates/example.html"
+await WriteAsync(model.Length, writer, cancellationToken).ConfigureAwait(false);
 #line default
-#line (6, 140) - (6, 149) 8 "Templates/example.html"
-        var n = 1;
+#line (6, 140) - (6, 149) "Templates/example.html"
+var n = 1;
 #line default
-#line (7, 5) - (7, 8) 8 "Templates/example.html"
-        n++;
+#line (7, 5) - (7, 8) "Templates/example.html"
+n++;
 #line default
 
         await FlushAsync(writer, cancellationToken).ConfigureAwait(false);

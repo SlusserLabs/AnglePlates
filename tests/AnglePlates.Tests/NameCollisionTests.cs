@@ -65,7 +65,8 @@ public sealed class NameCollisionTests
             public class WriteLiteralAsync { }
             public class WriteAsync { }
             public class FlushAsync { }
-            public class ToInvariantString { }
+            public class ToText { }
+            public class Culture { }
         }
         namespace SlusserLabs.AnglePlates
         {

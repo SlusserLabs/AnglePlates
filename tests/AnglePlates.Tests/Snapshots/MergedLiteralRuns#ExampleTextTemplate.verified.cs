@@ -20,7 +20,7 @@ internal sealed partial class ExampleTextTemplate : global::SlusserLabs.AnglePla
     /// </summary>
     /// <param name="options">The options that control how C# variables are written, or <see langword="null" /> for the template's default options.</param>
     public ExampleTextTemplate(global::SlusserLabs.AnglePlates.TemplateOptions? options = null)
-        : base(options ?? global::SlusserLabs.AnglePlates.TemplateOptions.Unencoded)
+        : base(options ?? new global::SlusserLabs.AnglePlates.TemplateOptions())
     {
     }
 
@@ -35,7 +35,7 @@ internal sealed partial class ExampleTextTemplate : global::SlusserLabs.AnglePla
         global::System.ArgumentNullException.ThrowIfNull(writer);
         string Model = model; // Allows alternate casing
 
-        WriteLiteral("abc[[de", writer);
-        WriteLiteral("f", writer);
+        WriteLiteral("abcef", writer);
+        WriteLiteral("g", writer);
     }
 }

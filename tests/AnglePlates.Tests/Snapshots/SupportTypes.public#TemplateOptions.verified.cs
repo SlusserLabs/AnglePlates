@@ -9,37 +9,29 @@
 namespace SlusserLabs.AnglePlates;
 
 /// <summary>
-/// Controls how compiled templates encode C# variables. Options can't change after they're created,
+/// Controls how compiled templates convert and encode C# variables. Options can't change after they're created,
 /// so a template and its options are safe to share between threads.
 /// </summary>
 public sealed class TemplateOptions
 {
-    /// <summary>
-    /// Gets options that HTML-encode C# variables with <see cref="global::System.Text.Encodings.Web.HtmlEncoder.Default" />.
-    /// Templates use these unless their <c>#encode</c> directive picks another preset.
-    /// </summary>
-    public static TemplateOptions Html { get; } = new();
-
-    /// <summary>
-    /// Gets options that write C# variables as they are, with no encoding.
-    /// </summary>
-    public static TemplateOptions Unencoded { get; } = new() { Encoder = null };
-
-    /// <summary>
-    /// Gets options that encode C# variables for JavaScript strings with <see cref="global::System.Text.Encodings.Web.JavaScriptEncoder.Default" />.
-    /// </summary>
-    public static TemplateOptions JavaScript { get; } = new() { Encoder = global::System.Text.Encodings.Web.JavaScriptEncoder.Default };
-
-    /// <summary>
-    /// Gets options that encode C# variables for URLs with <see cref="global::System.Text.Encodings.Web.UrlEncoder.Default" />.
-    /// </summary>
-    public static TemplateOptions Url { get; } = new() { Encoder = global::System.Text.Encodings.Web.UrlEncoder.Default };
+    private readonly global::System.Globalization.CultureInfo _culture = global::System.Globalization.CultureInfo.InvariantCulture;
 
     /// <summary>
     /// Gets the encoder for C# variables, or <see langword="null" /> to write them unencoded.
     /// The default is <see cref="global::System.Text.Encodings.Web.HtmlEncoder.Default" />.
     /// </summary>
     public global::System.Text.Encodings.Web.TextEncoder? Encoder { get; init; } = global::System.Text.Encodings.Web.HtmlEncoder.Default;
+
+    /// <summary>
+    /// Gets the culture that converts C# variables to text, such as numbers and dates.
+    /// It's <see cref="global::System.Globalization.CultureInfo.InvariantCulture" /> until you set it in a <c>TemplateOptions</c> initializer, so the output doesn't depend on the server's culture.
+    /// </summary>
+    /// <exception cref="global::System.ArgumentNullException">The value is <see langword="null" />.</exception>
+    public global::System.Globalization.CultureInfo Culture
+    {
+        get => _culture;
+        init => _culture = value ?? throw new global::System.ArgumentNullException(nameof(Culture));
+    }
 
     /// <summary>
     /// Gets the text written in place of a C# variable whose value is <see langword="null" />.
