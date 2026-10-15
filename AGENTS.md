@@ -55,7 +55,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 ## Commits
 
-- Agents may commit and push to the remote repository while working through the release spec. Only the owner makes the repository public or approves a nuget.org publish.
+- Agents may commit and push to the remote repository as they work. Only the owner makes the repository public or approves a nuget.org publish.
 
 ## Publishing
 
@@ -63,8 +63,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - **Only the owner** changes the repository's visibility. Agents never make the repo public (or private), and never change other repository settings that need Administration.
 - Agents may publish previews to int.nugettest.org at any time by dispatching `release.yml`, after the preview preflight in [docs/releasing.md](docs/releasing.md#preview-preflight) passes.
 - Agents never create stable tags or GitHub Releases, never approve a `nuget-org` deployment, never change `NUGET_ORG_PUBLISH_ENABLED`, never create or edit trusted-publishing policies, never dispatch the nuget.org login check unless the owner asks, and never call nuget.org's push API directly.
-- From Phase 8 on, agents use their own GitHub credential (a machine user's fine-grained PAT or a GitHub App) that is **not** a required reviewer on `nuget-org`. If an agent runs under the owner's own login, it's technically a reviewer and could approve through the API, which would make the gate only as strong as the agent's restraint. Until the owner provides that credential in Phase 8, agents commit and push with the git credentials already on the machine; nothing before Phase 9 has a nuget.org gate an agent could approve.
-- Agent credential permissions: Contents read/write, Actions read/write, Pull requests read/write, Workflows read/write, Environments read, Variables read, Secrets read (names only), Metadata read, and **no Administration and no Variables write**. Without Variables write, an agent can't flip `NUGET_ORG_PUBLISH_ENABLED`.
+- Agents use the git and `gh` credentials already on the machine; no separate agent credential exists. Those credentials may be the owner's own login, which can technically approve a `nuget-org` deployment through the API, so the rules above are what keep agents out of stable releases: agents never approve a `nuget-org` deployment, never change `NUGET_ORG_PUBLISH_ENABLED` or any other variable, environment, ruleset, or repository setting, and never dispatch the nuget.org login check unless the owner asks. The owner's own gates (creating the GitHub Release, flipping the variable, and approving the deployment) stay in front of every nuget.org publish.
 
 ## Generated Code and Rendering
 

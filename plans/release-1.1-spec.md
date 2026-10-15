@@ -72,14 +72,14 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 
 ### Phase B0: baselines and housekeeping ([details](#phase-b0-baselines-and-housekeeping))
 
-- [ ] The spec commit (`Spec: replace the 1.0 spec with the 1.1 spec`) adds this file as CRLF and deletes `plans/release-1.0-spec.md` and `plans/icon-draft/`.
-- [ ] Baseline line counts from [6.7](#67-simplification-targets) recorded (`Parsing/`, `Directives/`, `DirectiveReader.cs`, `TemplateGenerator.cs`, `DiagnosticDescriptors.cs`, `SupportTypes.cs`, `TemplateClassWriter.cs`, the `src/AnglePlates` total, and the test files [6.7](#67-simplification-targets) lists).
-- [ ] `samples/HelloWorld` output captured outside the repository.
+- [x] The spec commit (`Spec: replace the 1.0 spec with the 1.1 spec`) adds this file as CRLF and deletes `plans/release-1.0-spec.md` and `plans/icon-draft/`. (Already at HEAD as `0613cc2` "Spec: release 1.1 replaces the 1.0 spec"; working tree clean, `plans/` holds only this file.)
+- [x] Baseline line counts from [6.7](#67-simplification-targets) recorded (`Parsing/`, `Directives/`, `DirectiveReader.cs`, `TemplateGenerator.cs`, `DiagnosticDescriptors.cs`, `SupportTypes.cs`, `TemplateClassWriter.cs`, the `src/AnglePlates` total, and the test files [6.7](#67-simplification-targets) lists). (Measured at `0613cc2`; all match the 6.7 table: `CSharpBlockScanner.cs` 329, `TemplateReader.cs` 100, `TemplateParser.cs` 262, `TemplateSyntax.cs` 34, `Parsing/` 809, `TemplateClassWriter.cs` 449, `SupportTypes.cs` 483, `DirectiveReader.cs` 352, `TemplateEncoding.cs` 11, `DirectiveKind.cs` 13, `DirectiveKindExtensions.cs` 31, `TemplateDirectives.cs` 47, `Directives/` 556, `DiagnosticDescriptors.cs` 73, `TemplateGenerator.cs` 311, `src/AnglePlates` total 3,062; tests: `CSharpBlockScannerTests.cs` 189, `DirectiveReaderTests.cs` 452, runtime `TemplateOptionsTests.cs` 129.)
+- [x] `samples/HelloWorld` output captured outside the repository. (472 bytes, exit 0, from `dotnet run --project samples/HelloWorld -c Release --no-launch-profile` on the unchanged tree; saved in the agent scratchpad as `sample-baseline.txt`.)
 - [ ] Baseline benchmarks ([9.2](#92-benchmark-protocol)) and the Native AOT size recorded.
 - [ ] `gh auth status` passes (STOP G1 otherwise); branch pushed; draft pull request opened; CI ran on it.
-- [ ] AGENTS.md Commits bullet reworded and credential bullets replaced ([13.4](#134-agent-guardrails), [15.4](#154-documentation-that-changes-with-11)).
-- [ ] `docs/releasing.md` guardrails, preflight lines 1, 2, and 8, and the owner-inputs checklist updated to match.
-- [ ] No GitHub issues filed (S36 withdrawn).
+- [x] AGENTS.md Commits bullet reworded and credential bullets replaced ([13.4](#134-agent-guardrails), [15.4](#154-documentation-that-changes-with-11)).
+- [x] `docs/releasing.md` guardrails, preflight lines 1, 2, and 8, and the owner-inputs checklist updated to match. (Preflight line 2 now asks only for `"push": true` and notes `"admin": true` is possible under the owner's login; the agent-credential owner-input item is removed.)
+- [x] No GitHub issues filed (S36 withdrawn).
 - [ ] **Accept:** baselines recorded here or in the pull request, the draft pull request exists with a CI run, and the agent-rule edits are committed.
 
 ### Phase B1: the parser and the directives ([details](#phase-b1-the-parser-and-the-directives))

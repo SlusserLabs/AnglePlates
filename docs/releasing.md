@@ -137,8 +137,7 @@ AGENTS.md has the same rules.
 - Only I change the repository's visibility. Agents never make it public (or private), and never change other settings that need Administration.
 - Agents may publish previews to int.nugettest.org at any time by running `release.yml` by hand, after the [preview preflight](#preview-preflight) passes.
 - Agents never create stable tags or GitHub Releases, never approve a `nuget-org` deployment, never change `NUGET_ORG_PUBLISH_ENABLED`, never create or edit trusted-publishing policies, never run the nuget.org login check unless I ask, and never call nuget.org's push API directly.
-- Agents use their own GitHub credential, a machine user's fine-grained PAT or a GitHub App, that isn't a required reviewer on `nuget-org`. An agent running under my login is technically a reviewer and could approve through the API, which would make the gate only as strong as the agent's restraint. Until that credential exists, agents push with the git credentials already on the machine; nothing has a nuget.org gate an agent could approve before the repository is public.
-- The agent credential gets Contents read/write, Actions read/write, Pull requests read/write, Workflows read/write, Environments read, Variables read, Secrets read (names only), and Metadata read. It gets no Administration and no Variables write, so it can't flip `NUGET_ORG_PUBLISH_ENABLED`.
+- Agents use the git and `gh` credentials already on the machine; there's no separate agent credential. Those credentials may be my own login, which can technically approve a `nuget-org` deployment through the API, so the rules above are what keep agents out of stable releases. Agents never approve a `nuget-org` deployment, never change `NUGET_ORG_PUBLISH_ENABLED` or any other variable, environment, ruleset, or repository setting, and never run the nuget.org login check unless I ask. My own gates stay in front of every nuget.org publish: I create the GitHub Release, I flip the variable, and I approve the deployment.
 
 ## Preflight checks
 
@@ -148,14 +147,14 @@ These checks prove that whoever is about to publish has the access the publish n
 
 Run this the first time previews are set up, and again before a preview whenever access might have changed: a new machine, a new token, or a failed publish.
 
-1. The GitHub CLI is installed and signed in as the agent account, not mine. Install it with `winget install GitHub.cli` if `gh --version` fails. Fine-grained PATs and GitHub Apps don't report OAuth scopes, so the next lines prove access instead of a scope list.
+1. The GitHub CLI is installed and signed in with the credentials already on the machine, which may be mine. Install it with `winget install GitHub.cli` if `gh --version` fails. Tokens don't always report OAuth scopes, so the next lines prove access instead of a scope list.
 
    ```shell
    gh --version
    gh auth status
    ```
 
-2. The account can push and isn't an admin. Look for `"push": true` and `"admin": false`.
+2. The account can push. Look for `"push": true`. It may also report `"admin": true` when it's my login; agents don't use that access.
 
    ```shell
    gh api repos/SlusserLabs/AnglePlates --jq '.permissions'
@@ -199,7 +198,7 @@ Run this only while preparing a stable release, after I've made the repository p
    gh api repos/SlusserLabs/AnglePlates --jq .visibility
    ```
 
-8. `nuget-org` exists with a `required_reviewers` rule that names only me. The agent account isn't in it.
+8. `nuget-org` exists with a `required_reviewers` rule that names only me.
 
    ```shell
    gh api repos/SlusserLabs/AnglePlates/environments --jq '.environments[] | {name, protection_rules}'
@@ -350,7 +349,6 @@ Before previews:
 
 - [ ] Note which GitHub plan the SlusserLabs organization is on.
 - [ ] Pick the GitHub handle for `.github/CODEOWNERS` and the `nuget-org` reviewer.
-- [ ] Create the agent's GitHub credential (a machine user's fine-grained PAT or a GitHub App) with the permissions in [What agents may do](#what-agents-may-do).
 - [ ] Add the `NUGET_USER` repository secret with my NuGet profile name, and `NUGET_INT_USER` if my int.nugettest.org profile name is different:
 
   ```shell
