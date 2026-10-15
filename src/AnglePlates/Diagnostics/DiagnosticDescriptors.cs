@@ -7,16 +7,6 @@ internal static class DiagnosticDescriptors
 {
     private const string _category = "SlusserLabs.AnglePlates";
 
-    public static readonly DiagnosticDescriptor ClassNameNotDerived = Create(
-        "SLAP001",
-        "Template class name can't be derived",
-        "The file name gives the class name '{0}', which isn't a C# identifier; add a directive such as '#type MyTemplate'");
-
-    public static readonly DiagnosticDescriptor NamespaceNotDerived = Create(
-        "SLAP002",
-        "Template namespace can't be derived",
-        "The template's namespace can't be derived, because {0}; add a directive such as '#namespace MyApp.Templates'");
-
     public static readonly DiagnosticDescriptor MissingModel = Create(
         "SLAP003",
         "Template has no #model directive",

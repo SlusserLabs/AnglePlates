@@ -57,11 +57,24 @@ internal static class GeneratorTestHelper
         return Run(CreateCompilation(), CreateDriver(templates, optionsProvider));
     }
 
+    // For deliberately invalid C# in directive values, where the compiler's error cascade can't be derived by hand; the
+    // generator must still run without an exception, and callers assert the generated text and a located error
+    public static GeneratorTestResult RunAllowingCompilationErrors(AnalyzerConfigOptionsProvider optionsProvider, params AdditionalText[] templates)
+    {
+        return Run(CreateCompilation(), CreateDriver(templates, optionsProvider), allowCompilationErrors: true);
+    }
+
+    public static GeneratorTestResult RunAllowingCompilationErrors(params AdditionalText[] templates)
+    {
+        return RunAllowingCompilationErrors(new TestAnalyzerConfigOptionsProvider(), templates);
+    }
+
     public static GeneratorTestResult Run(
         Compilation compilation,
         GeneratorDriver driver,
         IEnumerable<ExpectedCompilerDiagnostic>? expectedCompilationErrors = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool allowCompilationErrors = false)
     {
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _, cancellationToken);
         var runResult = driver.GetRunResult();
@@ -71,6 +84,11 @@ internal static class GeneratorTestHelper
             {
                 throw new InvalidOperationException("The template generator threw an exception.", result.Exception);
             }
+        }
+
+        if (allowCompilationErrors)
+        {
+            return new GeneratorTestResult(driver, output, runResult);
         }
 
         // Emit catches errors that syntax and declaration diagnostics alone can miss

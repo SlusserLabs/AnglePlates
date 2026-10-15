@@ -5,8 +5,6 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
-SLAP001 | SlusserLabs.AnglePlates | Error | Template class name can't be derived from the file name
-SLAP002 | SlusserLabs.AnglePlates | Error | Template namespace can't be derived from RootNamespace and the folders
 SLAP003 | SlusserLabs.AnglePlates | Error | Template has no #model directive
 SLAP004 | SlusserLabs.AnglePlates | Error | Unclosed template block
 SLAP005 | SlusserLabs.AnglePlates | Error | Public template needs public support types

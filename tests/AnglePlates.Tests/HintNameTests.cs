@@ -15,9 +15,10 @@ public sealed class HintNameTests
     [Test]
     [Arguments("#namespace Consumer", "Consumer", "Consumer.Example")]
     [Arguments("#namespace MyApp.Templates", "MyApp.Templates", "MyApp.Templates.Example")]
-    // The namespace part uses each identifier's value, without a verbatim '@' or a Unicode escape
-    [Arguments("#namespace @class", "class", "class.Example")]
-    [Arguments("#namespace My.\\u0041pp", "My.App", "My.App.Example")]
+    // Directive values aren't validated, so a verbatim '@' or a Unicode escape is sanitized in the hint name; the source keeps
+    // the value, which is valid C# here
+    [Arguments("#namespace @class", "_class", "class.Example")]
+    [Arguments("#namespace My.\\u0041pp", "My._u0041pp", "My.App.Example")]
     public async Task HintName_DeclaredClass_NamesTheSourceAfterIt(string namespaceDirective, string hintNamespace, string type)
     {
         var template = new TemplateAdditionalText(TemplateText.WithDirective(namespaceDirective) + "[[ model ]]");
@@ -28,6 +29,27 @@ public sealed class HintNameTests
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(result.HintNames()).IsEqualTo(string.Join("\n", expected.Order(StringComparer.Ordinal)));
         await RenderingTestHelper.AssertRendersAsync(result.Compilation, type, "&lt;value&gt;");
+    }
+
+    [Test]
+    // The compiler reports what's wrong with each value; the generator only has to keep the hint name legal
+    [Arguments("#namespace Consumer", "#type Foo<T>", "Consumer.Foo_T_TextTemplate.g.cs", "Consumer.Foo_T_Utf8Template.g.cs")]
+    [Arguments("#namespace global::X", "#type Example", "global__X.ExampleTextTemplate.g.cs", "global__X.ExampleUtf8Template.g.cs")]
+    [Arguments("#namespace Consumer", "#type Foo\"|*?", "Consumer.Foo____TextTemplate.g.cs", "Consumer.Foo____Utf8Template.g.cs")]
+    // A '.' in the type becomes '_', so the names can't equal a support type's name, which AddSource would reject (CS8785)
+    [Arguments("#namespace SlusserLabs", "#type AnglePlates.", "SlusserLabs.AnglePlates_TextTemplate.g.cs", "SlusserLabs.AnglePlates_Utf8Template.g.cs")]
+    public async Task HintName_InvalidDirectiveValue_IsSanitizedWithoutFailingTheGenerator(string namespaceDirective, string typeDirective, string textName, string utf8Name)
+    {
+        var template = new TemplateAdditionalText(TemplateText.WithDirective(namespaceDirective).Replace("#type Example", typeDirective, StringComparison.Ordinal) + "body");
+        string[] expected = [textName, utf8Name, .. GeneratedSources.SupportHintNames];
+
+        var result = GeneratorTestHelper.RunAllowingCompilationErrors(template);
+
+        await Assert.That(result.GeneratorResult.Exception).IsNull();
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(result.HintNames()).IsEqualTo(string.Join("\n", expected.Order(StringComparer.Ordinal)));
+        await Assert.That(result.GeneratorResult.GeneratedSources.All(source => source.HintName.EndsWith(".g.cs", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.GeneratedFileErrors().Length).IsGreaterThan(0);
     }
 
     [Test]

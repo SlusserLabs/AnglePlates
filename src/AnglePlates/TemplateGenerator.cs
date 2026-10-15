@@ -7,7 +7,6 @@ using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 
@@ -289,14 +288,23 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         return new TemplateDiagnostic(descriptor, path, span, lines.GetLinePositionSpan(span), new EquatableArray<string>(arguments));
     }
 
-    // Names the source after the class it declares, such as MyApp.Templates.GreetingTextTemplate. The namespace uses each
-    // identifier's value, so a verbatim '@' or a Unicode escape never reaches the file name.
+    // Names the source after the class it declares, such as MyApp.Templates.GreetingTextTemplate. Directive values aren't
+    // validated and AddSource rejects some characters, so anything but letters, digits, '.', and '_' becomes '_'. A '.' in
+    // the type becomes '_' too, so a template can't produce the hint name of a support type.
     private static string CreateHintPrefix(TemplateDirectives directives, GenerationTarget target)
     {
-        var identifiers = SyntaxFactory.ParseName(directives.Namespace).DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
-            .Select(identifier => identifier.Identifier.ValueText);
+        return $"{Sanitize(directives.Namespace, keepDots: true)}.{Sanitize(directives.Type, keepDots: false)}{target}Template";
+    }
 
-        return $"{string.Join(".", identifiers)}.{directives.Type}{target}Template";
+    private static string Sanitize(string value, bool keepDots)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            builder.Append(char.IsLetterOrDigit(c) || c == '_' || (keepDots && c == '.') ? c : '_');
+        }
+
+        return builder.ToString();
     }
 
     // The second file with a name gets .2, the third .3, and so on, so AddSource doesn't throw on a repeated name

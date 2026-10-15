@@ -35,6 +35,15 @@ internal sealed class GeneratorTestResult
         return GeneratorResult.GeneratedSources.Single(source => source.HintName == hintName);
     }
 
+    // The compiler errors located in generated files, which is where an invalid directive value ends up
+    public Diagnostic[] GeneratedFileErrors()
+    {
+        return Compilation.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
+                && diagnostic.Location.SourceTree?.FilePath.EndsWith(".g.cs", StringComparison.Ordinal) == true)
+            .ToArray();
+    }
+
     public IncrementalStepRunReason[] StepReasons(string stepName)
     {
         return GeneratorResult.TrackedSteps[stepName].SelectMany(step => step.Outputs).Select(output => output.Reason).ToArray();

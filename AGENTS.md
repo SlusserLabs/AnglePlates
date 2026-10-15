@@ -73,6 +73,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 - Edit generator sources rather than generated files under `obj`
 - Preserve exact template bytes, including intentional newline fixtures, and both text and UTF-8 rendering contracts; execute generated renderers to verify exact characters and bytes when changing parsing, trimming, encoding, or output
 - Templates contain trusted C#; preserve default C# variable encoding and explicit raw-output behavior
+- Directive values are copied into the generated code without C# validation; the compiler reports invalid names and types. The generator checks only blank values (including an empty derived `#type`) and the values AnglePlates defines (`#generate`, `#access`). Hint names are sanitized with plain string work.
 - Preserve direct streaming; do not add whole-output buffering without a requirement
 - Preserve the analyzer-only package contract unless compatibility testing justifies a deliberate change: a development dependency with generated support types, no runtime assets or dependencies, and analyzer/XML assets under `analyzers/dotnet/cs/netstandard2.0`
 - Keep the package's MSBuild files under `build/` (not `buildTransitive/`, which leaked template discovery into referencing projects) and keep discovery and MSBuild options working as described in [How MSBuild hands over templates](docs/development.md#how-msbuild-hands-over-templates); the generator reads only tagged files, and invalid generator settings report `SLAP009`

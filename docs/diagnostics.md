@@ -10,29 +10,13 @@ A template with an error doesn't generate, but the project's other templates sti
 
 **Template class name can't be derived**
 
-The template has no `#type`, and its file name doesn't turn into a valid C# identifier. AnglePlates takes the file name up to its first `.`, splits it on `-`, `_`, and spaces, and capitalizes each part, so `order-line.html` becomes `OrderLine`. A file named `2fa-code.html` gives `2faCode`, which can't start a class name.
-
-```html
-#model MyApp.CodeModel
-<p>Your code is [[ model.Code ]]</p>
-<p>It expires in ten minutes.</p>
-```
-
-Fix it with `#type TwoFactorCode`, or rename the file. The squiggle covers the first line of the template.
+**Retired in 1.1.** AnglePlates no longer checks derived names, so a name that isn't valid C# shows up as a compiler error in the generated file; add `#type` to pick a valid one.
 
 ## SLAP002
 
 **Template namespace can't be derived**
 
-The template has no `#namespace`, and AnglePlates can't build one from `RootNamespace` plus the template's folders. That happens when `RootNamespace` is empty or isn't a namespace name, when a folder between the project and the template isn't a C# identifier (`my-folder`, `2024`, or a keyword such as `class`), or when the template sits outside the project folder. Folder names aren't changed, so `Templates/Emails/welcome.html` in a project whose `RootNamespace` is `MyApp` gets `MyApp.Templates.Emails`. The message says which of these went wrong.
-
-```html
-#model MyApp.InvoiceModel
-<h1>Invoice [[ model.Number ]]</h1>
-<p>Thanks for your order.</p>
-```
-
-If that file lives in `Templates/2024/`, fix it with `#namespace MyApp.Templates.Archive`, or move it to a folder with an identifier for a name. The squiggle covers the first line of the template.
+**Retired in 1.1.** AnglePlates no longer checks derived names, so a namespace that isn't valid C# shows up as a compiler error in the generated file; add `#namespace` to pick a valid one.
 
 ## SLAP003
 

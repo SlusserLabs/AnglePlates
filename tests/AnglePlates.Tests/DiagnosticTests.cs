@@ -20,34 +20,6 @@ namespace SlusserLabs.AnglePlates.Tests;
 public sealed class DiagnosticTests
 {
     [Test]
-    public async Task Slap001_UnderivableClassName_ReportsAtFirstLine()
-    {
-        const string path = "Templates/2fa-code.html";
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText("#model string\r\n#namespace Consumer\r\nbody", path)).RunResult;
-        var diagnostic = result.Diagnostics.Single();
-
-        await AssertRule(diagnostic, "SLAP001", DiagnosticSeverity.Error, "Template class name can't be derived");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo(
-            "The file name gives the class name '2faCode', which isn't a C# identifier; add a directive such as '#type MyTemplate'");
-        await AssertLineSpan(diagnostic, path, 0, 0, 0, 13);
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
-    }
-
-    [Test]
-    public async Task Slap002_UnderivableNamespace_ReportsAtFirstLine()
-    {
-        // Hand-built compilations supply no RootNamespace, so there's nothing to derive the namespace from
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText("#type Example\r\n#model string\r\nbody")).RunResult;
-        var diagnostic = result.Diagnostics.Single();
-
-        await AssertRule(diagnostic, "SLAP002", DiagnosticSeverity.Error, "Template namespace can't be derived");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo(
-            "The template's namespace can't be derived, because RootNamespace is empty; add a directive such as '#namespace MyApp.Templates'");
-        await AssertLineSpan(diagnostic, TemplateText.Path, 0, 0, 0, 13);
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
-    }
-
-    [Test]
     // The section ends at the first body line. When the text ends on a directive line, the empty span sits at its end.
     [Arguments("#type Example\r\n#namespace Consumer\r\nHello", 2, 0, 5)]
     [Arguments("#type Example\r\n#namespace Consumer\r\n", 2, 0, 0)]
@@ -239,7 +211,7 @@ public sealed class DiagnosticTests
         var anchors = MarkdownDocument.Load(path).Anchors;
         var descriptors = AllDescriptors();
 
-        await Assert.That(descriptors.Length).IsEqualTo(11);
+        await Assert.That(descriptors.Length).IsEqualTo(9);
         await Assert.That(descriptors.Select(descriptor => descriptor.Id).Distinct().Count()).IsEqualTo(descriptors.Length);
         foreach (var descriptor in descriptors)
         {
@@ -249,6 +221,22 @@ public sealed class DiagnosticTests
             await Assert.That(descriptor.HelpLinkUri).IsEqualTo(HelpLink(descriptor.Id));
             await Assert.That(anchors).Contains(new Uri(descriptor.HelpLinkUri).Fragment.TrimStart('#'));
         }
+    }
+
+    [Test]
+    [Arguments("SLAP001")]
+    [Arguments("SLAP002")]
+    public async Task Registry_RetiredRule_IsDocumentedAndNeverUsed(string id)
+    {
+        // IDs retired before any release stay documented and are never reused, but have no AnalyzerReleases entry
+        var lines = File.ReadAllLines(RepositoryFiles.GetPath("docs/diagnostics.md"));
+        var unshipped = File.ReadAllText(RepositoryFiles.GetPath("src/AnglePlates/AnalyzerReleases.Unshipped.md"));
+        var heading = Array.IndexOf(lines, "## " + id);
+
+        await Assert.That(heading).IsGreaterThan(0);
+        await Assert.That(lines[heading + 4]).Contains("Retired in 1.1");
+        await Assert.That(AllDescriptors().Any(descriptor => descriptor.Id == id)).IsFalse();
+        await Assert.That(unshipped).DoesNotContain(id);
     }
 
     [Test]
@@ -284,7 +272,7 @@ public sealed class DiagnosticTests
 
         // Missing directives, unclosed blocks, and directive errors each skip only their own template
         await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id).Order(StringComparer.Ordinal)))
-            .IsEqualTo("SLAP002,SLAP003,SLAP004,SLAP004,SLAP006");
+            .IsEqualTo("SLAP003,SLAP004,SLAP004,SLAP006");
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(8);
         await Assert.That(first.text).IsEqualTo("first &lt;value&gt;");
         await Assert.That(second.text).IsEqualTo("second &lt;value&gt;");
