@@ -114,10 +114,10 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 
 ### Phase B3: runtime tests and consumers ([details](#phase-b3-runtime-tests-and-consumers))
 
-- [ ] `Templates/Syntax` fixtures (`levels.html`, `multiline-lf.html`, `multiline-crlf.html`, `openers.html`) and `SyntaxTests`, including the encoder rows moved from `BlockSyntaxTests` ([11.3](#113-runtime-tests)).
-- [ ] `Templates/Readme/levels.html` and its `ReadmeExampleTests` entry.
-- [ ] Culture: `CultureTests` (including the null-throws row), `Templates/Culture/*`, the invoice partial and models.
-- [ ] New template classes registered in `TemplateDefaultsTests`; S37 wording and rename in `ConversionTests` and `OutputTests`.
+- [x] `Templates/Syntax` fixtures (`levels.html`, `multiline-lf.html`, `multiline-crlf.html`, `openers.html`) and `SyntaxTests`, including the encoder rows moved from `BlockSyntaxTests` ([11.3](#113-runtime-tests)). (`levels.html` has one line per rule, with trims at levels 1 to 4; every expected string was derived by hand and matched the first run. The `BlockSyntaxTests` encoder rows were already gone in B2, so `LiteralOpener_UnderOtherEncoders_WritesEncodedOpener` is new here and uses the S33 strings. The CRLF fixture keeps CRLF in its header lines too; both multi-line fixtures have no final newline.)
+- [x] `Templates/Readme/levels.html` and its `ReadmeExampleTests` entry. (Deviation: the drift test needs the marked block to exist, so a short marked sample with its output was added to `docs/templates.md` after the comments paragraph of "How blocks end" in this commit; B4 still rewrites that section's prose around it.)
+- [x] Culture: `CultureTests` (including the null-throws row), `Templates/Culture/*`, the invoice partial and models. (All de-DE, fr-FR, and invariant expectations were written by hand and passed on the first run; the `[NotInParallel]` row restores `CurrentCulture` in `finally`. `TemplateOptions` is internal, so the `RenderToString` row takes a `bool` instead of an options argument.)
+- [x] New template classes registered in `TemplateDefaultsTests`; S37 wording and rename in `ConversionTests` and `OutputTests`. (16 registrations. Runtime.Tests: 339 pass, up from 302; generator suite 981 pass; `-warnaserror` build clean; sample output byte-identical with the B0 capture.)
 - [ ] `ScannerParity`, `BuildErrors/Slap001`, and `BuildErrors/Slap002` deleted.
 - [ ] `DelimiterLevels` added ([Appendix B](#appendix-b-delimiterlevels-consumer-template)), every expected string checked against the actual render.
 - [ ] `StrictAnalyzers` added and builds with zero warnings, with relaxations only in a `[Program.cs]` section ([11.4](#114-package-validation), [8.7](#87-generated-code-and-consumer-analyzers)).

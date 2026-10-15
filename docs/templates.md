@@ -70,6 +70,22 @@ A block with no closer the lexer accepts doesn't end at all. It reports [`SLAP00
 
 Comments (`[* *]`) aren't C#, so they end at the first `*]`.
 
+Here's a template that needs more brackets. The slice `model[0..1]` ends in `]]`, which would close a two-bracket C# variable early, so it uses three. The C# block holds a `%]`, so it uses two:
+
+<!-- sample: Templates/Readme/levels.html -->
+```text
+#model string
+[[% var closer = "%]"; %]]<p>[[[ model[0..1] ]]] is the first letter of [[ model ]].</p>
+<p>A level-2 block ends at [[ closer ]].</p>
+```
+
+Rendered with the model `"Ada"`, it writes:
+
+```html
+<p>A is the first letter of Ada.</p>
+<p>A level-2 block ends at %].</p>
+```
+
 ## Escaping
 
 Got JavaScript with nested arrays, a Bash `[[ ]]` test, or a TOML `[[table]]`? Put a backslash in front of the opener, and AnglePlates writes it as plain text. `const grid = \[[1, 2], [3, 4]];` writes `const grid = [[1, 2], [3, 4]];`. This works for `[[`, `[%`, and `[*`.

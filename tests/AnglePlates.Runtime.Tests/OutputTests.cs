@@ -22,7 +22,7 @@ public sealed class OutputTests
     [Arguments(false, "a\uDC00", "a\uDC00", "61EFBFBD")]
     public async Task Render_LoneSurrogate_ReplacesOrPassesThrough(bool encoded, string value, string expectedText, string expectedUtf8Hex)
     {
-        // Captured from the pre-1.0 code: the HTML encoder writes U+FFFD, the unencoded text target passes the surrogate through,
+        // Captured from the prototype's code: the HTML encoder writes U+FFFD, the unencoded text target passes the surrogate through,
         // and the unencoded UTF-8 target writes the UTF-8 replacement character
         var text = new VariableTextTemplate(TestOptions.Create(encoded));
         var utf8 = new VariableUtf8Template(TestOptions.Create(encoded));

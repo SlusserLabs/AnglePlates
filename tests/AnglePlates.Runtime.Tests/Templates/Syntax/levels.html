@@ -1,0 +1,21 @@
+#type SyntaxLevels
+#model string
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+v2:[[ model ]] v3:[[[ model ]]] v4:[[[[ model ]]]]
+b1:[% var a = 1; %][[ a ]] b2:[[% var b = 2; %]][[ b ]] b3:[[[% var c = 3; %]]][[ c ]] b4:[[[[% var d = 4; %]]]][[ d ]]
+c1:[* x *]c2:[[* x *]]c3:[[[* x *]]]c4:[[[[* x *]]]]|
+more:[[[[[ model ]]]]][[[[[[ model ]]]]]]
+escapes:\[[ model ]] \\[[ model ]] C:\out\[[ model ]]
+text:[[ "[[" ]]x[[[ "]]" ]]] [[[ "[[table]]" ]]] [% WriteRaw("[[", writer); %] [a][b]
+closers:[% var grid = new[] { 7 }; var row = new[] { 0 }; %][[[ grid[row[0]] ]]] [[[ model[0..1] ]]] [[% var s = "%]"; %]][[ s ]] [[[* hidden [[ x ]] and *]] *]]] [[ model ]]]
+comment:[[*ptr*]]ok
+enc:[[ "<&" ]]
+t1:   [%- var t = 1; -%]   [[ t ]]|
+t2:   [[- model -]]   |
+t3:   [[[- model -]]]   |
+t4:   [[[[- model -]]]]   |
+t5:
+[[[[%- var w = 6; -%]]]]
+[[ w ]]|
+t6:  [[%- var y = 7; -%]]  [[ y ]]|
+t7:  [[[%- var z = 8; -%]]]  [[ z ]]|

@@ -28,7 +28,7 @@ public sealed class ReadmeExampleTests
     private static readonly Dictionary<string, string[]> _samples = new(StringComparer.Ordinal)
     {
         ["README.md"] = ["Templates/Readme/greeting.html"],
-        ["docs/templates.md"] = ["Templates/Readme/order-line.html", "Templates/Readme/order.html", "Readme/OrderTextTemplate.cs"],
+        ["docs/templates.md"] = ["Templates/Readme/levels.html", "Templates/Readme/order-line.html", "Templates/Readme/order.html", "Readme/OrderTextTemplate.cs"],
     };
 
     [Test]
@@ -64,6 +64,16 @@ public sealed class ReadmeExampleTests
         var output = GreetingTextTemplate.Default.RenderToString(model);
 
         await Assert.That(output).Contains("<h1>Hello, Ada &amp; Grace!</h1>");
+    }
+
+    [Test]
+    public async Task Render_Levels_WritesDocumentedOutput()
+    {
+        await TemplateOutput.AssertRendersAsync(
+            LevelsTextTemplate.Default,
+            LevelsUtf8Template.Default,
+            "Ada",
+            "<p>A is the first letter of Ada.</p>\n<p>A level-2 block ends at %].</p>\n");
     }
 
     [Test]

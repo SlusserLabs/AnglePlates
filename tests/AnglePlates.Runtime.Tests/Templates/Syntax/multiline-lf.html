@@ -1,0 +1,14 @@
+#type SyntaxMultilineLf
+#model string
+#namespace SlusserLabs.AnglePlates.Runtime.Tests.Templates
+[% var verbatim = @"a
+b"; WriteRaw(verbatim, writer); %]|[% var raw = """
+    x
+    y
+    """; WriteRaw(raw, writer); %]|[[
+    model
+    ]]|[%
+#if NEVER
+WriteRaw("never", writer);
+#endif
+%]end

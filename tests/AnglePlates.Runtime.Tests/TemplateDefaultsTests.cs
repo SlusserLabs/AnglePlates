@@ -89,6 +89,20 @@ public sealed class TemplateDefaultsTests
         yield return ("ConversionTimeOnlyUtf8Template", () => new ConversionTimeOnlyUtf8Template().Options, () => ConversionTimeOnlyUtf8Template.Default.Options);
         yield return ("ConversionTimeSpanTextTemplate", () => new ConversionTimeSpanTextTemplate().Options, () => ConversionTimeSpanTextTemplate.Default.Options);
         yield return ("ConversionTimeSpanUtf8Template", () => new ConversionTimeSpanUtf8Template().Options, () => ConversionTimeSpanUtf8Template.Default.Options);
+        yield return ("CultureInvoiceLineTextTemplate", () => new CultureInvoiceLineTextTemplate().Options, () => CultureInvoiceLineTextTemplate.Default.Options);
+        yield return ("CultureInvoiceTextTemplate", () => new CultureInvoiceTextTemplate().Options, () => CultureInvoiceTextTemplate.Default.Options);
+        yield return ("CultureNullableDoubleTextTemplate", () => new CultureNullableDoubleTextTemplate().Options, () => CultureNullableDoubleTextTemplate.Default.Options);
+        yield return ("CultureNullableDoubleUtf8Template", () => new CultureNullableDoubleUtf8Template().Options, () => CultureNullableDoubleUtf8Template.Default.Options);
+        yield return ("CulturePlainTextTemplate", () => new CulturePlainTextTemplate().Options, () => CulturePlainTextTemplate.Default.Options);
+        yield return ("CultureWriterTextTemplate", () => new CultureWriterTextTemplate().Options, () => CultureWriterTextTemplate.Default.Options);
+        yield return ("SyntaxLevelsTextTemplate", () => new SyntaxLevelsTextTemplate().Options, () => SyntaxLevelsTextTemplate.Default.Options);
+        yield return ("SyntaxLevelsUtf8Template", () => new SyntaxLevelsUtf8Template().Options, () => SyntaxLevelsUtf8Template.Default.Options);
+        yield return ("SyntaxMultilineCrlfTextTemplate", () => new SyntaxMultilineCrlfTextTemplate().Options, () => SyntaxMultilineCrlfTextTemplate.Default.Options);
+        yield return ("SyntaxMultilineCrlfUtf8Template", () => new SyntaxMultilineCrlfUtf8Template().Options, () => SyntaxMultilineCrlfUtf8Template.Default.Options);
+        yield return ("SyntaxMultilineLfTextTemplate", () => new SyntaxMultilineLfTextTemplate().Options, () => SyntaxMultilineLfTextTemplate.Default.Options);
+        yield return ("SyntaxMultilineLfUtf8Template", () => new SyntaxMultilineLfUtf8Template().Options, () => SyntaxMultilineLfUtf8Template.Default.Options);
+        yield return ("SyntaxOpenersTextTemplate", () => new SyntaxOpenersTextTemplate().Options, () => SyntaxOpenersTextTemplate.Default.Options);
+        yield return ("SyntaxOpenersUtf8Template", () => new SyntaxOpenersUtf8Template().Options, () => SyntaxOpenersUtf8Template.Default.Options);
         yield return ("ArrayModelTextTemplate", () => new ArrayModelTextTemplate().Options, () => ArrayModelTextTemplate.Default.Options);
         yield return ("ArrayModelUtf8Template", () => new ArrayModelUtf8Template().Options, () => ArrayModelUtf8Template.Default.Options);
         yield return ("NestedGenericModelTextTemplate", () => new NestedGenericModelTextTemplate().Options, () => NestedGenericModelTextTemplate.Default.Options);
@@ -127,6 +141,8 @@ public sealed class TemplateDefaultsTests
         yield return ("AsyncWriteOverloadsUtf8Template", () => new AsyncWriteOverloadsUtf8Template().Options, () => AsyncWriteOverloadsUtf8Template.Default.Options);
         yield return ("Readme.GreetingTextTemplate", () => new GreetingTextTemplate().Options, () => GreetingTextTemplate.Default.Options);
         yield return ("Readme.GreetingUtf8Template", () => new GreetingUtf8Template().Options, () => GreetingUtf8Template.Default.Options);
+        yield return ("Readme.LevelsTextTemplate", () => new LevelsTextTemplate().Options, () => LevelsTextTemplate.Default.Options);
+        yield return ("Readme.LevelsUtf8Template", () => new LevelsUtf8Template().Options, () => LevelsUtf8Template.Default.Options);
         yield return ("MyApp.OrderLineTextTemplate", () => new MyApp.Templates.OrderLineTextTemplate().Options, () => MyApp.Templates.OrderLineTextTemplate.Default.Options);
         yield return ("MyApp.OrderTextTemplate", () => new MyApp.Templates.OrderTextTemplate().Options, () => MyApp.Templates.OrderTextTemplate.Default.Options);
     }
