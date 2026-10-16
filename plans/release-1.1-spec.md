@@ -149,7 +149,7 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 - [x] Coverage measured for both modules and the listed classes. (Generator 99.75% line, 99.33% branch; Runtime.Tests 100% line, 99.74% branch; `TemplateParser`, `TemplateSyntax`, and emitted `TemplateOptions` 100% line and branch. The only gaps are the accepted ones in `docs/testing.md#coverage`.)
 - [x] Final fresh pack and `validate-package.ps1` run. (Pack `1.1.0-local.20261016.3` after clearing `artifacts/package`; `validate-package.ps1` exit 0 with every consumer, Native AOT included; sample output byte-identical with the B0 capture.)
 - [x] Pull request description complete and marked ready (`gh pr ready`). (Pull request #3; the description carries the 6.7 table, benchmarks, coverage, snapshot checklist, greps, and template sections. The "one-line purpose comment" template box is left unticked because I didn't re-audit every type in B5.)
-- [ ] **Accept:** CI green on all four legs; every item above ticked or noted.
+- [x] **Accept:** CI green on all four legs; every item above ticked or noted. (CI run 38921720722 on the B5 pull request tick commit: `windows`, `ubuntu`, `sdk-floor`, `latest-sdk` all success. Open for the owner: the numeric 6.7 misses and the possible 3 to 7% `TableBenchmarks` slowdown, both noted in the pull request.)
 - [ ] **STOP P1. Owner:** snapshot and voice review recorded in the pull request; the owner merges.
 
 ### Phase B6: after the merge ([details](#phase-b6-after-the-merge))
