@@ -148,7 +148,7 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 - [x] Benchmarks rerun and Native AOT size recorded. (All 46 benchmarks plus a second `*Table*` run; allocations are identical; formatted-row `TableBenchmarks` rows run about 3 to 7% slower on both runs while the hand-written rows move 0 to 5%, so the `Options.Culture` read may show; flagged in the pull request for the owner's written acceptance per 9.2 step 4. Native AOT `NativeAot` executable 1,754,112 bytes, baseline 1,752,064.)
 - [x] Coverage measured for both modules and the listed classes. (Generator 99.75% line, 99.33% branch; Runtime.Tests 100% line, 99.74% branch; `TemplateParser`, `TemplateSyntax`, and emitted `TemplateOptions` 100% line and branch. The only gaps are the accepted ones in `docs/testing.md#coverage`.)
 - [x] Final fresh pack and `validate-package.ps1` run. (Pack `1.1.0-local.20261016.3` after clearing `artifacts/package`; `validate-package.ps1` exit 0 with every consumer, Native AOT included; sample output byte-identical with the B0 capture.)
-- [ ] Pull request description complete and marked ready (`gh pr ready`).
+- [x] Pull request description complete and marked ready (`gh pr ready`). (Pull request #3; the description carries the 6.7 table, benchmarks, coverage, snapshot checklist, greps, and template sections. The "one-line purpose comment" template box is left unticked because I didn't re-audit every type in B5.)
 - [ ] **Accept:** CI green on all four legs; every item above ticked or noted.
 - [ ] **STOP P1. Owner:** snapshot and voice review recorded in the pull request; the owner merges.
 
