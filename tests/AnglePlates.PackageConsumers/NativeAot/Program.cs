@@ -6,6 +6,7 @@ using System.IO;
 using System.IO.Pipelines;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using NativeAot.Templates;
 using SlusserLabs.AnglePlates;
@@ -20,7 +21,7 @@ internal static class Program
 
     // The literal text is UTF-8 in the template file and must come out as the same characters and bytes
     private static readonly string _expectedReport =
-        "<h1>Q3 &lt;Report&gt;</h1>\n" +
+        "<h1>Q3 &lt;Report&gt; 2</h1>\n" +
         "<p>Read, Write |1234.5 0.25 10/07/2026 13:05:00</p>\n" +
         "<p>Café ✓ 東京 10/07/2026 13:05:00 &#x2B;02:00 0f8fad5b-d9cb-469f-a165-70867728950e</p>\n" +
         "<pre>" + string.Concat(Enumerable.Repeat("&lt;a&amp;b&gt;", _notesRepeat)) + "</pre>\n" +
@@ -65,12 +66,16 @@ internal static class Program
         Check(failures, "template access", typeof(ReportTextTemplate).IsPublic && typeof(ReportUtf8Template).IsPublic &&
             !typeof(LineTextTemplate).IsPublic && !typeof(LineUtf8Template).IsPublic);
 
-        // Each preset and a custom NullVariable, through both renderers
+        // Each encoder and a custom NullVariable, through both renderers
         var options = new OptionsModel("Tom & 'Jérôme' <b>", null);
-        CheckOptions(failures, "Html", TemplateOptions.Html, options, "Tom &amp; &#x27;J&#xE9;r&#xF4;me&#x27; &lt;b&gt;|");
-        CheckOptions(failures, "Unencoded", TemplateOptions.Unencoded, options, "Tom & 'Jérôme' <b>|");
-        CheckOptions(failures, "JavaScript", TemplateOptions.JavaScript, options, "Tom \\u0026 \\u0027J\\u00E9r\\u00F4me\\u0027 \\u003Cb\\u003E|");
+        CheckOptions(failures, "Html", new TemplateOptions(), options, "Tom &amp; &#x27;J&#xE9;r&#xF4;me&#x27; &lt;b&gt;|");
+        CheckOptions(failures, "Unencoded", new TemplateOptions { Encoder = null }, options, "Tom & 'Jérôme' <b>|");
+        CheckOptions(failures, "JavaScript", new TemplateOptions { Encoder = JavaScriptEncoder.Default }, options, "Tom \\u0026 \\u0027J\\u00E9r\\u00F4me\\u0027 \\u003Cb\\u003E|");
         CheckOptions(failures, "NullVariable", new TemplateOptions { NullVariable = "(none)" }, options, "Tom &amp; &#x27;J&#xE9;r&#xF4;me&#x27; &lt;b&gt;|(none)");
+
+        // A named culture reaches the conversion after trimming; this consumer keeps ICU, so de-DE exists in the native run
+        CheckNumber(failures, "de-DE", new TemplateOptions { Culture = CultureInfo.GetCultureInfo("de-DE") }, "1,5");
+        CheckNumber(failures, "default culture", new TemplateOptions(), "1.5");
 
         // PublishAot turns off dynamic code even under dotnet run, so the validation script names the run instead
         var mode = args.Length > 0 ? args[0] : "an unnamed run";
@@ -93,6 +98,17 @@ internal static class Program
 
         Check(failures, $"{name} text gave '{text}'", string.Equals(text.ToString(), expected, StringComparison.Ordinal));
         Check(failures, $"{name} UTF-8 gave '{Encoding.UTF8.GetString(utf8.WrittenSpan)}'", utf8.WrittenSpan.SequenceEqual(Encoding.UTF8.GetBytes(expected)));
+    }
+
+    private static void CheckNumber(List<string> failures, string name, TemplateOptions options, string expected)
+    {
+        using var text = new StringWriter(CultureInfo.InvariantCulture);
+        var utf8 = new ArrayBufferWriter<byte>();
+        new NumberTextTemplate(options).Render(1.5, text);
+        new NumberUtf8Template(options).Render(1.5, utf8);
+
+        Check(failures, $"{name} number text gave '{text}'", string.Equals(text.ToString(), expected, StringComparison.Ordinal));
+        Check(failures, $"{name} number UTF-8 gave '{Encoding.UTF8.GetString(utf8.WrittenSpan)}'", utf8.WrittenSpan.SequenceEqual(Encoding.UTF8.GetBytes(expected)));
     }
 
     private static void Check(List<string> failures, string name, bool passed)

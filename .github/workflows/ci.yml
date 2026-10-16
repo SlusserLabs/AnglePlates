@@ -118,7 +118,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      # Runs every consumer the script registers on every leg, including BuildErrors, ScannerParity, the Native AOT
+      # Runs every consumer the script registers on every leg, including BuildErrors, DelimiterLevels, the Native AOT
       # publish, and the AOT canary, and keeps their binlogs for the failure upload. Nothing passes -SkipNativeAot here.
       - name: Validate the package
         shell: pwsh

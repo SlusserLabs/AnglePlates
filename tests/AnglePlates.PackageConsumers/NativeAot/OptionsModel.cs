@@ -1,6 +1,6 @@
 namespace NativeAot;
 
-// Rendered once with each options preset and with a custom NullVariable
+// Rendered once with each encoder and with a custom NullVariable
 public sealed class OptionsModel
 {
     public OptionsModel(string text, string? missing)

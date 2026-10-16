@@ -1,1 +1,2 @@
 Templates/bad.html(5,4): error CS0103: The name 'Missing' does not exist in the current context
+Templates/bad.html(7,4): error CS0103: The name 'Missing2' does not exist in the current context

@@ -116,7 +116,8 @@ $consumers = @(
     @{ Name = 'NoPrivateAssets'; Source = 'tests/AnglePlates.PackageConsumers/NoPrivateAssets'; Project = 'App/App.csproj'; Arguments = @() },
     @{ Name = 'CentralPackageManagement'; Source = 'tests/AnglePlates.PackageConsumers/CentralPackageManagement'; Project = 'CentralPackageManagement.csproj'; Arguments = @() },
     @{ Name = 'DefaultNames'; Source = 'tests/AnglePlates.PackageConsumers/DefaultNames'; Project = 'DefaultNames.csproj'; Arguments = @() },
-    @{ Name = 'ScannerParity'; Source = 'tests/AnglePlates.PackageConsumers/ScannerParity'; Project = 'ScannerParity.csproj'; Arguments = @() },
+    @{ Name = 'DelimiterLevels'; Source = 'tests/AnglePlates.PackageConsumers/DelimiterLevels'; Project = 'DelimiterLevels.csproj'; Arguments = @() },
+    @{ Name = 'StrictAnalyzers'; Source = 'tests/AnglePlates.PackageConsumers/StrictAnalyzers'; Project = 'StrictAnalyzers.csproj'; Arguments = @() },
     @{ Name = 'AspNetCore'; Source = 'tests/AnglePlates.PackageConsumers/AspNetCore'; Project = 'AspNetCore.csproj'; Arguments = @() },
     @{ Name = 'UnsupportedFramework'; Source = 'tests/AnglePlates.PackageConsumers/UnsupportedFramework'; Project = 'UnsupportedFramework.csproj'; ExpectedErrors = 'Exact'; IgnoredWarnings = @('NETSDK1138') },
     @{ Name = 'BuildErrors'; Source = 'tests/AnglePlates.PackageConsumers/BuildErrors'; BuildErrors = $true },
@@ -256,7 +257,8 @@ try {
         $consumerRoot = Join-Path (Join-Path $validationRoot 'consumers') $consumer.Name
         $logPrefix = Join-Path $logDirectory $consumer.Name
         New-Item -ItemType Directory -Path $consumerRoot | Out-Null
-        Copy-Item -Path (Join-Path $repositoryRoot "$($consumer.Source)/*") -Destination $consumerRoot -Recurse
+        # -Force so dotfiles such as StrictAnalyzers/.editorconfig are copied too; PowerShell treats them as hidden on Linux and macOS
+        Get-ChildItem -LiteralPath (Join-Path $repositoryRoot $consumer.Source) -Force | Copy-Item -Destination $consumerRoot -Recurse -Force
 
         if ($consumer.BuildErrors) {
             # Each case folder is a project named after the folder, with optional extra build arguments, one per line

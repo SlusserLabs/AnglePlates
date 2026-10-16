@@ -17,8 +17,8 @@ internal static class Program
         var buffer = new ArrayBufferWriter<byte>();
         OrderLineUtf8Template.Default.Render("<tea>", buffer);
 
-        // #encode none makes Default unencoded
-        var welcome = WelcomeBackTextTemplate.Default.RenderToString("<Ada>");
+        // Encoder = null leaves the text unencoded
+        var welcome = new WelcomeBackTextTemplate(new TemplateOptions { Encoder = null }).RenderToString("<Ada>");
 
         if (!string.Equals(typeof(OrderLineTextTemplate).FullName, "DefaultNames.Templates.OrderLineTextTemplate", StringComparison.Ordinal) ||
             !string.Equals(typeof(WelcomeBackTextTemplate).FullName, "DefaultNames.Templates.Emails.Welcome.WelcomeBackTextTemplate", StringComparison.Ordinal) ||

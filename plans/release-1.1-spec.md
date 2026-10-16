@@ -118,14 +118,14 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 - [x] `Templates/Readme/levels.html` and its `ReadmeExampleTests` entry. (Deviation: the drift test needs the marked block to exist, so a short marked sample with its output was added to `docs/templates.md` after the comments paragraph of "How blocks end" in this commit; B4 still rewrites that section's prose around it.)
 - [x] Culture: `CultureTests` (including the null-throws row), `Templates/Culture/*`, the invoice partial and models. (All de-DE, fr-FR, and invariant expectations were written by hand and passed on the first run; the `[NotInParallel]` row restores `CurrentCulture` in `finally`. `TemplateOptions` is internal, so the `RenderToString` row takes a `bool` instead of an options argument.)
 - [x] New template classes registered in `TemplateDefaultsTests`; S37 wording and rename in `ConversionTests` and `OutputTests`. (16 registrations. Runtime.Tests: 339 pass, up from 302; generator suite 981 pass; `-warnaserror` build clean; sample output byte-identical with the B0 capture.)
-- [ ] `ScannerParity`, `BuildErrors/Slap001`, and `BuildErrors/Slap002` deleted.
-- [ ] `DelimiterLevels` added ([Appendix B](#appendix-b-delimiterlevels-consumer-template)), every expected string checked against the actual render.
-- [ ] `StrictAnalyzers` added and builds with zero warnings, with relaxations only in a `[Program.cs]` section ([11.4](#114-package-validation), [8.7](#87-generated-code-and-consumer-analyzers)).
-- [ ] `BuildErrors/StrictAnalyzersControl` added and fails with the verified IDE0055 line ([11.4](#114-package-validation)).
+- [x] `ScannerParity`, `BuildErrors/Slap001`, and `BuildErrors/Slap002` deleted. (`docs/development.md` line 85 still names `ScannerParity`; the B4 docs pass rewrites it.)
+- [x] `DelimiterLevels` added ([Appendix B](#appendix-b-delimiterlevels-consumer-template)), every expected string checked against the actual render. (All 13 rows matched the Appendix B expected string for Text, UTF-8, and `RenderAsync` on the first run; the template and string are unchanged from the appendix.)
+- [x] `StrictAnalyzers` added and builds with zero warnings, with relaxations only in a `[Program.cs]` section ([11.4](#114-package-validation), [8.7](#87-generated-code-and-consumer-analyzers)). (Relaxed for `Program.cs` only: SA1633, SA1200, IDE0090, CA1303, and SA1516, each commented in the `.editorconfig`. SA1516 is a StyleCop 1.1.118 false positive with no location: any two adjacent top-level statements trigger it, even in a file with no template. The generated files drew no diagnostic.)
+- [x] `BuildErrors/StrictAnalyzersControl` added and fails with the verified IDE0055 line ([11.4](#114-package-validation)). (Expected line: `error IDE0055: Fix formatting (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0055)`, reported at `Misindented.cs(6,40)`; the build also reports SA1137, SA1600, and others, which the non-exact check ignores.)
 - [ ] `validate-package.ps1` copies consumers with `Get-ChildItem -Force | Copy-Item -Recurse -Force`; the ubuntu leg confirms `.editorconfig` reaches the copied folders (run ID noted here).
-- [ ] `BuildErrors/Slap004`, `Cs0103`, and new `Cs1026` updated.
-- [ ] `NativeAot`: bracket levels, the culture check, options instead of presets. `DefaultNames`: no `#encode none`.
-- [ ] `validate-package.ps1` registrations, `tests/AnglePlates.PackageTests/README.md`, and the `ci.yml` comment.
+- [x] `BuildErrors/Slap004`, `Cs0103`, and new `Cs1026` updated. (The optional template-mapped CS1003 line for `Cs1026` wasn't added.)
+- [x] `NativeAot`: bracket levels, the culture check, options instead of presets. `DefaultNames`: no `#encode none`. (`level` string `<h1>Q3 &lt;Report&gt; 2</h1>` matched the actual render in both the JIT and native runs; de-DE gave `1,5`. Native executable 1,754,112 bytes.)
+- [x] `validate-package.ps1` registrations, `tests/AnglePlates.PackageTests/README.md`, and the `ci.yml` comment.
 - [ ] **Accept:** `-warnaserror` build; both test projects pass; sample byte-identical; fresh local pack and `validate-package.ps1` pass with every consumer (Native AOT included, or `-SkipNativeAot` noted); CI green or the failure noted here.
 
 ### Phase B4: docs, versions, and prose ([details](#phase-b4-docs-versions-and-prose))
