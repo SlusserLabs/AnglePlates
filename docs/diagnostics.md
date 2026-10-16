@@ -2,7 +2,7 @@
 
 AnglePlates reports template and project mistakes while it generates code, so they show up as ordinary build errors and warnings. This page has one section per rule: what fires it, a small template that triggers it, the fix, and where the squiggle lands. Each rule's help link in the IDE points at its section here.
 
-Every rule uses category `SlusserLabs.AnglePlates` and is enabled by default. All of them are errors except `SLAP011`, which is a warning. Template diagnostics point at a line and column in the template file, whether it uses CRLF, LF, or CR line endings.
+Every rule uses category `SlusserLabs.AnglePlates` and is on until you change its severity with `dotnet_diagnostic.SLAPnnn.severity` in a `.globalconfig` file (`is_global = true`); `NoWarn` and `WarningsAsErrors` in the project work too. An `.editorconfig` doesn't reach these rules, because a template diagnostic points at a template file, not a C# file. All of them are errors except `SLAP011`, which is a warning. Template diagnostics point at a line and column in the template file, whether it uses CRLF, LF, or CR line endings.
 
 A template with an error doesn't generate, but the project's other templates still do. `SLAP009` and `SLAP010` are the exceptions: each one stops generation for the whole project, support types included. A project that gets the generator without the package's build files, through a library that references AnglePlates without `PrivateAssets`, gets no diagnostics and no generated code at all, because it can't have templates.
 
@@ -36,7 +36,7 @@ Add `#model` with the model's C# type, or fix the spelling. The squiggle covers 
 
 **Unclosed template block**
 
-A C# variable (`[[`), C# block (`[%`), or comment (`[*`) has no closer after it that counts. For a comment, any `*]` counts. For C#, usually there's just no closer at all, but there are a few cases where a closer is there and the lexer won't take it; they're listed after the example. The message names the closer it expected.
+A C# variable, C# block, or comment has no closer with the same number of brackets after it. The message names the closer it expected, such as `]]]` for `[[[`.
 
 ```html
 #model MyApp.GreetingModel
@@ -46,31 +46,7 @@ A C# variable (`[[`), C# block (`[%`), or comment (`[*`) has no closer after it 
 
 Add the missing `]]`, `%]`, or `*]`. The squiggle covers the opener.
 
-In C# variables and C# blocks, a closer only counts if the C# lexer agrees it's a closer, as [How blocks end](templates.md#how-blocks-end) explains. So you can also get `SLAP004` with a closer right there on the screen:
-
-- A C# variable with an unmatched `[`, such as `[[ model[0 ]]`. The `]]` closes nothing until the brackets balance.
-- A block whose only closers are inside a C# string or comment, such as `[% var s = "%]";` at the end of the file.
-- A verbatim or raw string that never ends, such as `[% var s = @"x %]`, or a `/*` comment with no `*/`, when 16 or more closers come after it in the template. With fewer than that, the block ends at its first closer and the compiler points at the typo instead.
-- A block that hides more than 15 closers in strings, comments, or brackets before its own. The scanner stops looking after 16, so this one fails even though it's valid C#:
-
-```html
-#model MyApp.CodeListModel
-[% var codes = new[] { "%]", "%]", /* 14 more of the same */ "x" }; %]
-```
-
-Fix the first three like any other typo. For the last one, get the closers out of the template. A small class of your own is a good place for them, since the scanner never reads `.cs` files:
-
-```csharp
-namespace MyApp.Templates;
-
-// Strings that would hide too many closers in code-list.html
-internal static class CodeLists
-{
-    public static readonly string[] Codes = { "%]", "%]", /* ... */ "x" };
-}
-```
-
-Then the block is just `[% var codes = CodeLists.Codes; %]`. Without a `#generate` directive the template builds both a text class and a UTF-8 class, and both of them can reach a separate class like this one. A field in your half of `CodeListTextTemplate` would only be visible to the text class, so the UTF-8 class wouldn't compile. If you'd rather keep everything in the template, build the strings without the closer in them, such as `"%" + "]"`.
+The closer has to have as many brackets as the opener, so a closer of another level doesn't count. `[[[ model.Name ]]` expects `]]]` and reports `SLAP004` even though `]]` is right there. Add the bracket, or remove one from the opener. [How blocks end](templates.md#how-blocks-end) has more on bracket levels.
 
 ## SLAP005
 
@@ -104,7 +80,7 @@ Remove the repeat. The squiggle covers the repeated directive line.
 
 **Invalid directive value**
 
-A directive has a value it can't use, or no value at all. `#type` needs a C# identifier, `#model` a C# type name, `#namespace` and `#using` a plain dotted name, `#access` `public` or `internal`, `#generate` `Text` or `Utf8`, and `#encode` `html`, `none`, `javascript`, or `url`. `#access`, `#generate`, and `#encode` accept any casing. The message says what was expected.
+A directive has a value it can't use, or no value at all. Any directive with a blank value reports it, a `#type` derived from a file name that leaves nothing (a file named `.html` or `-.html`) reports it at line 1, `#access` must be `public` or `internal`, and `#generate` must be `Text` or `Utf8`. `#access` and `#generate` accept any casing. The message says what was expected.
 
 ```html
 #model MyApp.GreetingModel
@@ -172,6 +148,13 @@ Fix the spelling. Without the fix, the `#acess public` line ends the directive s
 
 ## Mistakes without a diagnostic
 
+- A closer inside your C# ends the block early. You get a compiler error at the template location, so add brackets to the opener and the closer.
+- `[[*` opens a comment, not a C# variable that starts with `*`. Write `[[ *ptr ]]` for a pointer.
+- More than four `[` in a row writes the extras as text.
+- `\[[` writes a backslash and then the C# variable. There are no escapes.
+- A literal `[` right before an opener raises its level, so `x[[[ i ]]]` is a level-3 C# variable.
+- A directive value that isn't valid C# is a compiler error in the generated file. That includes a `#type` or `#namespace` that AnglePlates derived, so add the directive yourself.
+- A leftover `#encode` line isn't a directive anymore. It ends the directive section, so any directive after it becomes body text.
 - `SLAP011` only checks the first body line, so a typo after it is ordinary template text.
 - Other tools' `AdditionalFiles`, such as a `PublicAPI.Shipped.txt`, never reach the template checks. The generator only reads the files that template discovery tagged.
 - Two templates that declare the same class get the compiler's own duplicate-member errors.

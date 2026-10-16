@@ -31,36 +31,46 @@ Every render method throws `ArgumentNullException` for a null `writer`. The mode
 
 ### Default or new
 
-`Default` is a shared instance that uses the template's default options, which `#encode` picks. `new GreetingTextTemplate()` does the same thing with a fresh instance, and `new GreetingTextTemplate(options)` uses yours. Neither allocates options of its own; the defaults are the shared presets.
+`Default` is one shared instance per template class, created with `new TemplateOptions()`. `new GreetingTextTemplate()` does the same thing with a fresh instance and its own `new TemplateOptions()`, and `new GreetingTextTemplate(options)` uses yours.
 
 A compiled template holds nothing but its options, and options can't change after they're created, so any instance is safe to share between threads and to render as often as you like. If you add fields in your own half of a partial class, keeping them thread safe is up to you.
 
-### Options and presets
+### Options
 
-`TemplateOptions` has two properties, both `init`-only:
+`TemplateOptions` has three properties, all `init`-only:
 
 | Property | Default | What it does |
 | --- | --- | --- |
 | `Encoder` | `HtmlEncoder.Default` | Encodes every C# variable. `null` writes them unencoded. |
+| `Culture` | `CultureInfo.InvariantCulture` | Converts C# variables that aren't strings, such as numbers and dates. `null` throws `ArgumentNullException`. |
 | `NullVariable` | `null` | Written in place of a null C# variable. `null` writes nothing. |
 
-The presets cover the common cases, and `#encode` picks one of them as the template's default:
-
-| Preset | `#encode` | Encoder |
-| --- | --- | --- |
-| `TemplateOptions.Html` | `html` | `HtmlEncoder.Default` |
-| `TemplateOptions.Unencoded` | `none` | none |
-| `TemplateOptions.JavaScript` | `javascript` | `JavaScriptEncoder.Default` |
-| `TemplateOptions.Url` | `url` | `UrlEncoder.Default` |
-
-For anything else, build your own with an object initializer:
+`Encoder` and `Culture` are independent; setting one never changes the other. Set the ones you want in an object initializer:
 
 ```csharp
-var options = new TemplateOptions { Encoder = null, NullVariable = "(null)" };
-var template = new GreetingTextTemplate(options);
+var unencoded = new TemplateOptions { Encoder = null };
+var javaScript = new TemplateOptions { Encoder = JavaScriptEncoder.Default };
+var german = new TemplateOptions { Culture = CultureInfo.GetCultureInfo("de-DE") };
+var template = new GreetingTextTemplate(german);
 ```
 
-A visible `NullVariable` like that one is handy while you're debugging a template. Options only affect C# variables and `Write` calls; literal text is always written unchanged, and `WriteRaw` never encodes.
+A template created with options gets exactly those options, so `german` above still encodes HTML. A plain-text template sets `Encoder = null` in the same initializer. A visible `NullVariable`, such as `"(null)"`, is handy while you're debugging a template.
+
+Options only affect C# variables and `Write` calls; literal text is always written unchanged, and `WriteRaw` never encodes. `Culture` covers the conversion of C# variables, so C# in a template that calls `ToString()` or `writer.Write(...)` itself doesn't use it unless it passes `Options.Culture`. `RenderToString` creates its `StringWriter` with `Options.Culture`.
+
+#### One template per culture
+
+`Render` has no culture argument, because options travel to child templates on their own. To localize per request, keep one template per culture and reuse it. Options and templates can't change after they're created and are safe to share between threads, so cache them by culture name:
+
+```csharp
+private static readonly ConcurrentDictionary<string, InvoiceTextTemplate> _invoices = new();
+
+InvoiceTextTemplate GetInvoiceTemplate(CultureInfo culture) =>
+    _invoices.GetOrAdd(culture.Name, name =>
+        new InvoiceTextTemplate(new TemplateOptions { Culture = CultureInfo.GetCultureInfo(name) }));
+```
+
+`CultureInfo.GetCultureInfo` returns a cached, read-only culture without user overrides, so every request for the same name formats the same way. For a plain-text email, set `Encoder = null` in the same initializer.
 
 ## Writers
 
@@ -129,7 +139,7 @@ It renders into a `StringWriter` and returns the string, so it holds the whole o
 
 ## Child template options
 
-A child template you create with `new(Options)` in the parent's partial class renders with the parent's options. One you call through `Default` uses its own defaults, which is easy to miss when you render the parent with `TemplateOptions.Unencoded` and the child keeps encoding. [Child templates](templates.md#child-templates) shows the pattern.
+A child template you create with `new(Options)` in the parent's partial class renders with the parent's options, `Culture` included. One you call through `Default` uses `new TemplateOptions()`, which is easy to miss when you render the parent with `new TemplateOptions { Encoder = null }` and the child keeps encoding and keeps the invariant culture. [Child templates](templates.md#child-templates) shows the pattern.
 
 ## Lone surrogates
 
@@ -137,8 +147,8 @@ A string with half a surrogate pair isn't valid UTF-16, and each writer handles 
 
 | Options | Text template | UTF-8 template |
 | --- | --- | --- |
-| An encoder, such as `Html` | Writes `&#xFFFD;` | Writes `&#xFFFD;` |
-| `Unencoded` | Passes the lone surrogate through | Writes U+FFFD, the bytes `EF BF BD` |
+| An encoder (the default) | Writes `&#xFFFD;` | Writes `&#xFFFD;` |
+| `Encoder = null` | Passes the lone surrogate through | Writes U+FFFD, the bytes `EF BF BD` |
 
 ## Viewing the generated code
 
@@ -153,6 +163,8 @@ Anywhere else, ask the compiler to write the files to disk:
 ```
 
 They land in `obj/<configuration>/<framework>/generated/SlusserLabs.AnglePlates/SlusserLabs.AnglePlates.TemplateGenerator/`. Each file is named after the class it declares, such as `MyApp.Templates.GreetingTextTemplate.g.cs`, and the support types get `SlusserLabs.AnglePlates.TemplateOptions.g.cs` and friends. When two names differ only by case, the second one gets a number, as in `MyApp.Templates.GreetingTextTemplate.2.g.cs`. Don't edit these files; the next build replaces them.
+
+Template C# shows up at column 0 with its own line breaks, which is why it looks unindented next to the code AnglePlates writes around it. Every generated file starts with `// <auto-generated>` and ends in `.g.cs`, so analyzers that skip generated code, as the built-in IDE and CA analyzers and StyleCop do, skip these files. That also means template C# gets compiler warnings but no IDE or CA analysis. Turning that off with `generated_code = false` in an `.editorconfig` isn't supported.
 
 ## Editing and debugging
 

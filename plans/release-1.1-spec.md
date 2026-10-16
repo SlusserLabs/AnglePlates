@@ -130,10 +130,10 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 
 ### Phase B4: docs, versions, and prose ([details](#phase-b4-docs-versions-and-prose))
 
-- [ ] `README.md` ([15.4](#154-documentation-that-changes-with-11)): syntax, bracket levels, non-goals, encoding and options without `#encode` or presets, culture.
-- [ ] `docs/templates.md`: syntax, "How blocks end", "Writing openers as text", directives without `#encode` and without validation, culture, child templates.
-- [ ] `docs/diagnostics.md`: SLAP004, SLAP001 and SLAP002 retired, SLAP007 narrowed, mistakes without a diagnostic, severity wording.
-- [ ] `docs/rendering.md`: "Options" heading, no presets, `Culture`, per-request pattern, child templates, generated-code note.
+- [x] `README.md` ([15.4](#154-documentation-that-changes-with-11)): syntax, bracket levels, non-goals, encoding and options without `#encode` or presets, culture.
+- [x] `docs/templates.md`: syntax, "How blocks end", "Writing openers as text", directives without `#encode` and without validation, culture, child templates. (The `levels.html` sample from B3 stays after the rewritten prose. `DocumentationLinkTests` 24 and `ReadmeExampleTests` 8 pass.)
+- [x] `docs/diagnostics.md`: SLAP004, SLAP001 and SLAP002 retired, SLAP007 narrowed, mistakes without a diagnostic, severity wording. (Deviation from the suggested severity wording, verified in a scratch consumer on a local pack: an `.editorconfig` severity does not change SLAP011, because a template diagnostic has no C# tree; `dotnet_diagnostic.SLAP011.severity` in an `is_global = true` `.globalconfig`, and `NoWarn` or `WarningsAsErrors` in the project, do. The page says so.)
+- [x] `docs/rendering.md`: "Options" heading, no presets, `Culture`, per-request pattern, child templates, generated-code note.
 - [ ] `docs/development.md`, `docs/lexicon.md`, `docs/testing.md`, `docs/configuration.md`, and `docs/releasing.md` (versions and O16 wording).
 - [ ] `CHANGELOG.md`, `SECURITY.md`, `.github/ISSUE_TEMPLATE/bug.yml`, `Directory.Build.props` (`1.1.0`), `exclusion.dic`.
 - [ ] AGENTS.md Scope bullet and Author Voice bullet (S46).

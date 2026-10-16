@@ -4,7 +4,7 @@ AnglePlates is like T4 templates for modern .NET. Give it a template and any mod
 
 If you've used T4, it's the same idea: templates become C# when you build. The syntax is different, and AnglePlates won't read `.tt` files. There are three delimiters and a handful of directives. Everything else is C# you already know.
 
-HTML is the main target, so C# variables are HTML-encoded by default, but a template can be any text format. Literal text is baked into your assembly, and output streams straight to your writer without any reflection along the way.
+HTML is the main target, so C# variables are HTML-encoded until you set `TemplateOptions.Encoder`, but a template can be any text format. Literal text is baked into your assembly, and output streams straight to your writer without any reflection along the way.
 
 ## Quick start
 
@@ -95,7 +95,7 @@ internal sealed partial class GreetingUtf8Template : Utf8Template<GreetingModel>
 }
 ```
 
-`Default` is a shared instance with the template's default options, and the constructor takes your own. The base classes expose the options as `Options`. A template keeps no state between renders, so one instance is safe to share between threads. The classes are `partial`, so you can add helper members in a file of your own.
+`Default` is a shared instance created with `new TemplateOptions()`, and the constructor takes your own options. The base classes expose the options as `Options`. A template keeps no state between renders, so one instance is safe to share between threads. The classes are `partial`, so you can add helper members in a file of your own.
 
 The base classes and `TemplateOptions` are generated into your project too, in the `SlusserLabs.AnglePlates` namespace. That's why there's no runtime package.
 
@@ -106,15 +106,15 @@ Want to see the generated code? In Visual Studio, open Dependencies > Analyzers 
 | Syntax | Example | What it does |
 | --- | --- | --- |
 | Literal text | `<h1>Hello</h1>` | Written unchanged, byte for byte. |
-| C# variable | `[[ model.Title ]]` | Converts any C# expression to text with the invariant culture, encodes it, and writes it. |
+| C# variable | `[[ model.Title ]]` | Converts any C# expression to text with the invariant culture (set `TemplateOptions.Culture` to change it), encodes it, and writes it. |
 | C# block | `[% foreach (var item in model.Items) { %]` | Goes into the render method as-is, for loops, conditions, and locals. |
 | Comment | `[* Not rendered. *]` | Writes nothing. |
 | Trim marker | `[[- model.Title -]]` | A `-` after an opener or before a closer removes the whitespace next to it. |
-| Escaped opener | `\[[1, 2]]` | Writes `[[1, 2]]` as literal text. |
+| More brackets | `[[[ grid[row[0]] ]]]` | Add up to four `[` to an opener, and the same number of `]` to its closer, when your C# contains the shorter closer. |
 
-Watch out for backslashes in front of a C# variable. `C:\out\[[ model.Name ]]` writes `C:\out[[ model.Name ]]`, because the backslash escapes the opener. Write `C:\out\\[[ model.Name ]]` instead. AnglePlates doesn't warn about this one, because a TOML table looks just like a C# variable to the parser.
+A block ends at the first closer with the same number of brackets as its opener, and AnglePlates doesn't read your C# to second-guess that. So `[[ a[b[0]] ]]` ends after the `0`; write `[[[ a[b[0]] ]]]` instead. A C# block works the same way: `[[% var s = "%]"; %]]`. If you need a literal `[[` in your text, send it through a C# variable: `[[ "[[" ]]`.
 
-[Writing templates](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/templates.md) covers the directives, how blocks end, escaping, trimming, how values turn into text, and child templates.
+[Writing templates](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/templates.md) covers the directives, how blocks end, bracket levels, trimming, how values turn into text, and child templates.
 
 ## Rendering
 
@@ -149,16 +149,17 @@ app.Run();
 
 ## Encoding and options
 
-Literal text is written unchanged. C# variables go through `HtmlEncoder.Default` unless you say otherwise, and a null C# variable writes nothing unless you set `NullVariable`.
+Literal text is written unchanged. C# variables go through `HtmlEncoder.Default` until you set `TemplateOptions.Encoder` in the options you create the template with; `null` turns encoding off. Numbers and dates convert with the invariant culture until you set `TemplateOptions.Culture`. A null C# variable writes `TemplateOptions.NullVariable`, which is empty until you set it.
 
-A template that isn't HTML says so with `#encode`: `html` (the default), `none`, `javascript`, or `url`. That picks the options its `Default` instance and its parameterless constructor use. Options you pass to the constructor always win, and `TemplateOptions` has presets for the common cases:
+Pass your options to the template's constructor:
 
 ```csharp
-var unencoded = new GreetingTextTemplate(TemplateOptions.Unencoded);
+var email = new GreetingTextTemplate(new TemplateOptions { Encoder = null });
+var german = new GreetingTextTemplate(new TemplateOptions { Culture = CultureInfo.GetCultureInfo("de-DE") });
 var custom = new GreetingTextTemplate(new TemplateOptions { Encoder = null, NullVariable = "-" });
 ```
 
-The presets are `Html`, `Unencoded`, `JavaScript`, and `Url`. Options can't change after they're created, so they're safe to share too. To skip encoding for one value, call `WriteRaw(value, writer)` from a C# block.
+The first one suits a plain-text email, and the second writes `1234,5` where the default writes `1234.5`. `Encoder` and `Culture` don't depend on each other. Options can't change after they're created, so they're safe to share. To skip encoding for one value, call `WriteRaw(value, writer)` from a C# block.
 
 ## Where templates live
 
@@ -187,6 +188,7 @@ Everything in a C# variable or C# block compiles into your application and runs 
 - No runtime compilation. Templates compile with your project, and there's no API to compile a template string while your app runs.
 - No runtime package. Everything the compiled templates need is generated into your assembly.
 - No IntelliSense inside template files. Compiler errors point at the template's line and column, and that's the editing story.
+- No reading your C#. AnglePlates doesn't parse the C# inside a block. A block ends at the first closer of its bracket level, so raise the level when your C# contains that closer.
 
 ## Requirements
 
