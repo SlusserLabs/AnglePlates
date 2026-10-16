@@ -139,7 +139,7 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 - [x] AGENTS.md Scope bullet and Author Voice bullet (S46). (The README already had all five non-goals from B4a.)
 - [x] [15.7](#157-defaults-name-their-mechanism) pass: offenders fixed, phrase search and wider read rerun, `icon-draft` check rerun. (The phrase search finds only the four judged-fine hits: `README.md` `LangVersion`, `SECURITY.md` "unless you'd rather I didn't", and `docs/testing.md` `WithoutProps()` and `IncludeTestAssembly`. The wider "default" read found no new offender; `docs/lexicon.md`'s "Generator setting" row stays as judged fine. `icon-draft` and `plans/` have no hit outside `plans/`.)
 - [x] `DocumentationLinkTests` and `ReadmeExampleTests` pass; whitespace and line endings checked. (`DocumentationLinkTests` 24, `ReadmeExampleTests` 8; every touched file is CRLF with no trailing whitespace and `git diff --check` is clean; `-warnaserror` build clean.)
-- [ ] **Accept:** docs describe only 1.1 behavior; links resolve; `VersionPrefix` is `1.1.0`; non-goals in both AGENTS.md and the README; CI green.
+- [x] **Accept:** docs describe only 1.1 behavior; links resolve; `VersionPrefix` is `1.1.0`; non-goals in both AGENTS.md and the README; CI green. (CI run 38916181836 on 1d0127b: all four legs green. The only `1.0.0` left outside `plans/` is the two `PackagedLibrary` lines.)
 
 ### Phase B5: self-audit, measurements, and the pull request ([details](#phase-b5-self-audit-measurements-and-the-pull-request))
 
