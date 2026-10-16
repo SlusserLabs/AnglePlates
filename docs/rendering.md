@@ -139,7 +139,7 @@ It renders into a `StringWriter` and returns the string, so it holds the whole o
 
 ## Child template options
 
-A child template you create with `new(Options)` in the parent's partial class renders with the parent's options, `Culture` included. One you call through `Default` uses `new TemplateOptions()`, which is easy to miss when you render the parent with `new TemplateOptions { Encoder = null }` and the child keeps encoding and keeps the invariant culture. [Child templates](templates.md#child-templates) shows the pattern.
+A child template you create with `new(Options)` in the parent's partial class renders with the parent's options, `Culture` included. One you call through `Default` uses `new TemplateOptions()`, which is easy to miss when you render the parent with `new TemplateOptions { Encoder = null }` and the child keeps encoding, and its `TemplateOptions.Culture` stays `CultureInfo.InvariantCulture`. [Child templates](templates.md#child-templates) shows the pattern.
 
 ## Lone surrogates
 

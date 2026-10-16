@@ -143,11 +143,11 @@ This is the progress record for the 1.1 work ([O19](#23-owner-decisions-2026-10-
 
 ### Phase B5: self-audit, measurements, and the pull request ([details](#phase-b5-self-audit-measurements-and-the-pull-request))
 
-- [ ] Every leftover grep in Phase B5 step 1 passes, with allowed hits listed in the pull request.
-- [ ] [6.7](#67-simplification-targets) table measured after B4; hard requirements hold (or misses explained for numeric targets).
-- [ ] Benchmarks rerun and Native AOT size recorded.
-- [ ] Coverage measured for both modules and the listed classes.
-- [ ] Final fresh pack and `validate-package.ps1` run.
+- [x] Every leftover grep in Phase B5 step 1 passes, with allowed hits listed in the pull request. (One real hit fixed: `docs/rendering.md` said "keeps the invariant culture" in the child-template paragraph without naming `TemplateOptions.Culture`; it does now. Every other hit is an allowed one, listed in the pull request.)
+- [x] [6.7](#67-simplification-targets) table measured after B4; hard requirements hold (or misses explained for numeric targets). (Deletions and greps hold; `Parsing/` 346 and `TemplateClassWriter.cs` 421 meet their targets. Numeric misses: `TemplateParser.cs` 187 (target 180), `TemplateSyntax.cs` 75 (60), `DirectiveReader.cs` 245 (200), `Directives/` 431 (385), `TemplateGenerator.cs` 319 (at most 311; the S50 sanitizer adds 8), `src/AnglePlates` total 2,438 (2,400). Explained in the pull request.)
+- [x] Benchmarks rerun and Native AOT size recorded. (All 46 benchmarks plus a second `*Table*` run; allocations are identical; formatted-row `TableBenchmarks` rows run about 3 to 7% slower on both runs while the hand-written rows move 0 to 5%, so the `Options.Culture` read may show; flagged in the pull request for the owner's written acceptance per 9.2 step 4. Native AOT `NativeAot` executable 1,754,112 bytes, baseline 1,752,064.)
+- [x] Coverage measured for both modules and the listed classes. (Generator 99.75% line, 99.33% branch; Runtime.Tests 100% line, 99.74% branch; `TemplateParser`, `TemplateSyntax`, and emitted `TemplateOptions` 100% line and branch. The only gaps are the accepted ones in `docs/testing.md#coverage`.)
+- [x] Final fresh pack and `validate-package.ps1` run. (Pack `1.1.0-local.20261016.3` after clearing `artifacts/package`; `validate-package.ps1` exit 0 with every consumer, Native AOT included; sample output byte-identical with the B0 capture.)
 - [ ] Pull request description complete and marked ready (`gh pr ready`).
 - [ ] **Accept:** CI green on all four legs; every item above ticked or noted.
 - [ ] **STOP P1. Owner:** snapshot and voice review recorded in the pull request; the owner merges.
