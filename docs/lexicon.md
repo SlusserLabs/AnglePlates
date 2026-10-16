@@ -12,12 +12,12 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Directive | A configuration line at the start of a template, such as `#model System.String`. It starts with a known directive name followed by whitespace or the end of the line. |
 | Directive section | The consecutive directive lines at the start of a template. AnglePlates directives are line based, so don't call the section frontmatter. |
 | Generation target | The kind of compiled template that `#generate` selects: `Text` or `Utf8`. Without the directive, AnglePlates generates both. |
-| C# variable | C# inside `[[ ... ]]`. Its value is converted to a string and passed through the configured encoder. The name matches the parser's `TokenType.Variable`. |
+| C# variable | C# inside `[[ ... ]]`, or inside three or four brackets. Its value is converted to a string and passed through the configured encoder. The name matches the parser's `TokenType.Variable`. |
 | C# block | C# inside `[% ... %]`. It becomes part of the generated render method, so it holds statements and control flow instead of a value to write. |
-| Opener | The two characters that start a block: `[[`, `[%`, or `[*`. |
-| Closing delimiter | The two characters that end a block: `]]`, `%]`, or `*]`. Call it the closer for short. In C# variables and C# blocks, the C# block scanner decides which closer ends the block, so a closer inside a C# string or comment doesn't count. |
-| Trim marker | A `-` right inside an opener or closer, as in `[%-` or `-]]`. It removes all the spaces, tabs, and line breaks in the literal text on that side of the block. |
-| Escaped opener | A `[[`, `[%`, or `[*` in literal text that follows an odd number of backslashes. AnglePlates writes the opener as literal text, plus one backslash for each pair before it. |
+| Opener | One to four `[` followed by `%` (C# block) or `*` (comment), or two to four `[` (C# variable), as in `[%`, `[[[*`, or `[[`. A `[` beyond four is literal text. |
+| Closing delimiter | The `]`, `%]`, or `*]` sequence that ends a block, with as many `]` as its opener has `[`, as in `]]`, `%]]`, or `*]]]]`. Call it the closer for short. The first one in the text ends the block. |
+| Bracket level | The number of `[` in an opener, matched by the same number of `]` in its closer; one to four for C# blocks and comments, two to four for C# variables. Write "level 3" or "a level-3 C# variable"; don't call it depth, nesting, or escaping. |
+| Trim marker | A `-` right inside an opener or closer, as in `[%-`, `-]]`, or `[[[-`. It removes all the spaces, tabs, and line breaks in the literal text on that side of the block. |
 
 ## Output
 
@@ -47,8 +47,8 @@ When a term below fits, use it instead of a synonym. Write `AnglePlate` (singula
 | Rendering | The runtime process that runs a compiled template and writes its output. |
 | Compiled template | The generated C# class that application code calls to render a template. |
 | Support types | The generated `TemplateOptions`, `TextTemplate<TModel>`, `Utf8Template<TModel>`, and `TemplateExtensions` types that compiled templates share. Every project that uses AnglePlates gets all four; trimming removes the ones an app doesn't use. A project that gets only the analyzer, through a library that references AnglePlates without `PrivateAssets`, gets none, because the generator needs the `AnglePlatePropsImported` marker from the package props. |
-| Preset | One of the shared `TemplateOptions` instances: `Html`, `Unencoded`, `JavaScript`, or `Url`. A compiled template created without options uses the preset its `#encode` directive picks, which is `Html` unless the template says otherwise. |
-| Literal run | Adjacent literal text that a compiled template writes with one `WriteLiteral` call. A run continues across comments, empty blocks, and escaped openers, and a trim marker ends it. |
+| Culture | The `CultureInfo` in `TemplateOptions.Culture` that C# variables convert with, such as `1,5` for `1.5` under `de-DE`. It's `CultureInfo.InvariantCulture` until the options set `Culture`. Say "culture", not "locale" or "format provider". |
+| Literal run | Adjacent literal text that a compiled template writes with one `WriteLiteral` call. A run continues across comments and empty blocks, and a trim marker ends it. |
 | Flush check | The point in `RenderAsync` where a UTF-8 compiled template checks for cancellation and flushes the pipe if enough output is waiting. It's fused into the first write after each C# block, and every render ends with one unconditional flush. |
 | Template class writer | The internal generator component, `TemplateClassWriter`, that writes the C# source for a text or UTF-8 compiled template. Use it only for the generator's internals; applications use compiled templates. |
 | Consumer | An application or library that references AnglePlates and compiles the generated source. |

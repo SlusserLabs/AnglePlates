@@ -44,7 +44,7 @@ Add templates from anywhere with `Include`:
 
 Files you add yourself have to be templates. If one doesn't start with a directive, the build reports [`SLAP008`](diagnostics.md#slap008), so keep your wildcards narrow. A file that's in the default folder and also listed with an `Include` counts as one you added, and a file matched twice is still only read once.
 
-A template outside the project folder can't get a derived namespace, so `..\Shared\receipt.html` needs its own `#namespace`, or it reports [`SLAP002`](diagnostics.md#slap002).
+A template outside the project folder can't get a derived namespace, so `..\Shared\receipt.html` needs its own `#namespace`. Without one, the derived namespace isn't valid C#, and the compiler reports an error in the generated file.
 
 To leave out a few files and keep the rest of the default folder, remove them:
 
@@ -68,7 +68,7 @@ A `Remove` in `Directory.Build.props` runs before the package adds the default f
 
 ## Public templates
 
-AnglePlates generates `TemplateOptions`, `TextTemplate<TModel>`, `Utf8Template<TModel>`, and `TemplateExtensions` into every project that uses it. They're `internal` by default, just like your compiled templates, and most templates only get used by the project they live in, so that's usually all you need.
+AnglePlates generates `TemplateOptions`, `TextTemplate<TModel>`, `Utf8Template<TModel>`, and `TemplateExtensions` into every project that uses it. They're `internal` until you set `AnglePlateBaseAccessModifier` to `public`, and so are your compiled templates until their `#access` directive says `public`. Most templates only get used by the project they live in, so that's usually all you need.
 
 If another assembly needs your templates, make the support types public:
 
@@ -105,7 +105,7 @@ The package's props and targets only apply to the project that references AngleP
 AnglePlates is a development dependency, so `dotnet package add` writes the reference with `PrivateAssets` for you:
 
 ```xml
-<PackageReference Include="SlusserLabs.AnglePlates" Version="1.0.0">
+<PackageReference Include="SlusserLabs.AnglePlates" Version="1.1.0">
   <PrivateAssets>all</PrivateAssets>
   <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 </PackageReference>
@@ -125,7 +125,7 @@ With Central Package Management, a `GlobalPackageReference` in `Directory.Packag
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <GlobalPackageReference Include="SlusserLabs.AnglePlates" Version="1.0.0" />
+    <GlobalPackageReference Include="SlusserLabs.AnglePlates" Version="1.1.0" />
   </ItemGroup>
 </Project>
 ```

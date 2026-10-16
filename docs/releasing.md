@@ -18,10 +18,10 @@ NuGet doesn't forgive mistakes. You can't push the same version twice, and a ver
 
 | Kind | Format | Where it goes | Who makes it |
 | --- | --- | --- | --- |
-| Local | `1.0.0-local.<yyyyMMdd>.<n>` | `artifacts/package` only, never pushed | Anyone. Clear older package pairs first. |
+| Local | `1.1.0-local.<yyyyMMdd>.<n>` | `artifacts/package` only, never pushed | Anyone. Clear older package pairs first. |
 | CI | `0.0.0-ci.<run>.<attempt>` | CI artifacts only | `ci.yml` |
-| Preview | `1.0.0-preview.<run number>` | int.nugettest.org only | `release.yml`, from a manual run. Agents can do this whenever they want. |
-| Stable | `1.0.0` | nuget.org only | `release.yml`, from a published GitHub Release, after I approve the deployment. |
+| Preview | `1.1.0-preview.<run number>` | int.nugettest.org only | `release.yml`, from a manual run. Agents can do this whenever they want. |
+| Stable | `1.1.0` | nuget.org only | `release.yml`, from a published GitHub Release, after I approve the deployment. |
 
 `local` sorts below `preview`, so a local pack never outranks a preview in a shared package cache. `<n>` in a local version starts at 1 and goes up with each pack that day. A preview takes its number from the workflow run, and run numbers never repeat, so two previews can't collide. Gaps in the numbering are fine.
 
@@ -33,8 +33,8 @@ Pack only to `artifacts/package`, and delete the older `.nupkg` and `.snupkg` pa
 
 ```powershell
 Remove-Item artifacts/package/*.nupkg, artifacts/package/*.snupkg -ErrorAction Ignore
-dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -p:Version=1.0.0-local.20261013.1
-./eng/validate-package.ps1 -Version 1.0.0-local.20261013.1
+dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -p:Version=1.1.0-local.20261014.1
+./eng/validate-package.ps1 -Version 1.1.0-local.20261014.1
 ```
 
 The script needs PowerShell 7.4 or later. It installs the package into isolated consumers outside the solution and fails if any of them does. [Validating the package](development.md#validating-the-package) explains what it checks, what the Native AOT consumer needs, how to run it on Linux in a container, and the options for keeping its output, checking the commit, and pinning an SDK.
@@ -70,13 +70,13 @@ The actions are pinned to full commit SHAs with the version in a comment next to
 | `publish-nuget` | A published Release, and only when `NUGET_ORG_PUBLISH_ENABLED` is `true` | Waits for my approval on the `nuget-org` environment, logs in to nuget.org, pushes the `.nupkg`, and attaches the `.nupkg`, `.snupkg`, and `SHA256SUMS` to the GitHub Release. |
 | `verify-nuget-login` | A manual run with `check-nuget-org` set to `true` | Waits for my approval on the `nuget-org` environment, gets a nuget.org key, and pushes nothing. |
 
-For a manual run, `pack` uses `<VersionPrefix>-preview.<run number>`, so `1.0.0-preview.17` comes from run 17. For a release, `pack` checks out the tag with the full history and fails unless:
+For a manual run, `pack` uses `<VersionPrefix>-preview.<run number>`, so `1.1.0-preview.17` comes from run 17. For a release, `pack` checks out the tag with the full history and fails unless:
 
-- The tag looks like `v1.0.0`. A prerelease tag such as `v1.0.0-preview.1` fails, because previews never go to nuget.org.
+- The tag looks like `v1.1.0`. A prerelease tag such as `v1.1.0-preview.1` fails, because previews never go to nuget.org.
 - The tag equals `v` plus `VersionPrefix`.
 - The tagged commit is on `main`.
 
-Then it packs `-p:Version=1.0.0` (the tag without its `v`).
+Then it packs `-p:Version=1.1.0` (the tag without its `v`).
 
 A few details came from my AssemblyInfo package, which learned them the hard way:
 
@@ -185,7 +185,7 @@ Run this the first time previews are set up, and again before a preview whenever
    Wait until the version shows up in `https://apiint.nugettest.org/v3-flatcontainer/slusserlabs.angleplates/index.json`, then validate the published package from the feed:
 
    ```powershell
-   ./eng/validate-package.ps1 -Version 1.0.0-preview.17 -Source https://apiint.nugettest.org/v3/index.json
+   ./eng/validate-package.ps1 -Version 1.1.0-preview.17 -Source https://apiint.nugettest.org/v3/index.json
    ```
 
 ### Stable preflight
@@ -271,29 +271,29 @@ Before starting, all of these have to be true:
 Then:
 
 1. An agent or I open the release-prep pull request. It:
-   - Moves the rules from `AnalyzerReleases.Unshipped.md` into `AnalyzerReleases.Shipped.md` under `## Release 1.0.0`, as [Diagnostic release tracking](#diagnostic-release-tracking) describes.
-   - Turns the CHANGELOG's `Unreleased` section into `## 1.0.0`, as [The CHANGELOG](#the-changelog) describes.
+   - Moves the rules from `AnalyzerReleases.Unshipped.md` into `AnalyzerReleases.Shipped.md` under `## Release 1.1.0`, as [Diagnostic release tracking](#diagnostic-release-tracking) describes.
+   - Turns the CHANGELOG's `Unreleased` section into `## 1.1.0`, as [The CHANGELOG](#the-changelog) describes.
    - Clears `VersionSuffix` in `Directory.Build.props` for the release commit.
    - Updates the README for the release: the install line, the NuGet and CI badges, and the absolute icon URL.
    - Passes a 100% coverage check in Visual Studio 2026 or with `--coverage`.
-   - For 1.0.0 only, deletes the `plans` folder.
+   - For 1.1.0 only, deletes the `plans` folder and removes the plan's phase references from `AGENTS.md`, `release.yml`, and this guide.
 2. I merge it and turn on the kill switch. Do this before publishing the Release, so the switch is already on when the run decides whether `publish-nuget` runs:
 
    ```shell
    gh variable set NUGET_ORG_PUBLISH_ENABLED --body true
    ```
 
-3. I tag the merged commit `v1.0.0` and publish a GitHub Release from the tag, with the CHANGELOG section as its notes. Publishing the Release starts `release.yml`.
+3. I tag the merged commit `v1.1.0` and publish a GitHub Release from the tag, with the CHANGELOG section as its notes. Publishing the Release starts `release.yml`.
 
    ```shell
    git switch main
    git pull
-   git tag v1.0.0
-   git push origin v1.0.0
-   gh release create v1.0.0 --verify-tag --title "AnglePlates 1.0.0" --notes-file release-notes.md
+   git tag v1.1.0
+   git push origin v1.1.0
+   gh release create v1.1.0 --verify-tag --title "AnglePlates 1.1.0" --notes-file release-notes.md
    ```
 
-   `release-notes.md` holds the `## 1.0.0` section from the CHANGELOG. It's a throwaway file; don't commit it.
+   `release-notes.md` holds the `## 1.1.0` section from the CHANGELOG. It's a throwaway file; don't commit it.
 4. I approve the `nuget-org` deployment when `publish-nuget` asks for it.
 5. After the push, turn the switch back off and check the results:
 
@@ -311,8 +311,8 @@ Then:
 
 AnglePlates follows Semantic Versioning, and a breaking change needs a new major version. Because the compiled templates live in your assembly, "breaking" covers more than a public API. Each of these is breaking:
 
-- **Templates.** A template that built and rendered on the last release stops building, or renders different characters or bytes. That covers the syntax, the directives and their defaults, `#encode` and the default encoding, trimming, how C# variables convert, and where a C# block ends.
-- **Generated API.** Renaming, removing, or changing the signature of a generated class or its members, or of a support type's public or `protected` members: `TextTemplate<TModel>`, `Utf8Template<TModel>`, `TemplateOptions` and its presets, and `TemplateExtensions.RenderToString`. Changing how class names and namespaces are derived counts too, since your code refers to them.
+- **Templates.** A template that built and rendered on the last release stops building, or renders different characters or bytes. That covers the syntax, the directives and their defaults, `TemplateOptions.Encoder` and the default encoding, trimming, how C# variables convert, and where a C# block ends.
+- **Generated API.** Renaming, removing, or changing the signature of a generated class or its members, or of a support type's public or `protected` members: `TextTemplate<TModel>`, `Utf8Template<TModel>`, `TemplateOptions`, and `TemplateExtensions.RenderToString`. Changing how class names and namespaces are derived counts too, since your code refers to them.
 - **MSBuild surface.** Renaming or removing the `AnglePlate` item, `EnableDefaultAnglePlateItems`, or `AnglePlateBaseAccessModifier`, changing their defaults, changing the default `Templates` folder, or moving the package's files out of `build/` and `analyzers/dotnet/cs/netstandard2.0`.
 - **Diagnostics.** Removing or reusing a `SLAPnnn` ID, raising a rule's severity, or adding an error that fires on templates that used to build. A new warning isn't breaking, but it goes in the CHANGELOG, because builds with `-warnaserror` will notice.
 - **Hosts.** Raising the Roslyn version the generator builds against, or the oldest .NET SDK or C# version it supports.
@@ -323,13 +323,13 @@ These aren't breaking: new directives, options, or diagnostics at warning level 
 
 [CHANGELOG.md](../CHANGELOG.md) follows Keep a Changelog. A change a consumer would notice gets a line under `Unreleased` in the same pull request that makes it, under `Added`, `Changed`, `Fixed`, or `Removed`. Generator internals and test changes don't get entries.
 
-For a release, the release-prep pull request renames `## Unreleased` to the version, such as `## 1.0.0`, and starts a new empty `## Unreleased` above it.
+For a release, the release-prep pull request renames `## Unreleased` to the version, such as `## 1.1.0`, and starts a new empty `## Unreleased` above it.
 
 ## Diagnostic release tracking
 
 Diagnostic IDs come from the registry in [diagnostics](diagnostics.md), and each one keeps its ID forever. Don't reuse an ID for a different rule, and don't rename or remove a `## SLAPnnn` heading, because it's the target of that rule's help link. A retired rule keeps its heading and says which release retired it.
 
-Record new rules and rule changes in [AnalyzerReleases.Unshipped.md](../src/AnglePlates/AnalyzerReleases.Unshipped.md). When a release ships, the release-prep pull request moves its entries into a versioned section of [AnalyzerReleases.Shipped.md](../src/AnglePlates/AnalyzerReleases.Shipped.md), such as `## Release 1.0.0`, and leaves the unshipped file with just its header. The shipped file stays empty until the first stable release.
+Record new rules and rule changes in [AnalyzerReleases.Unshipped.md](../src/AnglePlates/AnalyzerReleases.Unshipped.md). When a release ships, the release-prep pull request moves its entries into a versioned section of [AnalyzerReleases.Shipped.md](../src/AnglePlates/AnalyzerReleases.Shipped.md), such as `## Release 1.1.0`, and leaves the unshipped file with just its header. The shipped file stays empty until the first stable release.
 
 The generator project passes both files to Roslyn's release-tracking analyzers as `AdditionalFiles`, so a rule that's missing from them gets the `RS2000` warning. That warning fails CI and any other build run with `-warnaserror`; a plain local `dotnet build` only warns. They're inputs to that one build. They aren't packaged, and they don't reach consuming projects.
 
@@ -363,4 +363,4 @@ Before the stable release:
 
 - [ ] Make the repository public. Then set up the `nuget-org` environment, the `NUGET_ORG_PUBLISH_ENABLED` variable (`false`), both rulesets, private vulnerability reporting, and the social preview.
 - [ ] Create the nuget.org trusted-publishing policy with environment `nuget-org`.
-- [ ] Set `NUGET_ORG_PUBLISH_ENABLED` to `true`, tag `v1.0.0`, publish the GitHub Release, approve the `nuget-org` deployment, and set the variable back to `false`, as [Release a stable version](#release-a-stable-version) describes.
+- [ ] Set `NUGET_ORG_PUBLISH_ENABLED` to `true`, tag `v1.1.0`, publish the GitHub Release, approve the `nuget-org` deployment, and set the variable back to `false`, as [Release a stable version](#release-a-stable-version) describes.

@@ -16,8 +16,8 @@ These are in scope:
 - Generator crashes: a template or project that makes the generator throw or hang during a build instead of reporting a diagnostic.
 - Anything else in the package or the generated support types that lets untrusted model data do something the template didn't ask for.
 
-Output written with `WriteRaw`, or with `#encode none` or `TemplateOptions.Unencoded`, isn't encoded by design.
+Output written with `WriteRaw`, or with options whose `Encoder` is `null`, isn't encoded by design.
 
 ## Supported versions
 
-Fixes go into the latest release. Until 1.0.0 is out, that means the `main` branch.
+Fixes go into the latest release. Until 1.1.0 is out, that means the `main` branch.

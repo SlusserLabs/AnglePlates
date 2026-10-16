@@ -40,7 +40,7 @@ body:
     id: package-version
     attributes:
       label: AnglePlates version
-      placeholder: 1.0.0
+      placeholder: 1.1.0
     validations:
       required: true
   - type: input

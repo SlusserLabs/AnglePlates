@@ -29,6 +29,8 @@ Match this voice in README files and other human-facing project prose:
 
 Keep the writing conversational and technically specific. Use contractions, concrete examples, and direct opinions. First person is welcome when explaining a preference or accepting responsibility. A little dry humor is part of the voice, but it should not get in the way of the instructions.
 
+- When prose describes a default, name the exact directive, option, property, parameter, or MSBuild setting that changes it; don't write "unless you say otherwise", "unless you set it", or a bare "by default".
+
 ## Current Repository
 
 - AnglePlates is a compile-time template engine using a Roslyn incremental source generator; [docs/development.md](docs/development.md) describes the projects, source files, generator pipeline, and MSBuild assets
@@ -51,7 +53,7 @@ Keep the writing conversational and technically specific. Use contractions, conc
 
 ## Scope
 
-- T4 syntax, `.tt` files, and runtime template compilation are out of scope. Don't add them.
+- T4 syntax and `.tt` files, runtime template compilation, a runtime package, IntelliSense inside template files, and C#-aware parsing or emission of embedded C# are out of scope. Don't add them.
 
 ## Commits
 

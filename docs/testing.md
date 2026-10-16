@@ -4,8 +4,8 @@ AnglePlates has three kinds of code to prove: the generator, the C# it emits int
 
 | Layer | Where | What it proves |
 | --- | --- | --- |
-| Generator | `tests/AnglePlates.Tests` | Parsing, the C# block scanner, directives, diagnostics and where they land, `#line` mappings, hint names, MSBuild options, accessibility, C# versions, and incremental caching. It runs the generator against in-memory compilations. |
-| Emitted code | `tests/AnglePlates.Runtime.Tests` | How compiled templates behave: both targets, `Render`, `RenderAsync`, and `RenderToString`, encoding, nulls, value conversion, cancellation and flushing, child templates, and the README examples. It's plain typed C# against real template files. |
+| Generator | `tests/AnglePlates.Tests` | Parsing (bracket levels and trim markers), directives, diagnostics and where they land, `#line` mappings, hint names, MSBuild options, accessibility, C# versions, and incremental caching. It runs the generator against in-memory compilations. |
+| Emitted code | `tests/AnglePlates.Runtime.Tests` | How compiled templates behave: both targets, `Render`, `RenderAsync`, and `RenderToString`, encoding, nulls, value conversion, culture, cancellation and flushing, child templates, and the README examples. It's plain typed C# against real template files. |
 | Package | `eng/validate-package.ps1`, `tests/AnglePlates.PackageTests`, and `tests/AnglePlates.PackageConsumers` | The packed `.nupkg`: its layout and metadata, analyzer loading, MSBuild discovery, real build errors, multi-project setups, Native AOT, and incremental rebuilds. |
 
 Both test projects are TUnit executables on .NET 10, and `global.json` selects Microsoft.Testing.Platform. Restore and build first, then run them from the repository root:
@@ -36,7 +36,7 @@ public async Task Variable_InBody_RendersEncodedValue(string body, string expect
 }
 ```
 
-`Render` passes the model `"<value>"` unless you give it another one. It renders the text class to a `StringWriter`, the UTF-8 class to an `ArrayBufferWriter<byte>`, and the UTF-8 class again with `RenderAsync` to a `Pipe`, and it throws if `RenderAsync` wrote different bytes than `Render`. So a rendering test covers all three paths. To test another C# variable type, cast in the template, as in `[[ (int?)null ]]`.
+`Render` passes the model `"<value>"`; pass its `model` parameter to use another one. It renders the text class to a `StringWriter`, the UTF-8 class to an `ArrayBufferWriter<byte>`, and the UTF-8 class again with `RenderAsync` to a `Pipe`, and it throws if `RenderAsync` wrote different bytes than `Render`. So a rendering test covers all three paths. To test another C# variable type, cast in the template, as in `[[ (int?)null ]]`.
 
 A test of how compiled templates behave at run time goes in `AnglePlates.Runtime.Tests` instead. Add a template under its `Templates` folder, and the build turns it into a class you can call directly:
 
@@ -87,6 +87,8 @@ GeneratorTestHelper.Run(GeneratorTestHelper.CreateCompilation(), GeneratorTestHe
 
 Leaving generated line numbers out means a cosmetic change to the emitted layout doesn't break these tests; the snapshots pin that layout instead. A UTF-8 class reports an error in template C# twice, once from `Render` and once from `RenderAsync`, so generate one target at a time when the order matters. Assert generator diagnostics separately, through `result.RunResult.Diagnostics`.
 
+The exception is a test whose directive value is deliberately invalid C#, such as `#namespace My-App`. An invalid name cascades into more errors than anyone can derive by hand, so that test uses `RunAllowingCompilationErrors`, asserts the verbatim generated line, and asserts at least one error in the generated file (`GeneratedFileErrors`) instead of the full error list.
+
 ## Snapshots
 
 A few reviewed snapshots pin what the generated code looks like. [ModuleInitializer](../tests/AnglePlates.Tests/Infrastructure/ModuleInitializer.cs) sets up Verify.SourceGenerators and stores the files in [Snapshots](../tests/AnglePlates.Tests/Snapshots). A snapshot test calls `Run`, which also checks that the output compiles, and hands the run result to [GeneratorSnapshot](../tests/AnglePlates.Tests/Infrastructure/GeneratorSnapshot.cs) with a short file name:
@@ -128,9 +130,11 @@ The step names are `internal const` fields on `TemplateGenerator`, so tests and 
 - [ProbeEncoder](../tests/AnglePlates.Runtime.Tests/Infrastructure/ProbeEncoder.cs) is a custom `TextEncoder`. Its base class has pointer-based abstract members, which is why this project allows unsafe code.
 - `ThrowingTextWriter` and `ThrowingBufferWriter` fail on write, for the tests that check what happens when the destination breaks.
 
-`ConversionTests` is the contract for how C# variables turn into text. It covers the common value types, enums, nullable values, custom classes, `IFormattable` and `IConvertible`, `null`, and `dynamic`, with encoding on and off, and the expected strings are exact. A change to the support types has to keep it passing.
+`ConversionTests` is the contract for how C# variables turn into text. It covers the common value types, enums, nullable values, custom classes, `IFormattable` and `IConvertible`, `null`, and `dynamic`, with encoding on and off, and the expected strings are exact. A change to the support types has to keep it passing. `CultureTests` covers `TemplateOptions.Culture`: numbers and dates under `de-DE`, child templates, `RenderToString`, the invariant default when the current culture is German, and the null check.
 
-`ReadmeExampleTests` keeps the documentation honest. `Templates/Readme` holds copies of the templates in `README.md` and [Writing templates](templates.md#child-templates), and the tests render them and check the exact output the documents show. In those documents, a `<!-- sample: <path> -->` comment right before a fenced block names its copy, relative to the test project. The drift test compares each marked block with its copy after turning CRLF into LF, expects the copy to end with exactly one line break, and fails if a marker goes missing. If you edit one of those examples, edit its copy too.
+A new template class under `Templates` belongs in `TemplateDefaultsTests`, which checks that every class created without options, or through `Default`, gets default-valued options.
+
+`ReadmeExampleTests` keeps the documentation honest. `Templates/Readme` holds copies of the templates in `README.md` and [Writing templates](templates.md), and the tests render them and check the exact output the documents show. In those documents, a `<!-- sample: <path> -->` comment right before a fenced block names its copy, relative to the test project. The drift test compares each marked block with its copy after turning CRLF into LF, expects the copy to end with exactly one line break, and fails if a marker goes missing. If you edit one of those examples, edit its copy too.
 
 ## `RenderAsync` helpers
 
