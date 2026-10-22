@@ -13,7 +13,6 @@ This is the road to 1.1.0, the first release on nuget.org. Nothing before it was
 - `#type` and `#namespace` are optional. The class name comes from the file name, so `order-line.html` becomes `OrderLine`, and the namespace comes from `RootNamespace` plus the template's folders. A name that isn't valid C#, given or derived, is a compiler error in the generated file, so add `#type` or `#namespace`. `#model` is still required.
 - `RenderToString` is an extension method on every text template. Add `using SlusserLabs.AnglePlates;` and call `GreetingTextTemplate.Default.RenderToString(model)`.
 - `EnableDefaultAnglePlateItems` turns off the default `Templates` folder. Unlike a `Remove`, it works from `Directory.Build.props` too.
-- `SLAP011` warns when the first line after the directives, or the first line of a file without directives, looks like a misspelled directive, such as `#modle`.
 - Every diagnostic has a help link to its section in [docs/diagnostics.md](docs/diagnostics.md).
 
 ### Changed
@@ -33,7 +32,7 @@ This is the road to 1.1.0, the first release on nuget.org. Nothing before it was
 - The package's MSBuild files ship in `build/` instead of `buildTransitive/`, so template discovery stays in the project that references AnglePlates. Before, a project that referenced yours picked up discovery without the generator.
 - A project that gets the generator without the package's build files, through a library that references AnglePlates without `PrivateAssets`, gets no generated code and no diagnostics. Before, it got its own support types, which collided with the library's public ones as `CS0436` warnings.
 - Generated files are named after their class, as in `MyApp.Templates.GreetingTextTemplate.g.cs`, and the generated header has no version number, so a package update doesn't touch every generated file.
-- Diagnostic IDs were renumbered into one registry, `SLAP003` through `SLAP011`, and messages no longer repeat the file path.
+- Diagnostic IDs were renumbered into one registry, `SLAP003` through `SLAP010`, and messages no longer repeat the file path.
 
 ### Removed
 

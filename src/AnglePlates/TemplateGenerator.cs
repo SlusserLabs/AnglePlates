@@ -223,17 +223,6 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         var diagnostics = new List<TemplateDiagnostic>();
         var sources = new List<GeneratedTemplate>();
 
-        // A misspelled directive either ends the directive section or keeps the file from being a template, so the first
-        // line after the directives, or the first line of a file without any, gets checked for one
-        var lineStart = parsed.Directives.Count == 0 ? 0 : parsed.BodyStart;
-        var checkedLine = TextSpan.FromBounds(lineStart, TemplateSyntax.LineEnd(template.Content, lineStart));
-        var lineText = template.Content.Substring(checkedLine.Start, checkedLine.Length);
-        var intended = DirectiveSpellCheck.FindIntendedDirective(lineText, out var misspelled);
-        if (intended is not null)
-        {
-            diagnostics.Add(CreateDiagnostic(DiagnosticDescriptors.PossibleMisspelledDirective, template.Path, lines, checkedLine, misspelled, intended));
-        }
-
         // A file is a template when it starts with a known directive. The default folder picks up notes and other
         // files, so those are skipped quietly, but a file the project added explicitly was meant to be a template.
         if (parsed.Directives.Count == 0)

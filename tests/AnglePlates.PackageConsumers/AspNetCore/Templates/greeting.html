@@ -1,9 +1,0 @@
-#model MyApp.GreetingModel
-
-[* A greeting with an optional message. *]
-
-<h1>Hello, [[ model.Name ]]!</h1>
-
-[% if (!string.IsNullOrEmpty(model.Message)) { %]
-    <p>[[ model.Message ]]</p>
-[% } %]

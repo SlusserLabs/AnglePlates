@@ -111,7 +111,7 @@ public sealed class DirectiveReaderTests
         var template = $"#type Example{newline}#namespace Consumer{newline}#mdoel string{newline}body";
         var diagnostics = GenerateDiagnostics(template);
 
-        await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP011,SLAP003");
+        await Assert.That(string.Join(",", diagnostics.Select(d => d.Id))).IsEqualTo("SLAP003");
         foreach (var diagnostic in diagnostics)
         {
             await AssertLocation(diagnostic, template, 2, 0, "#mdoel string".Length);

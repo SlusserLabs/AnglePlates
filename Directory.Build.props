@@ -1,6 +1,6 @@
 <Project>
 
-  <!-- Versions: 1.1.0 is the next release; builds and packs pass -p:Version, as the version table in docs/releasing.md describes -->
+  <!-- Versions: 1.1.0 is the next release; builds and packs pass -p:Version, as docs/development.md describes -->
   <PropertyGroup>
     <VersionPrefix>1.1.0</VersionPrefix>
     <VersionSuffix>dev</VersionSuffix>

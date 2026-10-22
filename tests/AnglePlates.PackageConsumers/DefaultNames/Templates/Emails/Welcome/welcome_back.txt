@@ -1,3 +1,0 @@
-#model string
-#generate Text
-Welcome back, [[ model ]]!

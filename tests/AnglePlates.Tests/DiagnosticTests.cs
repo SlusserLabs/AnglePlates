@@ -189,29 +189,26 @@ public sealed class DiagnosticTests
     }
 
     [Test]
-    public async Task Slap011_PossibleMisspelledDirective_WarnsAtLine()
+    [Arguments("#modal { color: red; }")]
+    [Arguments("#modle x")]
+    public async Task UnknownDirectiveAfterHeader_IsLiteralText(string body)
     {
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(TemplateText.Header + "#modle x\r\nbody"));
-        var diagnostic = result.RunResult.Diagnostics.Single();
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(TemplateText.Header + body));
 
-        await AssertRule(diagnostic, "SLAP011", DiagnosticSeverity.Warning, "Possible misspelled directive");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo("'#modle' isn't a directive. Did you mean '#model'?");
-        await AssertLineSpan(diagnostic, TemplateText.Path, 3, 0, 3, 8);
-        // A warning doesn't stop the template from generating
-        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", "#modle x\r\nbody");
+        await Assert.That(result.RunResult.Diagnostics).IsEmpty();
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", body);
     }
 
     [Test]
     public async Task Registry_EveryDescriptor_HasDocumentedHelpAnchor()
     {
         // Each rule's heading is exactly "## SLAPnnn", which GitHub turns into the #slapnnn anchor the help link names,
-        // and the next line repeats the descriptor's title in bold. DocumentationLinkTests uses the same anchor rules.
+        // and the next line repeats the descriptor's title in bold. Retired IDs keep their headings.
         var path = RepositoryFiles.GetPath("docs/diagnostics.md");
         var lines = File.ReadAllLines(path);
-        var anchors = MarkdownDocument.Load(path).Anchors;
         var descriptors = AllDescriptors();
 
-        await Assert.That(descriptors.Length).IsEqualTo(9);
+        await Assert.That(descriptors.Length).IsEqualTo(8);
         await Assert.That(descriptors.Select(descriptor => descriptor.Id).Distinct().Count()).IsEqualTo(descriptors.Length);
         foreach (var descriptor in descriptors)
         {
@@ -219,13 +216,13 @@ public sealed class DiagnosticTests
             await Assert.That(heading).IsGreaterThan(0);
             await Assert.That(lines[heading + 2]).IsEqualTo($"**{descriptor.Title}**");
             await Assert.That(descriptor.HelpLinkUri).IsEqualTo(HelpLink(descriptor.Id));
-            await Assert.That(anchors).Contains(new Uri(descriptor.HelpLinkUri).Fragment.TrimStart('#'));
         }
     }
 
     [Test]
     [Arguments("SLAP001")]
     [Arguments("SLAP002")]
+    [Arguments("SLAP011")]
     public async Task Registry_RetiredRule_IsDocumentedAndNeverUsed(string id)
     {
         // IDs retired before any release stay documented and are never reused, but have no AnalyzerReleases entry

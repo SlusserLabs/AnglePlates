@@ -1,3 +1,0 @@
-error CS0111: Type 'SameTextTemplate' already defines a member called 'SameTextTemplate' with the same parameter types
-error CS0111: Type 'SameTextTemplate' already defines a member called 'Render' with the same parameter types
-error CS0102: The type 'SameTextTemplate' already contains a definition for 'Default'

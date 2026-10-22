@@ -29,14 +29,10 @@
     <File Path=".github/workflows/release.yml" />
   </Folder>
   <Folder Name="/docs/">
-    <File Path="docs/configuration.md" />
     <File Path="docs/development.md" />
     <File Path="docs/diagnostics.md" />
     <File Path="docs/lexicon.md" />
-    <File Path="docs/releasing.md" />
-    <File Path="docs/rendering.md" />
     <File Path="docs/templates.md" />
-    <File Path="docs/testing.md" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AnglePlates/AnglePlates.csproj" />

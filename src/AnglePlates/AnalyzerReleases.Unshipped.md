@@ -13,4 +13,3 @@ SLAP007 | SlusserLabs.AnglePlates | Error | Invalid directive value
 SLAP008 | SlusserLabs.AnglePlates | Error | File added with an AnglePlate Include isn't a template
 SLAP009 | SlusserLabs.AnglePlates | Error | Invalid MSBuild setting
 SLAP010 | SlusserLabs.AnglePlates | Error | C# version too old
-SLAP011 | SlusserLabs.AnglePlates | Warning | Possible misspelled directive

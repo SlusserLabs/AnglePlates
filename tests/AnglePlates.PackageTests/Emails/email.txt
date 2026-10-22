@@ -1,0 +1,5 @@
+#type Email
+#namespace PackageSmoke
+#model string
+#generate Text
+Hello, [[ model ]]!

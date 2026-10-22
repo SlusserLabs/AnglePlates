@@ -1,1 +1,0 @@
-error IDE0055: Fix formatting (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0055)

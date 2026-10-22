@@ -47,17 +47,11 @@ internal static class DiagnosticDescriptors
         "C# version too old",
         "AnglePlates requires C# 11 or later, but this project uses C# {0}; set LangVersion to 11 or later");
 
-    public static readonly DiagnosticDescriptor PossibleMisspelledDirective = Create(
-        "SLAP011",
-        "Possible misspelled directive",
-        "'{0}' isn't a directive. Did you mean '{1}'?",
-        DiagnosticSeverity.Warning);
-
-    // Every rule is an error unless it says otherwise, and every rule links to its section in docs/diagnostics.md
-    private static DiagnosticDescriptor Create(string id, string title, string message, DiagnosticSeverity severity = DiagnosticSeverity.Error)
+    // Each error links to its section in docs/diagnostics.md
+    private static DiagnosticDescriptor Create(string id, string title, string message)
     {
         return new DiagnosticDescriptor(
-            id, title, message, _category, severity, isEnabledByDefault: true,
+            id, title, message, _category, DiagnosticSeverity.Error, isEnabledByDefault: true,
             helpLinkUri: $"https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#{id.ToLowerInvariant()}");
     }
 }

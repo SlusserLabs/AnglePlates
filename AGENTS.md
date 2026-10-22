@@ -1,105 +1,37 @@
-# Repository Instructions
+# AnglePlates
 
-- Treat requests to update project rules or `AGENTS.md` as requests to update this file
-- Keep agent instructions concise and specific to AnglePlates
-- Write README files and project documentation in plain American English with concrete subjects and ordinary verbs; do not copy the compressed style of internal verification notes into user-facing prose
-- When using `/humanizer`, treat the Author Voice section below as the user-provided writing sample described by the skill's Voice instructions
-- Explicit user instructions take precedence over skill guidelines
-- If a skill causes a permission request, pause, unfinished work, or departure from user intent, link the exact `SKILL.md`, quote the relevant instruction, and explain its application; distinguish requirements from interpretation
-- Use [README.md](README.md) as the short nuget.org overview for consumers, [docs/templates.md](docs/templates.md) for writing templates, [docs/rendering.md](docs/rendering.md) for using compiled templates, [docs/configuration.md](docs/configuration.md) for MSBuild items and properties, [docs/development.md](docs/development.md) for contributor setup and architecture, [docs/releasing.md](docs/releasing.md) for versions, CI, and publishing, [CHANGELOG.md](CHANGELOG.md) for shipped changes, and GitHub issues for known defects and planned work; verify affected code before relying on historical findings
-- Update affected documentation when behavior or repository structure changes, including README files; keep implemented behavior separate from planned work
-- README links and images are absolute `https://` URLs, because the README is the nuget.org readme
-- Use [docs/lexicon.md](docs/lexicon.md) for project terminology, [docs/testing.md](docs/testing.md) for test layers, helpers, and conventions, [docs/diagnostics.md](docs/diagnostics.md) for diagnostic IDs, and [docs/releasing.md](docs/releasing.md#diagnostic-release-tracking) for diagnostic release tracking
+AnglePlates is a small compile-time C# template engine published as `SlusserLabs.AnglePlates`. Keep it simple.
 
-## Skill Routing
+## Scope and contracts
 
-- `/csharp`: Use for all C# source changes, including consumer code emitted from strings in `Emit/SupportTypes.cs` and `Emit/TemplateClassWriter.cs`.
-- `/dotnet-tunit`: Use for tests in `tests/AnglePlates.Tests` and `tests/AnglePlates.Runtime.Tests`.
-- `/docs`: Use for project documentation under `docs/`.
-- `/humanizer`: Use for human-facing prose and code comments. Do not apply it to code, plans, chat messages, or agent instructions such as `AGENTS.md`.
-- `/test-delegation`: Use only for one-off, agent-driven test runs the user requests.
+- Preserve the package ID, assembly name, and root namespace `SlusserLabs.AnglePlates`.
+- The generator targets `netstandard2.0` with Roslyn 4.14.0; consumers and tests use .NET 10 and C# 11. Native AOT is required.
+- Templates contain trusted C#. Don't parse or validate embedded C#: copy it unchanged and let the compiler report errors. Blocks end at the first closer of their bracket level.
+- Preserve exact text and UTF-8 output, HTML encoding, invariant culture, explicit raw output, direct streaming, and accurate template line mappings.
+- Emitted code uses `global::` names and static extension calls, except imports from template `#using` directives. Keep the generated header and `.g.cs` names; don't suppress compiler warnings.
+- Keep the package analyzer-only, with generated support types, no runtime dependencies, and MSBuild assets under `build/`.
+- T4 syntax, runtime compilation, a runtime package, and template IntelliSense are out of scope.
 
-Do not duplicate instructions in `AGENTS.md` that are already defined by a referenced skill.
+## Working here
 
-## Author Voice
+- Use `/csharp` for C# changes, including emitted source strings; `/dotnet-tunit` for TUnit tests; `/docs` for guides; and `/humanizer` for human-facing prose and comments.
+- Follow `.editorconfig`, preserve template fixture bytes, and avoid unrelated changes. Use `uv run python` for Python commands.
+- Edit generator sources, not files under `obj`. Review snapshot diffs manually; never automatically accept them.
+- For code changes, restore and build `AnglePlates.slnx`, run relevant tests, and run the sample when generation changes. For packaging changes, pack and run `eng/validate-package.ps1`; its Native AOT check needs the native toolchain.
+- Coverage reports help find missing tests; no percentage is a release requirement.
+- Keep package smoke tests outside the solution and validate them from an isolated folder against the packed package.
+- Keep local build output in ignored `artifacts/`. Don't commit agent orchestration, scratch scripts, or verification reports.
+- `docs/development.md` has contributor and release commands; `docs/templates.md` is the consumer reference; `docs/lexicon.md` defines essential terms. Keep docs consistent with implemented behavior.
+- Keep diagnostic IDs in `docs/diagnostics.md`; don't reuse retired IDs.
+- README links and images use absolute `https://` URLs for nuget.org.
+- Treat requests to update project rules as edits to this file.
 
-Match this voice in README files and other human-facing project prose:
+## Writing voice
 
 > AnglePlates is like T4 templates for modern .NET. Give it a template and any model you want to render, and it generates the C# classes at compile time. The compiled templates write straight to a `TextWriter` or UTF-8 buffer, so there is no runtime package to drag along. That's it! You can make it fancier, but you don't have to.
 
-Keep the writing conversational and technically specific. Use contractions, concrete examples, and direct opinions. First person is welcome when explaining a preference or accepting responsibility. A little dry humor is part of the voice, but it should not get in the way of the instructions.
-
-- When prose describes a default, name the exact directive, option, property, parameter, or MSBuild setting that changes it; don't write "unless you say otherwise", "unless you set it", or a bare "by default".
-
-## Current Repository
-
-- AnglePlates is a compile-time template engine using a Roslyn incremental source generator; [docs/development.md](docs/development.md) describes the projects, source files, generator pipeline, and MSBuild assets
-- Use `samples/HelloWorld` as the current example: `Templates/hello-world.html` is a page rendered to `Console.Out`, and `Templates/welcome-email.txt` shows unencoded output through `new TemplateOptions { Encoder = null }` with `RenderToString`; byte-for-byte rendering checks belong in `tests/AnglePlates.Runtime.Tests`, not the sample
-- Preserve `SlusserLabs.AnglePlates` as the main assembly name, package ID, and root namespace independently of project paths
-- Use .NET 10 for repository test applications and future CI; retain the generator's `netstandard2.0` target and Roslyn 4.14.0 unless a host-compatibility change is deliberate and tested
-- The sample, generated-compilation tests, and package tests run on .NET 10 with C# 11. Do not claim support for earlier frameworks or compiler hosts without testing them
-- Repository projects need no `System.IO.Pipelines` or other extra references, because .NET 10 includes `System.IO.Pipelines` in the base framework; do not add them back
-
-## General Practices
-
-- Avoid unrelated formatting and changes
-- Use the line endings `.editorconfig` defines for each file you create or edit; if it defines none, match the file's existing line endings
-- Add repository assets and processes only for the user's workflow; never persist agent-only verification helpers, scripts, reports, or tooling
-- CI fails below 90% line or branch coverage for `SlusserLabs.AnglePlates` and `AnglePlates.Runtime.Tests` on the `windows` and `ubuntu` legs, using the TUnit-supplied Microsoft collector, Cobertura reports, and each test project's `code-coverage.settings.xml`; before every stable release, the user checks for 100% in Visual Studio 2026 or with `--coverage`. Do not add other coverage scripts, configuration, packages, or gates
-- Correct spelling errors without changing meaning
-- Do not include or reference publicly available code unless explicitly requested
-- In Markdown, wrap language keywords and type names in backticks
-- Use `uv run python` for Python commands, including quick checks
-
-## Scope
-
-- T4 syntax and `.tt` files, runtime template compilation, a runtime package, IntelliSense inside template files, and C#-aware parsing or emission of embedded C# are out of scope. Don't add them.
-
-## Commits
-
-- Agents may commit and push to the remote repository as they work. Only the owner makes the repository public or approves a nuget.org publish.
+Use conversational American English, contractions, concrete examples, and ordinary verbs. Name the setting that changes a documented default.
 
 ## Publishing
 
-- Agents may commit and push to the remote repository as they work. Once CI exists (Phase 1), a phase's work goes up as a branch and pull request so CI runs on it. Once the `main` ruleset exists (Phase 9), every change to `main` goes through a pull request.
-- **Only the owner** changes the repository's visibility. Agents never make the repo public (or private), and never change other repository settings that need Administration.
-- Agents may publish previews to int.nugettest.org at any time by dispatching `release.yml`, after the preview preflight in [docs/releasing.md](docs/releasing.md#preview-preflight) passes.
-- Agents never create stable tags or GitHub Releases, never approve a `nuget-org` deployment, never change `NUGET_ORG_PUBLISH_ENABLED`, never create or edit trusted-publishing policies, never dispatch the nuget.org login check unless the owner asks, and never call nuget.org's push API directly.
-- Agents use the git and `gh` credentials already on the machine; no separate agent credential exists. Those credentials may be the owner's own login, which can technically approve a `nuget-org` deployment through the API, so the rules above are what keep agents out of stable releases: agents never approve a `nuget-org` deployment, never change `NUGET_ORG_PUBLISH_ENABLED` or any other variable, environment, ruleset, or repository setting, and never dispatch the nuget.org login check unless the owner asks. The owner's own gates (creating the GitHub Release, flipping the variable, and approving the deployment) stay in front of every nuget.org publish.
-
-## Generated Code and Rendering
-
-- Treat the generator host's framework, compiler API version, and generated consumer framework/language requirements as separate compatibility constraints
-- Keep emitted sources self-contained, including support types. Reference every type and static member with a `global::`-qualified name instead of `using` directives or aliases (emitted `using` lines come only from template `#using` directives), and call extension methods as static methods; this overrides the `/csharp` import preference for emitted code. Cover consumer-name collisions with compilation tests
-- The parser and class writer never interpret the C# inside a C# variable or C# block: no lexing and no bracket, brace, string, comment, or directive detection. A block ends at the first closer of its bracket level, and the writer copies the C# under one `#line` mapping at the generated type's indent (column 0), line breaks unchanged
-- Every generated file starts with the `// <auto-generated>` header and has a `.g.cs` hint name, so analyzers that exclude generated code skip it; never emit `#pragma warning disable`, which would hide compiler warnings from template C#
-- Keep `#line` mappings for C# variables and C# blocks accurate when changing emitted statement layout, and cover the mapped template locations with compiler-error tests
-- Edit generator sources rather than generated files under `obj`
-- Preserve exact template bytes, including intentional newline fixtures, and both text and UTF-8 rendering contracts; execute generated renderers to verify exact characters and bytes when changing parsing, trimming, encoding, or output
-- Templates contain trusted C#; preserve default C# variable encoding, the invariant default of `TemplateOptions.Culture`, and explicit raw-output behavior
-- Directive values are copied into the generated code without C# validation; the compiler reports invalid names and types. The generator checks only blank values (including an empty derived `#type`) and the values AnglePlates defines (`#generate`, `#access`). Hint names are sanitized with plain string work.
-- Preserve direct streaming; do not add whole-output buffering without a requirement
-- Preserve the analyzer-only package contract unless compatibility testing justifies a deliberate change: a development dependency with generated support types, no runtime assets or dependencies, and analyzer/XML assets under `analyzers/dotnet/cs/netstandard2.0`
-- Keep the package's MSBuild files under `build/` (not `buildTransitive/`, which leaked template discovery into referencing projects) and keep discovery and MSBuild options working as described in [How MSBuild hands over templates](docs/development.md#how-msbuild-hands-over-templates); the generator reads only tagged files, and invalid generator settings report `SLAP009`
-
-## Diagnostics
-
-- Assign diagnostic IDs only through the registry in `docs/diagnostics.md`. Never reuse or rename a `## SLAPnnn` heading.
-
-## Testing Conventions
-
-- Follow [docs/testing.md](docs/testing.md) for `GeneratorTestHelper`, Verify snapshots, expected diagnostics, and incremental reruns
-- Review every changed source and diagnostic snapshot manually; never enable automatic acceptance or feed generated output back as generator input
-- Support types have one snapshot; don't add per-test copies.
-- Cover valid inputs, boundaries, malformed templates, failures, diagnostics, and both rendering paths
-- Target 100% line and branch coverage separately for generator sources and emitted runtime code; report measured coverage separately from this target
-- Keep `tests/AnglePlates.PackageTests` and the consumers under `tests/AnglePlates.PackageConsumers` outside the solution, without source-tree imports or analyzer project references; each consumer checks its own results and exits nonzero on failure. Run them through `eng/validate-package.ps1` after freshly packing a unique version, and register new consumers in that script
-- Treat `artifacts/` as ignored local build output. Pack only to `artifacts/package` with `-p:Version`, using the local `X.Y.Z-local.<yyyyMMdd>.<n>` format from the version table in [docs/releasing.md](docs/releasing.md#versions); do not create sibling output directories or task-named versions. Before packing, remove older package pairs so the folder holds only the version under validation
-- A successful sample build or pack does not prove the package works; only the isolated package consumers verify analyzer loading, build assets, and rendering
-
-## Validation
-
-- For code changes, restore and build `AnglePlates.slnx`, then run `samples/HelloWorld` when generation or rendering is affected; use the commands in docs/development.md
-- Run focused tests and report their scope; check measured coverage against the accepted gaps in [docs/testing.md](docs/testing.md#coverage) before calling coverage complete
-- For documentation-only changes, check links, consistency, whitespace, and line endings; a build is unnecessary
-- Report what changed, what was verified, and any remaining limitations; do not claim release readiness, coverage, or performance without evidence
+Agents may commit and push branches. Only the owner creates release tags or GitHub Releases, approves NuGet publication, or changes repository settings, visibility, environments, secrets, and trusted-publishing policies. Never publish to NuGet without the owner's explicit authorization.
