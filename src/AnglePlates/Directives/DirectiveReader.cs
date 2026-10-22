@@ -23,7 +23,6 @@ internal sealed class DirectiveReader
     private readonly string _text;
     private readonly List<TemplateError> _errors = [];
     private readonly HashSet<DirectiveKind> _seen = [];
-    private readonly HashSet<string> _distinctUsings = new(StringComparer.Ordinal);
     private readonly List<string> _usings = [];
 
     private string? _type;
@@ -80,15 +79,11 @@ internal sealed class DirectiveReader
     {
         var value = _text.Substring(directive.Value.Start, directive.Value.Length);
 
-        // Only #using may repeat, and then only with a different namespace
-        var duplicate = directive.Kind == DirectiveKind.Using
-            ? value.Length > 0 && !_distinctUsings.Add(value)
-            : !_seen.Add(directive.Kind);
-        if (duplicate)
+        // Every #using is kept in order; other directives may appear only once
+        if (directive.Kind != DirectiveKind.Using && !_seen.Add(directive.Kind))
         {
             var name = directive.Kind.GetName();
-            var label = directive.Kind == DirectiveKind.Using ? $"#{name} {value}" : $"#{name}";
-            _errors.Add(new TemplateError(DiagnosticDescriptors.DuplicateDirective, TextSpan.FromBounds(directive.Name.Start, directive.Value.End), label));
+            _errors.Add(new TemplateError(DiagnosticDescriptors.DuplicateDirective, TextSpan.FromBounds(directive.Name.Start, directive.Value.End), $"#{name}"));
             return;
         }
 

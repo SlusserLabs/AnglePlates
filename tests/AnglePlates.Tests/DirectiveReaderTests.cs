@@ -280,7 +280,6 @@ public sealed class DirectiveReaderTests
     [Arguments("#namespace Other", "#namespace")]
     [Arguments("#generate Text", "#generate")]
     [Arguments("#access public", "#access")]
-    [Arguments("#using System", "#using System")]
     [Arguments("#type\t", "#type")]
     public async Task Directive_Repeated_ReportsDuplicate(string line, string label)
     {
@@ -395,6 +394,26 @@ public sealed class DirectiveReaderTests
             await Assert.That(output.text).IsEqualTo("&lt;value&gt;");
             await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(output.text))).IsTrue();
         }
+    }
+
+    [Test]
+    [Arguments("System.Text")]
+    [Arguments("static System.Math")]
+    public async Task Using_RepeatedValue_PreservesEveryImportInOrder(string import)
+    {
+        var template = TemplateText.Header + $"#using {import}\r\n#using System.Collections.Generic\r\n#using {import}\r\n[[ model ]]";
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
+
+        await Assert.That(result.RunResult.Diagnostics).IsEmpty();
+        await Assert.That(result.TemplateSources.Length).IsEqualTo(2);
+        foreach (var source in result.TemplateSources)
+        {
+            var imports = source.Split('\n').Select(line => line.TrimEnd('\r')).Where(line => line.StartsWith("using ", StringComparison.Ordinal));
+
+            await Assert.That(string.Join("\n", imports)).IsEqualTo($"using {import};\nusing System.Collections.Generic;\nusing {import};");
+        }
+
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", "&lt;value&gt;");
     }
 
     [Test]

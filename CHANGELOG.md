@@ -22,7 +22,7 @@ This is the road to 1.1.0, the first release on nuget.org. Nothing before it was
 - A `[` right before an opener raises its level, and a run of more than four `[` keeps the extras as text.
 - Generated C# blocks are no longer re-indented around braces. Template C# now sits at column 0 of the generated file and keeps the template's own line breaks.
 - Generated classes are `sealed partial`, so you can add helper members in a hand-written half, but you can't derive from them.
-- `TemplateOptions` is `sealed` with `init`-only properties. Options can't change after you create them, so a template and its options are safe to share between threads.
+- `TemplateOptions` is `sealed` with `init`-only properties. The properties cannot be reassigned after initialization; the supplied culture and encoder are retained by reference.
 - The base classes' constructors and flush helpers are `private protected`. Template C# still calls `Write` and `WriteRaw`.
 - `Render` and `RenderAsync` throw `ArgumentNullException` for a null writer. `RenderAsync` reports it through the returned `ValueTask`.
 - `[[ null ]]` and `[[ default ]]` compile and write `NullVariable`.
@@ -42,4 +42,5 @@ This is the road to 1.1.0, the first release on nuget.org. Nothing before it was
 
 ### Fixed
 
+- Repeated identical `#using` directives are emitted in template order instead of reporting `SLAP006`. The C# compiler handles duplicate imports.
 - Projects with `GenerateDocumentationFile` no longer get `CS1584` and `CS1658` warnings from the generated support types.

@@ -66,7 +66,7 @@ Set `<AnglePlateBaseAccessModifier>public</AnglePlateBaseAccessModifier>` in the
 
 **Duplicate directive**
 
-A directive that can appear only once appears twice. `#using` can repeat, but not with the same namespace.
+A directive other than `#using` appears twice. Every `#using` is copied into the generated template in order, including repeated identical values. Duplicate imports or aliases are left to the C# compiler.
 
 ```html
 #model MyApp.GreetingModel

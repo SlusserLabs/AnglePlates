@@ -122,7 +122,7 @@ internal sealed class TemplateClassWriter
     }
 
     // The constructor falls back to default options, so only a template created without options allocates one small
-    // immutable object, and Default is a shared instance that uses them
+    // options object, and Default is a shared instance that uses them
     private void WriteConstructorAndDefault()
     {
         _writer.WriteLine("/// <summary>");

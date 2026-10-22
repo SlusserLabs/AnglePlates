@@ -71,7 +71,7 @@ A `//` comment or a `#` preprocessor line in a C# block does what it looks like,
 
 A block with no closer at its level reports [`SLAP004`](diagnostics.md#slap004) at the opener, and the template doesn't compile. `[[[ x ]]` reports it, because `]]` isn't the closer for three brackets.
 
-Here's a template that needs more brackets. The slice `model[0..1]` ends in `]]`, which would close a two-bracket C# variable early, so it uses three. The C# block holds a `%]`, so it uses two:
+Here's a template that uses higher bracket levels. The slice `model[0..1]` ends in one `]`. If it touches a two-bracket closer, as in `[[ model[0..1]]]`, the block closes early. A space before the closer, as in `[[ model[0..1] ]]`, is enough; the example uses three brackets instead. The C# block holds a `%]`, so it needs two:
 
 <!-- sample: Templates/Readme/levels.html -->
 ```text

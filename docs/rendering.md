@@ -33,7 +33,7 @@ Every render method throws `ArgumentNullException` for a null `writer`. The mode
 
 `Default` is one shared instance per template class, created with `new TemplateOptions()`. `new GreetingTextTemplate()` does the same thing with a fresh instance and its own `new TemplateOptions()`, and `new GreetingTextTemplate(options)` uses yours.
 
-A compiled template holds nothing but its options, and options can't change after they're created, so any instance is safe to share between threads and to render as often as you like. If you add fields in your own half of a partial class, keeping them thread safe is up to you.
+The generated render methods keep no state between calls. Options properties are init-only, but `Culture` and `Encoder` keep the objects you supply by reference. Changing a mutable `CultureInfo` later changes the template's formatting too. To share a template between threads, use a read-only culture such as one returned by `CultureInfo.GetCultureInfo`, and keep custom encoders thread safe. If you add fields in your own half of a partial class, keeping them thread safe is up to you.
 
 ### Options
 
@@ -60,7 +60,7 @@ Options only affect C# variables and `Write` calls; literal text is always writt
 
 #### One template per culture
 
-`Render` has no culture argument, because options travel to child templates on their own. To localize per request, keep one template per culture and reuse it. Options and templates can't change after they're created and are safe to share between threads, so cache them by culture name:
+`Render` has no culture argument, because options travel to child templates on their own. To localize per request, keep one template per culture and reuse it. This example uses read-only cultures and the shared `HtmlEncoder.Default`, so these instances can be cached by culture name:
 
 ```csharp
 private static readonly ConcurrentDictionary<string, InvoiceTextTemplate> _invoices = new();
@@ -113,7 +113,7 @@ app.MapGet("/greeting", async (HttpContext context) =>
 
 ## Flush checks and cancellation
 
-`RenderAsync` checks at the first write after each C# block. A check throws if the cancellation token is canceled, then flushes if 16 KB or more are waiting in the pipe. The method flushes once more at the end. Loops live in C# blocks, so every loop iteration that writes something gets a check, and a large page applies backpressure as it goes. Most checks find less than 16 KB waiting and carry on without awaiting anything.
+`RenderAsync` checks at the first write after each C# block. The helper writes the value or literal first, then checks cancellation and flushes if 16 KB or more are waiting in the pipe. The method flushes once more at the end. A loop gets a check on each iteration when its body reaches one of these generated writes, so a large page can apply backpressure as it goes. Most checks find less than 16 KB waiting and carry on without awaiting anything.
 
 A `PipeWriter` that can't report how many bytes are waiting (its `CanGetUnflushedBytes` is `false`) gets flushed at every check instead.
 
@@ -147,8 +147,10 @@ A string with half a surrogate pair isn't valid UTF-16, and each writer handles 
 
 | Options | Text template | UTF-8 template |
 | --- | --- | --- |
-| An encoder (the default) | Writes `&#xFFFD;` | Writes `&#xFFFD;` |
+| `Encoder = HtmlEncoder.Default` | Writes `&#xFFFD;` | Writes `&#xFFFD;` |
 | `Encoder = null` | Passes the lone surrogate through | Writes U+FFFD, the bytes `EF BF BD` |
+
+Other encoders, including `JavaScriptEncoder`, `UrlEncoder`, and custom encoders, use their own escaping rules.
 
 ## Viewing the generated code
 

@@ -9,8 +9,8 @@
 namespace SlusserLabs.AnglePlates;
 
 /// <summary>
-/// Controls how compiled templates convert and encode C# variables. Options can't change after they're created,
-/// so a template and its options are safe to share between threads.
+/// Controls how compiled templates convert and encode C# variables. Properties are init-only;
+/// the supplied culture and encoder are retained by reference and must be safe to share when rendering concurrently.
 /// </summary>
 public sealed class TemplateOptions
 {

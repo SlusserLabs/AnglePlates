@@ -95,7 +95,7 @@ internal sealed partial class GreetingUtf8Template : Utf8Template<GreetingModel>
 }
 ```
 
-`Default` is a shared instance created with `new TemplateOptions()`, and the constructor takes your own options. The base classes expose the options as `Options`. A template keeps no state between renders, so one instance is safe to share between threads. The classes are `partial`, so you can add helper members in a file of your own.
+`Default` is a shared instance created with `new TemplateOptions()`, and the constructor takes your own options. The base classes expose the options as `Options`. The generated render methods keep no state between calls. You can share an instance between threads when its culture and encoder are safe to share and any members you add are thread safe. The classes are `partial`, so you can add helper members in a file of your own.
 
 The base classes and `TemplateOptions` are generated into your project too, in the `SlusserLabs.AnglePlates` namespace. That's why there's no runtime package.
 
@@ -159,7 +159,7 @@ var german = new GreetingTextTemplate(new TemplateOptions { Culture = CultureInf
 var custom = new GreetingTextTemplate(new TemplateOptions { Encoder = null, NullVariable = "-" });
 ```
 
-The first one suits a plain-text email, and the second writes `1234,5` where the default writes `1234.5`. `Encoder` and `Culture` don't depend on each other. Options can't change after they're created, so they're safe to share. To skip encoding for one value, call `WriteRaw(value, writer)` from a C# block.
+The first one suits a plain-text email, and the second writes `1234,5` where the default writes `1234.5`. `Encoder` and `Culture` don't depend on each other. Options properties are init-only, but they keep references to the culture and encoder you supply. Use a read-only culture such as one returned by `CultureInfo.GetCultureInfo`, and keep custom encoders thread safe when sharing a template. To skip encoding for one value, call `WriteRaw(value, writer)` from a C# block.
 
 ## Where templates live
 
