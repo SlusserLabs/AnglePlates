@@ -15,9 +15,6 @@
     <File Path="icon.png" />
     <File Path="icon.svg" />
   </Folder>
-  <Folder Name="/.github/">
-    <File Path=".github/dependabot.yml" />
-  </Folder>
   <Folder Name="/.github/workflows/">
     <File Path=".github/workflows/ci.yml" />
     <File Path=".github/workflows/release.yml" />

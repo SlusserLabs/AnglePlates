@@ -90,9 +90,10 @@ Use the exact version you packed. The command installs the package into NuGet's 
 
 ## CI and releases
 
-CI uses one Ubuntu job and the SDK from `global.json`. It restores, builds, tests, runs the console sample, packs, and validates the package, including Native AOT. Test results and failed snapshots are uploaded for inspection. CI runs on pushes to `main` and on pull requests; pull requests are optional for solo development.
+There are two workflows:
 
-The release workflow runs when the owner publishes a GitHub Release. It calls CI with the release version, then publishes the exact package CI validated. It doesn't rebuild the package in the publish job.
+- `ci.yml` runs on every push and pull request. One Ubuntu job uses the SDK from `global.json` to restore, build, test, run the console sample, pack, and validate the package, including Native AOT. Test results and failed snapshots are uploaded for inspection. On pushes, a second job publishes the validated package to the [NuGet test feed](#publish-to-the-nuget-test-feed).
+- `release.yml` only runs when you start it from **Actions → Release → Run workflow** on `main`. It calls CI with the stable `VersionPrefix` version, publishes the exact package CI validated to nuget.org, then creates the matching tag and GitHub Release. It doesn't rebuild the package in the publish job.
 
 Before the first release, the owner must:
 
@@ -104,18 +105,18 @@ For each release:
 
 1. Review the changes and update `CHANGELOG.md` and `VersionPrefix` in `Directory.Build.props`.
 2. Push the changes to `main`, directly or through a pull request, and check that CI passes for the intended release commit.
-3. Create a stable `vX.Y.Z` tag on the intended `main` commit and publish its GitHub Release. The tag must match `VersionPrefix`.
-4. Approve the `nuget-org` deployment after validation succeeds.
+3. Run the `Release` workflow on `main`.
+4. Approve the `nuget-org` deployment after validation succeeds. The publish job allows an existing `vX.Y.Z` tag only if it points to the built commit; a missing tag is created with the GitHub Release. Tag lookup errors other than HTTP 404 stop the job. It publishes to nuget.org, then creates a GitHub Release with generated notes. Duplicate package versions fail publication. If publication succeeds but tagging or release creation fails, the owner must create the missing tag or release for that exact commit separately; rerunning the job will fail on the duplicate package.
 
-Only the owner performs release actions or changes repository and NuGet settings. Local packages and ordinary CI packages aren't published.
+Only the owner performs release actions or changes repository and NuGet settings. Local packages aren't published.
 
 ### Publish to the NuGet test feed
 
-The `Publish to NuGet integration feed` workflow (`publish-test.yml`) runs on demand through GitHub Actions. It calls the same CI validation, including Native AOT, then publishes the validated artifact to [int.nugettest.org](https://int.nugettest.org/). Versions use `VersionPrefix` plus `-beta.<run-number>.<run-attempt>`, such as `1.1.0-beta.42.1`. Rerunning all jobs produces a new version; retrying only the publish job reuses the validated artifact.
+Every push runs the `publish-nugettest` job in `ci.yml` after validation, and it publishes the validated artifact to [int.nugettest.org](https://int.nugettest.org/). Pull requests don't publish. Versions use `VersionPrefix` plus `-beta.<run-number>.<run-attempt>`, such as `1.1.0-beta.42.1`. Rerunning all jobs produces a new version; retrying only the publish job reuses the validated artifact.
 
-Before the first run, the owner must:
+Before the first push, the owner must:
 
-1. Create the `nuget-test` GitHub environment. Restrict deployments to the branches you intend to publish from and configure owner approval if desired.
+1. Create the `nuget-test` GitHub environment. Restrict deployments to the branches you intend to publish from. Don't require approval unless you want to approve every push.
 2. Add an environment secret named `NUGET_USER` containing the test site's profile name, not an email address. This overrides a repository secret with the same name if the production username differs.
 3. Sign in to the test site and create a trusted-publishing policy with these values:
 
@@ -123,12 +124,10 @@ Before the first run, the owner must:
    | --- | --- |
    | Repository Owner | `SlusserLabs` |
    | Repository | `AnglePlates` |
-   | Workflow File | `publish-test.yml` |
+   | Workflow File | `ci.yml` |
    | Environment | `nuget-test` |
 
-After the workflow is on `main`, open **Actions → Publish to NuGet integration feed → Run workflow**, select the intended branch, and run it. Approve the `nuget-test` deployment if the environment requires approval. No release tag or GitHub Release is needed.
-
-The workflow uses the test site's token endpoint and OIDC audience to obtain a short-lived API key through `NuGet/login`. It pushes to `https://apiint.nugettest.org/v3/index.json`; production publishing continues to use `release.yml` and `nuget-org`. No long-lived API key is needed.
+The job uses the test site's token endpoint and OIDC audience to obtain a short-lived API key through `NuGet/login`. It pushes to `https://apiint.nugettest.org/v3/index.json`; production publishing continues to use `release.yml` and `nuget-org`. No long-lived API key is needed.
 
 Check the package on the test site after publishing. For a consumer outside this repository, use the published version and the test feed as the source:
 
