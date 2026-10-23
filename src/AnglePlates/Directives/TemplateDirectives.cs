@@ -38,6 +38,6 @@ internal sealed class TemplateDirectives
     // Where SLAP005 points when the template is public; an empty span when #access is left out
     public TextSpan AccessSpan { get; }
 
-    // In template order, without repeats
+    // In template order, repeats included
     public IReadOnlyList<string> Usings { get; }
 }
