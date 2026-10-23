@@ -28,7 +28,7 @@ public sealed class ReadmeExampleTests
     private static readonly Dictionary<string, string[]> _samples = new(StringComparer.Ordinal)
     {
         ["README.md"] = ["Templates/Readme/greeting.html"],
-        ["docs/templates.md"] = ["Templates/Readme/levels.html", "Templates/Readme/order-line.html", "Templates/Readme/order.html", "Readme/OrderTextTemplate.cs"],
+        ["docs/templates.md"] = ["Templates/Readme/levels.html", "Templates/Readme/order-line.html", "Templates/Readme/order.html"],
     };
 
     [Test]

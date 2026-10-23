@@ -66,7 +66,7 @@ Compiled classes are `sealed partial`. A template named `Greeting` produces thes
 
 Synchronous rendering doesn't flush or dispose the writer. `RenderAsync` flushes as output grows, checks cancellation at the first write after each C# block, and flushes once at the end. It doesn't complete the pipe. Cancellation or a completed pipe reader stops rendering with `OperationCanceledException`. Exceptions from your C# or writer propagate.
 
-For ASP.NET Core, pass `context.Response.BodyWriter` and `context.RequestAborted` to `RenderAsync`, and set the response content type yourself. Template C# is also compiled into the async method, so normal C# async restrictions apply.
+For ASP.NET Core, pass `context.Response.BodyWriter` and `context.RequestAborted` to `RenderAsync`, and set the response content type yourself. The [minimal API walkthrough](minimal-api.md) shows a complete endpoint. Template C# is also compiled into the async method, so normal C# async restrictions apply.
 
 ### Options
 
@@ -91,6 +91,16 @@ Strings keep their text. Other values convert through `IConvertible`, then `IFor
 
 Generated render methods hold no state between calls. Shared instances require thread-safe encoders, read-only cultures, and thread-safe members in your partial classes.
 
+### HTML encoding and context
+
+The default `HtmlEncoder.Default` encodes model values for HTML text and quoted attribute values, such as `<p>[[ model.Name ]]</p>` and `<input value="[[ model.Name ]]">`. Always quote attribute values. Pass the original text to the template; pre-encoded text gets encoded again.
+
+HTML encoding doesn't validate URLs. For example, `<a href="[[ model.Url ]]">` still writes `javascript:alert(1)` unchanged if that's the model value. Validate URLs in your application before rendering, allowing only the schemes you need, such as `https`. Encode individual query-string values when constructing a URL, then let the template HTML-encode the completed URL in its quoted attribute.
+
+Keep model values out of JavaScript, CSS, and event-handler attributes such as `onclick`. HTML encoding doesn't make values safe in those contexts. To pass text to JavaScript, put it in a quoted `data-*` attribute, read it through `element.dataset`, and use `textContent` when displaying it. See ASP.NET Core's [XSS guidance](https://learn.microsoft.com/aspnet/core/security/cross-site-scripting) for more context.
+
+Use `WriteRaw` only for trusted HTML. Setting `TemplateOptions.Encoder = null` disables encoding for the whole template instance; reserve that for plain text or other output where you've handled encoding yourself.
+
 ## Child templates
 
 A C# block can render another template into the same writer. Start with `Templates/order-line.html`:
@@ -114,29 +124,14 @@ Then `Templates/order.html`:
 #namespace MyApp.Templates
 <h1>Order [[ model.Number ]]</h1>
 <ul>
+[% var lineTemplate = new OrderLineTextTemplate(Options); -%]
 [% foreach (var line in model.Lines) { -%]
-[% Line.Render(line, writer); -%]
+[% lineTemplate.Render(line, writer); -%]
 [% } -%]
 </ul>
 ```
 
-Create the child in the parent's partial class with the parent's options:
-
-<!-- sample: Readme/OrderTextTemplate.cs -->
-```csharp
-namespace MyApp.Templates;
-
-// The hand-written half of the generated OrderTextTemplate
-internal sealed partial class OrderTextTemplate
-{
-    private OrderLineTextTemplate? _line;
-
-    // One child per parent instance, created with the parent's options
-    private OrderLineTextTemplate Line => _line ??= new(Options);
-}
-```
-
-The models are ordinary types: `OrderModel` has `Number` and `Lines`, and each `OrderLineModel` has `Quantity` and `Name`. The child writes directly to the parent's writer. Passing `Options` preserves encoding and culture.
+The models are ordinary types: `OrderModel` has `Number` and `Lines`, and each `OrderLineModel` has `Quantity` and `Name`. Each render call creates one child before the loop, so concurrent calls to the parent's `Default` instance don't share mutable child fields. The child writes directly to the parent's writer. Passing `Options` preserves encoding and culture.
 
 For UTF-8, use `#generate Utf8` in both templates and an `OrderLineUtf8Template` child. Call its synchronous `Render` inside the parent, including during `RenderAsync`. The parent checks flushing after the C# block returns; a large loop entirely inside one block can delay that check.
 
@@ -155,7 +150,36 @@ Use MSBuild items to add or remove files:
 
 Explicit includes must be templates or report `SLAP008`. Set `EnableDefaultAnglePlateItems` to `false` to disable the default folder. Put that property in your project or `Directory.Build.props`. Remove default items from the project or `Directory.Build.targets`, after the package has added them.
 
-To expose templates to another assembly, set `AnglePlateBaseAccessModifier` to `public` and add `#access public` to the template. Shared template files outside the project should set `#namespace` explicitly. Keep `PrivateAssets="all"` on the package reference when packing a library, so AnglePlates doesn't become a dependency of your package.
+Shared template files outside the project should set `#namespace` explicitly. Keep `PrivateAssets="all"` on the package reference when packing a library, so AnglePlates doesn't become a dependency of your package.
+
+### Templates in libraries
+
+Keep templates and support types internal when building a library. Expose a small rendering method that accepts your model and returns a string or writes to a caller-supplied writer. For example, a library containing the order templates above can expose this class in `OrderRenderer.cs`:
+
+```csharp
+using MyApp.Templates;
+using SlusserLabs.AnglePlates;
+
+namespace MyApp;
+
+/// <summary>
+/// Renders an order as HTML.
+/// </summary>
+public static class OrderRenderer
+{
+    /// <summary>
+    /// Returns the rendered order HTML.
+    /// </summary>
+    public static string Render(OrderModel model)
+    {
+        return OrderTextTemplate.Default.RenderToString(model);
+    }
+}
+```
+
+Make the model public if it's part of your library's API. Keep `TemplateOptions` and the generated base classes out of that API; let your rendering method select the options inside the library.
+
+Public generated templates are an advanced option. Set `AnglePlateBaseAccessModifier` to `public` and add `#access public` to the template. This also exposes support types under `SlusserLabs.AnglePlates`, with a separate type identity in each assembly. If the consuming app also references AnglePlates, its generated support types can cause `CS0436` warnings, and its `TemplateOptions` can't be passed to your library's template constructor (`CS1503`). Referencing two libraries with public support types can make names such as `TemplateOptions` ambiguous (`CS0433`). `PrivateAssets="all"` prevents package dependency propagation; it doesn't hide public types already compiled into your assembly. The internal-template wrapper above avoids these conflicts.
 
 ## Compiler errors and generated files
 

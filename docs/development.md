@@ -75,6 +75,16 @@ Native publishing needs the [platform's Native AOT prerequisites](https://learn.
 
 Package metadata, symbols, and Source Link use the .NET SDK's tooling.
 
+### Try a local package
+
+Pack the version above, then create your consumer project outside this repository so its build doesn't inherit repository settings. From the consumer's project folder, run this command in PowerShell or Bash, replacing the source path with the absolute path to your `artifacts/package` folder:
+
+```shell
+dotnet package add SlusserLabs.AnglePlates --version 1.1.0-local.20261022.1 --source "<absolute-path-to-artifacts/package>"
+```
+
+Use the exact version you packed. The command installs the package into NuGet's cache and adds its `PackageReference`; no manual analyzer references or MSBuild imports are needed. Use a new version whenever you rebuild a local package, since NuGet caches packages by ID and version. This command uses the filesystem feed for installation and doesn't publish anything. The [minimal API walkthrough](minimal-api.md) provides a complete consumer example.
+
 ## CI and releases
 
 CI uses one Ubuntu job and the SDK from `global.json`. It restores, builds, tests, runs the sample, packs, and validates the package, including Native AOT. Test results and failed snapshots are uploaded for inspection. CI runs on pushes to `main` and on pull requests; pull requests are optional for solo development.
