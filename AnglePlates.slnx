@@ -33,6 +33,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
+    <Project Path="samples/HelloWorldApi/HelloWorldApi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AnglePlates.Runtime.Tests/AnglePlates.Runtime.Tests.csproj" />

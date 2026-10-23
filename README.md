@@ -1,5 +1,7 @@
 # AnglePlates
 
+<!-- This README also ships in the NuGet package; its repository links stay absolute so they work on nuget.org. -->
+
 AnglePlates is like T4 templates for modern .NET. Give it a template and any model you want to render, and it generates the C# classes at compile time. The compiled templates write straight to a `TextWriter` or UTF-8 buffer, so there is no runtime package to drag along. That's it! You can make it fancier, but you don't have to.
 
 Templates use C# expressions, loops, and conditions. They compile with your application, work with Native AOT, and need .NET 10 and C# 11 or later.
@@ -69,13 +71,18 @@ var german = new GreetingTextTemplate(new TemplateOptions
 
 `TemplateOptions.Encoder` starts as `HtmlEncoder.Default`; `null` turns encoding off. `TemplateOptions.Culture` starts as `CultureInfo.InvariantCulture`. `TemplateOptions.NullVariable` controls what a null value writes; `null` writes nothing.
 
+## Samples
+
+Both [samples](https://github.com/SlusserLabs/AnglePlates/tree/main/samples) are small runnable .NET 10 programs. Each has a README with a run command and expected output:
+
+- [HelloWorld](https://github.com/SlusserLabs/AnglePlates/tree/main/samples/HelloWorld): render a Markdown greeting and numbered task list with conditions and a loop.
+- [HelloWorldApi](https://github.com/SlusserLabs/AnglePlates/tree/main/samples/HelloWorldApi): stream a UTF-8 HTML page with nested models, a child template, and default encoding.
+
 ## Learn more
 
 - [Template reference](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/templates.md): directives, syntax, child templates, rendering, and MSBuild settings.
-- [Minimal API walkthrough](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/minimal-api.md): stream an HTML response from ASP.NET Core.
 - [Glossary](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/glossary.md): template terminology, generation, and rendering.
 - [Diagnostics](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md): build errors and their fixes.
-- [HelloWorld sample](https://github.com/SlusserLabs/AnglePlates/tree/main/samples/HelloWorld): a console page and plain-text email.
 - [Contributing](https://github.com/SlusserLabs/AnglePlates/blob/main/CONTRIBUTING.md) and [development](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/development.md): build, test, and release commands.
 
 Templates are trusted C# source. Only compile templates you'd trust as part of your application. AnglePlates doesn't support T4 syntax, runtime compilation, or IntelliSense inside templates. It doesn't parse embedded C#: blocks end at their matching delimiter.

@@ -30,6 +30,8 @@ The file name before its first dot supplies `#type`: split on hyphens, underscor
 
 The model is available as `model` or `Model`. C# blocks can call `Write(value, writer)` to encode a value. Don't reuse `model`, `Model`, `writer`, or `cancellationToken` as local names.
 
+Prepare data and calculations in your application and pass the results through the model. Keep template C# focused on presentation: choosing markup, looping over prepared items, and rendering child templates. For example, calculate a completed-item count in the request handler, then output that model property in the template.
+
 C# blocks are copied as written. Each piece of literal text and each C# variable becomes its own write statement; comments and empty blocks don't join neighboring text. Use braces around loops and conditional bodies that contain template output.
 
 Blocks end at the first matching closer, even inside C# strings or comments. When an expression contains `]]`, use more brackets: `[[[ grid[row[0]] ]]]`. Variables allow two to four brackets; C# blocks and comments allow one to four. A C# block containing `%]` can use `[[% ... %]]`.
@@ -66,7 +68,7 @@ Compiled classes are `sealed partial`. A template named `Greeting` produces thes
 
 Synchronous rendering doesn't flush or dispose the writer. `RenderAsync` flushes as output grows, checks cancellation at the first write after each C# block, and flushes once at the end. It doesn't complete the pipe. Cancellation or a completed pipe reader stops rendering with `OperationCanceledException`. Exceptions from your C# or writer propagate.
 
-For ASP.NET Core, pass `context.Response.BodyWriter` and `context.RequestAborted` to `RenderAsync`, and set the response content type yourself. The [minimal API walkthrough](minimal-api.md) shows a complete endpoint. Template C# is also compiled into the async method, so normal C# async restrictions apply.
+For ASP.NET Core, pass `context.Response.BodyWriter` and `context.RequestAborted` to `RenderAsync`, and set the response content type yourself. The runnable [HelloWorldApi sample](../samples/HelloWorldApi) shows a complete endpoint. Template C# is also compiled into the async method, so normal C# async restrictions apply.
 
 ### Options
 

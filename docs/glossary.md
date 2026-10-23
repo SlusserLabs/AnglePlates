@@ -18,6 +18,7 @@ AnglePlates generates C# classes from template files at build time. These terms 
 | Rendering | Executing a compiled template's render method at runtime to write output from a model. |
 | Support types | The generated options, base classes, and extension methods compiled into the consumer's assembly. |
 | Consumer | An application or library that references AnglePlates. |
+| Sample | A complete runnable program under [samples/](../samples/README.md) that demonstrates AnglePlates. Each sample has a README with its purpose, run command, and expected output. Use "sample" for these programs and "example" for short snippets in the documentation. |
 
 ## Relationships
 

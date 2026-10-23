@@ -12,13 +12,16 @@ dotnet build AnglePlates.slnx -c Release --no-restore -warnaserror
 dotnet run --project samples/HelloWorld -c Release --no-build --no-launch-profile
 ```
 
+The solution build includes both samples. To start the web server, use the command in the [HelloWorldApi sample](../samples/HelloWorldApi/README.md).
+
 The generator targets `netstandard2.0` and uses Roslyn 4.14.0. Consumers need .NET 10 and C# 11 or later. Keep these constraints separate when changing generated APIs.
 
 ## Source layout
 
 - `src/AnglePlates` contains the generator. `Parsing` handles delimiters, `Directives` reads settings, `Pipeline` holds values used by incremental generation, and `Emit` writes the consumer code.
 - `src/AnglePlates/build` contains NuGet's props and targets. They discover `AnglePlate` files and tag them as compiler `AdditionalFiles`. The generator ignores untagged files.
-- `samples/HelloWorld` shows text rendering and plain-text options.
+- `samples/HelloWorld` renders a Markdown greeting and numbered task list to the console with conditions, a loop, and HTML encoding disabled.
+- `samples/HelloWorldApi` streams HTML to an ASP.NET Core response with default encoding, nested models, and a child template. Both projects are in the solution; the [samples overview](../samples/README.md) links to their run commands and expected output.
 - `benchmarks/AnglePlates.Benchmarks` measures text and UTF-8 rendering of an encoded list. It stays outside the solution; run it separately when investigating performance.
 
 The generator doesn't interpret embedded C#. It copies blocks unchanged, adds line mappings, and lets the consumer's compiler check them.
@@ -55,7 +58,7 @@ The two methods render a list to a reused `StringWriter` or UTF-8 buffer. `Split
 
 ## Validate the package
 
-The sample and unit tests use the generator from source. An isolated app must also prove the packed analyzer and build assets work.
+The samples and unit tests use the generator from source. An isolated app must also prove the packed analyzer and build assets work.
 
 Pack into `artifacts/package` with an explicit local version such as `1.1.0-local.20261022.1`. Use a new local version for each package under validation and clear older package pairs from that folder first:
 
@@ -83,11 +86,11 @@ Pack the version above, then create your consumer project outside this repositor
 dotnet package add SlusserLabs.AnglePlates --version 1.1.0-local.20261022.1 --source "<absolute-path-to-artifacts/package>"
 ```
 
-Use the exact version you packed. The command installs the package into NuGet's cache and adds its `PackageReference`; no manual analyzer references or MSBuild imports are needed. Use a new version whenever you rebuild a local package, since NuGet caches packages by ID and version. This command uses the filesystem feed for installation and doesn't publish anything. The [minimal API walkthrough](minimal-api.md) provides a complete consumer example.
+Use the exact version you packed. The command installs the package into NuGet's cache and adds its `PackageReference`; no manual analyzer references or MSBuild imports are needed. Use a new version whenever you rebuild a local package, since NuGet caches packages by ID and version. This command uses the filesystem feed for installation and doesn't publish anything. The [samples](../samples/README.md) provide small programs you can adapt to your consumer project.
 
 ## CI and releases
 
-CI uses one Ubuntu job and the SDK from `global.json`. It restores, builds, tests, runs the sample, packs, and validates the package, including Native AOT. Test results and failed snapshots are uploaded for inspection. CI runs on pushes to `main` and on pull requests; pull requests are optional for solo development.
+CI uses one Ubuntu job and the SDK from `global.json`. It restores, builds, tests, runs the console sample, packs, and validates the package, including Native AOT. Test results and failed snapshots are uploaded for inspection. CI runs on pushes to `main` and on pull requests; pull requests are optional for solo development.
 
 The release workflow runs when the owner publishes a GitHub Release. It calls CI with the release version, then publishes the exact package CI validated. It doesn't rebuild the package in the publish job.
 

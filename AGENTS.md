@@ -33,7 +33,7 @@ AnglePlates is a small compile-time C# template engine published as `SlusserLabs
   - `docs/templates.md` is the consumer reference
   - `docs/glossary.md` defines essential terms
   - `docs/diagnostics.md` for diagnostic IDs; don't reuse retired IDs.
-- README links and images use absolute `https://` URLs for nuget.org.
+- Use relative links between repository documents and samples. The root README ships in the NuGet package, so its links and images use absolute `https://` URLs that work on nuget.org. External references and localhost sample URLs also need absolute URLs.
 - Treat requests to update project rules as edits to this file.
 
 ## Writing voice
