@@ -9,6 +9,9 @@ on:
       release-tag:
         type: string
         default: ''
+      integration-test:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,11 +29,15 @@ jobs:
       - name: Choose the package version
         env:
           RELEASE_TAG: ${{ inputs.release-tag }}
+          INTEGRATION_TEST: ${{ inputs.integration-test }}
         run: |
           if [ -n "$RELEASE_TAG" ]; then
             prefix="$(dotnet msbuild src/AnglePlates/AnglePlates.csproj -getProperty:VersionPrefix)"
             [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$RELEASE_TAG" == "v$prefix" ]] || { echo "Release tag must match v$prefix"; exit 1; }
             version="${RELEASE_TAG#v}"
+          elif [ "$INTEGRATION_TEST" = 'true' ]; then
+            prefix="$(dotnet msbuild src/AnglePlates/AnglePlates.csproj -getProperty:VersionPrefix)"
+            version="$prefix-beta.$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
           else
             version="0.0.0-ci.$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
           fi

@@ -1,26 +1,17 @@
 <Project>
 
-  <!-- Versions: 1.1.0 is the next release; builds and packs pass -p:Version, as docs/development.md describes -->
   <PropertyGroup>
     <VersionPrefix>1.1.0</VersionPrefix>
     <VersionSuffix>dev</VersionSuffix>
   </PropertyGroup>
 
-  <!-- Reproducible builds and Source Link -->
   <PropertyGroup>
-    <!-- The same source and inputs produce the same binaries -->
     <Deterministic>true</Deterministic>
-    <!-- Normalizes the paths in the PDB on CI, which sets CI to true -->
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
-    <!-- Portable PDBs, which the symbol package carries -->
     <DebugType>portable</DebugType>
-    <!-- Puts generated and other untracked sources in the PDB, since Source Link can't fetch them -->
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <!-- Writes the repository URL and commit into the nuspec -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <!-- The repository type the nuspec records -->
     <RepositoryType>git</RepositoryType>
-    <!-- The repository URL the nuspec records -->
     <RepositoryUrl>https://github.com/SlusserLabs/AnglePlates</RepositoryUrl>
   </PropertyGroup>
 

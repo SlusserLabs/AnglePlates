@@ -107,7 +107,36 @@ For each release:
 3. Create a stable `vX.Y.Z` tag on the intended `main` commit and publish its GitHub Release. The tag must match `VersionPrefix`.
 4. Approve the `nuget-org` deployment after validation succeeds.
 
-Only the owner performs release actions or changes repository and NuGet settings. There is no separate preview feed, login rehearsal, or publishing switch. Local packages and CI packages aren't published.
+Only the owner performs release actions or changes repository and NuGet settings. Local packages and ordinary CI packages aren't published.
+
+### Publish to the NuGet test feed
+
+The `Publish to NuGet integration feed` workflow (`publish-test.yml`) runs on demand through GitHub Actions. It calls the same CI validation, including Native AOT, then publishes the validated artifact to [int.nugettest.org](https://int.nugettest.org/). Versions use `VersionPrefix` plus `-beta.<run-number>.<run-attempt>`, such as `1.1.0-beta.42.1`. Rerunning all jobs produces a new version; retrying only the publish job reuses the validated artifact.
+
+Before the first run, the owner must:
+
+1. Create the `nuget-test` GitHub environment. Restrict deployments to the branches you intend to publish from and configure owner approval if desired.
+2. Add an environment secret named `NUGET_USER` containing the test site's profile name, not an email address. This overrides a repository secret with the same name if the production username differs.
+3. Sign in to the test site and create a trusted-publishing policy with these values:
+
+   | Field | Value |
+   | --- | --- |
+   | Repository Owner | `SlusserLabs` |
+   | Repository | `AnglePlates` |
+   | Workflow File | `publish-test.yml` |
+   | Environment | `nuget-test` |
+
+After the workflow is on `main`, open **Actions → Publish to NuGet integration feed → Run workflow**, select the intended branch, and run it. Approve the `nuget-test` deployment if the environment requires approval. No release tag or GitHub Release is needed.
+
+The workflow uses the test site's token endpoint and OIDC audience to obtain a short-lived API key through `NuGet/login`. It pushes to `https://apiint.nugettest.org/v3/index.json`; production publishing continues to use `release.yml` and `nuget-org`. No long-lived API key is needed.
+
+Check the package on the test site after publishing. For a consumer outside this repository, use the published version and the test feed as the source:
+
+```shell
+dotnet package add SlusserLabs.AnglePlates --version 1.1.0-beta.42.1 --source https://apiint.nugettest.org/v3/index.json
+```
+
+This command works in PowerShell and Bash. The test site is for publishing rehearsals; [Microsoft doesn't guarantee that uploaded packages will be preserved](https://learn.microsoft.com/nuget/nuget-org/nuget-org-faq#is-it-recommended-to-upload-my-test-packages-to-nugetorg).
 
 ## Diagnostics
 
