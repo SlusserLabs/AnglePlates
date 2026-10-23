@@ -37,20 +37,20 @@ public sealed class TemplateSnapshotTests
     }
 
     [Test]
-    public Task Snapshot_MergedLiteralRuns_MatchesReviewedSources()
+    public Task Snapshot_SeparateLiterals_MatchesReviewedSources()
     {
-        // A comment, empty blocks, and a level-3 comment between literals write one literal; the trim marker ends the run.
+        // Comments and empty blocks leave separate literal writes; trim markers affect only adjacent whitespace
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Text\r\na[* c *]b[%%]c[[[* d *]]]e[[]]f [*- x *]g"));
 
-        return GeneratorSnapshot.Verify(result.RunResult, "MergedLiteralRuns", source => !GeneratedSources.IsSupportType(source));
+        return GeneratorSnapshot.Verify(result.RunResult, "SeparateLiterals", source => !GeneratedSources.IsSupportType(source));
     }
 
     [Test]
     public Task Snapshot_RenderAsync_MatchesReviewedSources()
     {
-        // Literals, C# variables, a loop, brace-less C#, a comment after a block, and a trimmed literal that disappears
+        // Literals, variables, braced C# branches, comments, and a literal that disappears after trimming
         const string body = "#generate Utf8\r\n<ul>[% foreach (var c in model) { %]<li>[[ c ]]</li>[% } %][* note *][[ model ]]" +
-            "[% if (model.Length > 0) %]a[% else %][[ model.Length ]][% var n = 1; -%]  \r\n[%- n++; %]";
+            "[% if (model.Length > 0) { %]a[% } else { %][[ model.Length ]][% } %][% var n = 1; -%]  \r\n[%- n++; %]";
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
 
         return GeneratorSnapshot.Verify(result.RunResult, "RenderAsync", source => !GeneratedSources.IsSupportType(source));

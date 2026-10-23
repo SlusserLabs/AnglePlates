@@ -198,13 +198,26 @@ public sealed class BlockSyntaxTests
     [Arguments("[% var c = 1; -%] [[[* n *]]] y", " y")]
     [Arguments("[% var c = 1; -%] x [[* n *]] y \n[%- var d = 2; %]", "x  y")]
     [Arguments("[% var c = 1; -%] [* n *] [* m *] \n[%- var d = 2; %]", " ")]
-    public async Task MergedLiteralRun_NextToTrimMarker_TrimsOnlyAdjacentLiterals(string body, string expected)
+    public async Task Literal_NextToTrimMarker_TrimsOnlyAdjacentWhitespace(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
         var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    [Arguments("a[* comment *]b[%%]c[[]]d", "abcd")]
+    [Arguments("[* first *][%%][[]]a[* last *]", "a")]
+    [Arguments("[% if (model.Length > 0) { %]a[* comment *]b[%%]c[[]]d[% } %]", "abcd")]
+    [Arguments("[% if (model.Length == 0) { %]a[* comment *]b[%%]c[[]]d[% } %]", "")]
+    [Arguments("[% for (var i = 0; i < 3; i++) { %]a[* comment *]b[%%]c[[]]d[% } %]", "abcdabcdabcd")]
+    public async Task Literals_SeparatedByCommentsAndEmptyBlocks_KeepOutput(string body, string expected)
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", expected);
     }
 
     [Test]

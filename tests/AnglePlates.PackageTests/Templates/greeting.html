@@ -1,4 +1,4 @@
 #type Greeting
 #namespace PackageSmoke
 #model string
-<p>Hello, [[ model ]]! café</p>[% foreach (var number in new[] { 1, 2 }) { %][[ number ]][% } %]
+<p>Hello,[* separator *] [[ model ]]! café</p>[% foreach (var number in new[] { 1, 2 }) { %][[ number ]][% } %]

@@ -30,6 +30,8 @@ The file name before its first dot supplies `#type`: split on hyphens, underscor
 
 The model is available as `model` or `Model`. C# blocks can call `Write(value, writer)` to encode a value. Don't reuse `model`, `Model`, `writer`, or `cancellationToken` as local names.
 
+C# blocks are copied as written. Each piece of literal text and each C# variable becomes its own write statement; comments and empty blocks don't join neighboring text. Use braces around loops and conditional bodies that contain template output.
+
 Blocks end at the first matching closer, even inside C# strings or comments. When an expression contains `]]`, use more brackets: `[[[ grid[row[0]] ]]]`. Variables allow two to four brackets; C# blocks and comments allow one to four. A C# block containing `%]` can use `[[% ... %]]`.
 
 <!-- sample: Templates/Readme/levels.html -->

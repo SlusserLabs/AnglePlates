@@ -17,6 +17,8 @@ This is the road to 1.1.0, the first release on nuget.org. Nothing before it was
 
 ### Changed
 
+- Literal text separated by comments or empty blocks generates separate writes. Use braces around C# loops and conditional bodies containing template output.
+
 - `[[%` and `[[*` now open level-2 C# blocks and comments. They used to open a C# variable whose C# started with `%` or `*`, so `[[*ptr ]]` (a pointer dereference) must now be written `[[ *ptr ]]`.
 - A `[` right before an opener raises its level, and a run of more than four `[` keeps the extras as text.
 - Generated C# blocks are no longer re-indented around braces. Template C# now sits at column 0 of the generated file and keeps the template's own line breaks.

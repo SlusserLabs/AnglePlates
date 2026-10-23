@@ -35,7 +35,11 @@ internal sealed partial class ExampleTextTemplate : global::SlusserLabs.AnglePla
         global::System.ArgumentNullException.ThrowIfNull(writer);
         string Model = model; // Allows alternate casing
 
-        WriteLiteral("abcef", writer);
+        WriteLiteral("a", writer);
+        WriteLiteral("b", writer);
+        WriteLiteral("c", writer);
+        WriteLiteral("e", writer);
+        WriteLiteral("f", writer);
         WriteLiteral("g", writer);
     }
 }

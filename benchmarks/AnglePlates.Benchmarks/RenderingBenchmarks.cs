@@ -7,26 +7,38 @@ using SlusserLabs.AnglePlates.Benchmarks.Templates;
 
 namespace SlusserLabs.AnglePlates.Benchmarks;
 
-// Measures a loop with encoded values through the text and UTF-8 writers
+// Measures equivalent lists with plain literals or literals separated by comments and empty blocks
 [MemoryDiagnoser]
 public class RenderingBenchmarks
 {
     private readonly string[] _items = Enumerable.Range(0, 100).Select(index => $"Item <{index}> & details").ToArray();
     private readonly StringWriter _text = new(CultureInfo.InvariantCulture);
     private readonly ArrayBufferWriter<byte> _utf8 = new();
+    private TextTemplate<string[]> _textTemplate = default!;
+    private Utf8Template<string[]> _utf8Template = default!;
+
+    [Params(false, true)]
+    public bool SplitLiterals { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _textTemplate = SplitLiterals ? SplitListTextTemplate.Default : ListTextTemplate.Default;
+        _utf8Template = SplitLiterals ? SplitListUtf8Template.Default : ListUtf8Template.Default;
+    }
 
     [Benchmark]
     public void Text()
     {
         _text.GetStringBuilder().Clear();
-        ListTextTemplate.Default.Render(_items, _text);
+        _textTemplate.Render(_items, _text);
     }
 
     [Benchmark]
     public void Utf8()
     {
         _utf8.ResetWrittenCount();
-        ListUtf8Template.Default.Render(_items, _utf8);
+        _utf8Template.Render(_items, _utf8);
     }
 
     [GlobalCleanup]

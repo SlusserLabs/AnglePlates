@@ -51,7 +51,7 @@ Run the optional benchmarks directly:
 dotnet run --project benchmarks/AnglePlates.Benchmarks -c Release -- --filter "*"
 ```
 
-The two methods render the same list to a reused `StringWriter` or UTF-8 buffer. There are no handwritten renderers to keep in sync. Add `--job Dry` for a quick execution check; use a normal run for measurements.
+The two methods render a list to a reused `StringWriter` or UTF-8 buffer. `SplitLiterals` selects an equivalent template whose text is separated by comments and empty blocks, so the benchmark covers the cost of separate literal writes. Add `--job Dry` for a quick execution check; use a normal run for measurements.
 
 ## Validate the package
 

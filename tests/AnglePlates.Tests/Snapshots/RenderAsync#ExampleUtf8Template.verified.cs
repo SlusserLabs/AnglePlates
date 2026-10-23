@@ -50,17 +50,20 @@ Write(c, writer);
 #line (6, 73) - (6, 77) 6 "Templates/example.html"
 Write(model, writer);
 #line default
-#line (6, 84) - (6, 104) "Templates/example.html"
-if (model.Length > 0)
+#line (6, 84) - (6, 106) "Templates/example.html"
+if (model.Length > 0) {
 #line default
         WriteLiteral("a"u8, writer);
-#line (6, 112) - (6, 115) "Templates/example.html"
-else
+#line (6, 114) - (6, 121) "Templates/example.html"
+} else {
 #line default
-#line (6, 122) - (6, 133) 6 "Templates/example.html"
+#line (6, 128) - (6, 139) 6 "Templates/example.html"
 Write(model.Length, writer);
 #line default
-#line (6, 140) - (6, 149) "Templates/example.html"
+#line (6, 146) - (6, 146) "Templates/example.html"
+}
+#line default
+#line (6, 153) - (6, 162) "Templates/example.html"
 var n = 1;
 #line default
 #line (7, 5) - (7, 8) "Templates/example.html"
@@ -91,19 +94,22 @@ Write(c, writer);
 #line (6, 73) - (6, 77) 17 "Templates/example.html"
 await WriteAsync(model, writer, cancellationToken).ConfigureAwait(false);
 #line default
-#line (6, 84) - (6, 104) "Templates/example.html"
-if (model.Length > 0)
+#line (6, 84) - (6, 106) "Templates/example.html"
+if (model.Length > 0) {
 #line default
-#line (6, 108) - (6, 108) 88 "Templates/example.html"
+#line (6, 110) - (6, 110) 88 "Templates/example.html"
         await WriteLiteralAsync("a"u8, writer, cancellationToken).ConfigureAwait(false);
 #line default
-#line (6, 112) - (6, 115) "Templates/example.html"
-else
+#line (6, 114) - (6, 121) "Templates/example.html"
+} else {
 #line default
-#line (6, 122) - (6, 133) 17 "Templates/example.html"
+#line (6, 128) - (6, 139) 17 "Templates/example.html"
 await WriteAsync(model.Length, writer, cancellationToken).ConfigureAwait(false);
 #line default
-#line (6, 140) - (6, 149) "Templates/example.html"
+#line (6, 146) - (6, 146) "Templates/example.html"
+}
+#line default
+#line (6, 153) - (6, 162) "Templates/example.html"
 var n = 1;
 #line default
 #line (7, 5) - (7, 8) "Templates/example.html"

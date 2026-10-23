@@ -16,9 +16,7 @@ internal sealed class TemplateClassWriter
     private const string _write = "Write(";
     private const string _writeEnd = ", writer);";
 
-    // The flush check lives inside the write call so it stays one statement; brace-less C# such as
-    // [% if (x) %]a[% else %]b would break if it were a separate statement. Only the first write after a C# block uses
-    // it, because the writes between two C# blocks are fixed by the template and can't grow.
+    // The first write after each C# block checks cancellation and whether the pipe needs flushing
     private const string _flushingWrite = "await WriteAsync(";
     private const string _flushingLiteral = "await WriteLiteralAsync(";
     private const string _flushingWriteEnd = ", writer, cancellationToken).ConfigureAwait(false);";
@@ -163,7 +161,7 @@ internal sealed class TemplateClassWriter
         _writer.WriteLine($"{_directives.ModelType} Model = model; // Allows alternate casing");
         _firstStatement = true;
 
-        // Empty blocks, empty literal runs, and comments write nothing, so they don't change whether the last write was a C# block
+        // Empty blocks, trimmed literals, and comments write nothing, so they don't change whether the last write was a C# block
         var tokens = _template.Tokens;
         bool afterCode = false;
         for (int i = 0; i < tokens.Count; i++)
@@ -175,13 +173,11 @@ internal sealed class TemplateClassWriter
                     break;
 
                 case TokenType.Literal:
-                    int runEnd = FindLiteralRunEnd(i);
-                    if (WriteLiteralRun(i, runEnd, isAsync && afterCode))
+                    if (WriteLiteral(i, isAsync && afterCode))
                     {
                         afterCode = false;
                     }
 
-                    i = runEnd - 1;
                     break;
 
                 case TokenType.Variable:
@@ -217,52 +213,14 @@ internal sealed class TemplateClassWriter
         _writer.WriteLine("}");
     }
 
-    // Finds where a run of literal text ends. Comments and empty blocks sit between literals without writing anything,
-    // so literals merge across them. A trim marker on one of those tokens ends the run, because it trims the literal
-    // next to it. The run ends after its last literal token.
-    private int FindLiteralRunEnd(int start)
+    // Writes one literal token, trimming only whitespace adjacent to neighboring trim markers
+    private bool WriteLiteral(int index, bool checkFlush)
     {
         var tokens = _template.Tokens;
-        int end = start + 1;
-        for (int i = start + 1; i < tokens.Count; i++)
-        {
-            var token = tokens[i];
-            if (token.Type == TokenType.Literal)
-            {
-                end = i + 1;
-            }
-            else if (token.TrimPrevious || token.TrimNext || (token.Type != TokenType.Comment && !token.Span.IsEmpty))
-            {
-                break;
-            }
-        }
-
-        return end;
-    }
-
-    // Writes the literal tokens from start up to end as one write, and returns false when trimming left nothing to write.
-    // UTF-8 literals use u8 strings, which the compiler stores as bytes in the assembly.
-    private bool WriteLiteralRun(int start, int end, bool checkFlush)
-    {
-        var tokens = _template.Tokens;
-
-        // Trim markers on neighboring blocks remove whitespace from the run's edges. The first body token has no block before it.
-        bool trimStart = start > 0 && tokens[start - 1].TrimNext;
-        bool trimEnd = end < tokens.Count && tokens[end].TrimPrevious;
-
-        // A trim marker reaches only the literal token next to it, so trimming stops at a comment or empty block inside
-        // the run, the same as it does when they aren't merged. The head and tail are the literals at each edge.
-        ReadOnlySpan<char> literal;
-        if (end == start + 1)
-        {
-            literal = Trim(Slice(tokens[start].Span), trimStart, trimEnd);
-        }
-        else
-        {
-            var head = Trim(Slice(tokens[start].Span), trimStart, trimEnd: false).ToString();
-            var tail = Trim(Slice(tokens[end - 1].Span), trimStart: false, trimEnd).ToString();
-            literal = (head + ConcatenateLiterals(start + 1, end - 1) + tail).AsSpan();
-        }
+        var token = tokens[index];
+        bool trimStart = index > 0 && tokens[index - 1].TrimNext;
+        bool trimEnd = index + 1 < tokens.Count && tokens[index + 1].TrimPrevious;
+        var literal = Trim(Slice(token.Span), trimStart, trimEnd);
 
         if (literal.IsEmpty)
         {
@@ -275,7 +233,7 @@ internal sealed class TemplateClassWriter
         {
             // An await can't appear inside lock or unsafe, so errors anywhere on this line point at the whole literal
             var flushingWrite = $"{_flushingLiteral}{quoted}{_flushingWriteEnd}";
-            WriteLineMapping(TextSpan.FromBounds(tokens[start].Span.Start, tokens[end - 1].Span.End), flushingWrite.Length);
+            WriteLineMapping(token.Span, flushingWrite.Length);
             _writer.WriteLine(flushingWrite);
             WriteDefaultLineMapping();
         }
@@ -389,22 +347,6 @@ internal sealed class TemplateClassWriter
         }
 
         return trimEnd ? literal.TrimEnd(TemplateSyntax.Whitespace.AsSpan()) : literal;
-    }
-
-    // Joins the literal tokens of a run, skipping the comments and empty blocks between them
-    private string ConcatenateLiterals(int start, int end)
-    {
-        var run = new StringBuilder();
-        for (int i = start; i < end; i++)
-        {
-            var token = _template.Tokens[i];
-            if (token.Type == TokenType.Literal)
-            {
-                run.Append(Slice(token.Span).ToString());
-            }
-        }
-
-        return run.ToString();
     }
 
     // A line break would end the /// comment, so each one becomes an XML character reference
