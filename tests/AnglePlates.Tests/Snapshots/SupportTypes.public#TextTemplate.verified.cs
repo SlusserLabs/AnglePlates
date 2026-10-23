@@ -75,14 +75,14 @@ public abstract class TextTemplate<TModel>
     }
 
     /// <summary>
-    /// Converts <paramref name="value" /> to text with the invariant culture, then encodes and writes it like a string.
+    /// Converts <paramref name="value" /> to text with <see cref="TemplateOptions.Culture" />, then encodes and writes it like a string.
     /// </summary>
     /// <typeparam name="T">The type of value, such as a number, date, enum, or your own class.</typeparam>
     /// <param name="value">The value to write.</param>
     /// <param name="writer">The writer that receives the output.</param>
     protected void Write<T>(T value, global::System.IO.TextWriter writer)
     {
-        Write(ToInvariantString(value), writer);
+        Write(ToText(value, Options.Culture), writer);
     }
 
     /// <summary>
@@ -114,10 +114,11 @@ public abstract class TextTemplate<TModel>
         writer.Write(value);
     }
 
-    // Matches the pre-1.0 Convert.ToString(value, CultureInfo.InvariantCulture): IConvertible first, then IFormattable,
-    // then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below are on T rather
-    // than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in Write(T?) first.
-    private static string? ToInvariantString<T>(T value)
+    // Works like Convert.ToString(value, culture), which the prototype called with the invariant culture: IConvertible first,
+    // then IFormattable, then ToString. Null stays null so Write(string?) can write NullVariable. The checks and casts below
+    // are on T rather than on pattern variables, so the JIT drops the box for most value types. Nullable values unwrap in
+    // Write(T?) first.
+    private static string? ToText<T>(T value, global::System.Globalization.CultureInfo culture)
     {
         if (value is null)
         {
@@ -126,12 +127,12 @@ public abstract class TextTemplate<TModel>
 
         if (value is global::System.IConvertible)
         {
-            return ((global::System.IConvertible)value).ToString(global::System.Globalization.CultureInfo.InvariantCulture);
+            return ((global::System.IConvertible)value).ToString(culture);
         }
 
         if (value is global::System.IFormattable)
         {
-            return ((global::System.IFormattable)value).ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);
+            return ((global::System.IFormattable)value).ToString(null, culture);
         }
 
         return value.ToString();

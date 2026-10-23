@@ -1,8 +1,0 @@
-<Project>
-  <!-- Directory.Build.targets is imported after the project body, so this Remove sees the default item -->
-  <ItemGroup>
-    <!-- Drop the default Templates folder. Remove only affects items defined above it, so it goes first. -->
-    <AnglePlate Remove="Templates\**\*" />
-    <AnglePlate Include="Emails\**\*.html" />
-  </ItemGroup>
-</Project>

@@ -5,8 +5,6 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
-SLAP001 | SlusserLabs.AnglePlates | Error | Template class name can't be derived from the file name
-SLAP002 | SlusserLabs.AnglePlates | Error | Template namespace can't be derived from RootNamespace and the folders
 SLAP003 | SlusserLabs.AnglePlates | Error | Template has no #model directive
 SLAP004 | SlusserLabs.AnglePlates | Error | Unclosed template block
 SLAP005 | SlusserLabs.AnglePlates | Error | Public template needs public support types
@@ -15,4 +13,3 @@ SLAP007 | SlusserLabs.AnglePlates | Error | Invalid directive value
 SLAP008 | SlusserLabs.AnglePlates | Error | File added with an AnglePlate Include isn't a template
 SLAP009 | SlusserLabs.AnglePlates | Error | Invalid MSBuild setting
 SLAP010 | SlusserLabs.AnglePlates | Error | C# version too old
-SLAP011 | SlusserLabs.AnglePlates | Warning | Possible misspelled directive

@@ -1,1 +1,0 @@
-Templates/public.html(4,9): error SLAP005: '#access public' needs public support types; set AnglePlateBaseAccessModifier to 'public' or make the template internal (https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap005)

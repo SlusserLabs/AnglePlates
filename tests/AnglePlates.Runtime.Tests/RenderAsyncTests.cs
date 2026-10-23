@@ -23,7 +23,7 @@ public sealed class RenderAsyncTests
     [Arguments("plain", "plain &lt;value&gt; text", 1)]
     [Arguments("loop", "ax0yx1yx2yz", 5)]
     [Arguments("local", "2", 2)]
-    [Arguments("comment-and-empty-block", "n1", 2)]
+    [Arguments("comment-and-empty-block", "number:1", 2)]
     [Arguments("if-else", "ac", 3)]
     [Arguments("foreach-if", "A!", 3)]
     [Arguments("foreach-if-else", "&lt;v-lue&gt;", 8)]
@@ -93,6 +93,17 @@ public sealed class RenderAsyncTests
         await new AsyncSmallPageUtf8Template().RenderAsync("<value>", writer);
 
         await Assert.That(writer.FlushedLengths).IsEquivalentTo(new[] { 7 });
+    }
+
+    [Test]
+    public async Task RenderAsync_SeparatedLiterals_ChecksForFlushAtFirstLiteral()
+    {
+        var writer = new CountingPipeWriter(reportsUnflushedBytes: false);
+
+        await new AsyncCommentAndEmptyBlockUtf8Template().RenderAsync("unused", writer);
+
+        await Assert.That(Encoding.UTF8.GetString(writer.WrittenSpan)).IsEqualTo("number:1");
+        await Assert.That(writer.FlushedLengths).IsEquivalentTo(new[] { 1, 8 });
     }
 
     [Test]

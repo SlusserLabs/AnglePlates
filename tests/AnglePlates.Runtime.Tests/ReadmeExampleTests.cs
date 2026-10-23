@@ -28,7 +28,7 @@ public sealed class ReadmeExampleTests
     private static readonly Dictionary<string, string[]> _samples = new(StringComparer.Ordinal)
     {
         ["README.md"] = ["Templates/Readme/greeting.html"],
-        ["docs/templates.md"] = ["Templates/Readme/order-line.html", "Templates/Readme/order.html", "Readme/OrderTextTemplate.cs"],
+        ["docs/templates.md"] = ["Templates/Readme/levels.html", "Templates/Readme/order-line.html", "Templates/Readme/order.html"],
     };
 
     [Test]
@@ -67,6 +67,16 @@ public sealed class ReadmeExampleTests
     }
 
     [Test]
+    public async Task Render_Levels_WritesDocumentedOutput()
+    {
+        await TemplateOutput.AssertRendersAsync(
+            LevelsTextTemplate.Default,
+            LevelsUtf8Template.Default,
+            "Ada",
+            "<p>A is the first letter of Ada.</p>\n<p>A level-2 block ends at %].</p>\n");
+    }
+
+    [Test]
     public async Task Render_Order_WritesDocumentedOutput()
     {
         var order = new OrderModel { Number = "1001" };
@@ -84,7 +94,7 @@ public sealed class ReadmeExampleTests
         var order = new OrderModel { Number = "1001" };
         order.Lines.Add(new OrderLineModel { Name = "Fish & Chips", Quantity = 2 });
 
-        var output = TemplateOutput.RenderText(new OrderTextTemplate(TemplateOptions.Unencoded), order);
+        var output = TemplateOutput.RenderText(new OrderTextTemplate(new TemplateOptions { Encoder = null }), order);
 
         await Assert.That(output).IsEqualTo("<h1>Order 1001</h1>\n<ul>\n<li>2 x Fish & Chips</li>\n</ul>\n");
     }

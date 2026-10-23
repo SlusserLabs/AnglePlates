@@ -10,7 +10,7 @@ using TUnit.Core;
 
 namespace SlusserLabs.AnglePlates.Tests;
 
-// Renders template bodies to check brackets, escapes, trim markers, empty blocks, and newline styles end to end
+// Renders template bodies to check bracket levels, trim markers, empty blocks, and newline styles end to end
 public sealed class BlockSyntaxTests
 {
     private const string _nullTextSource = "namespace Consumer { public sealed class NullText { public override string? ToString() => null; } }";
@@ -26,10 +26,14 @@ public sealed class BlockSyntaxTests
     [Arguments("plain text", "plain text")]
     [Arguments("[% // %]tail", "tail")]
     [Arguments("[* first *]rest *]", "rest *]")]
+    [Arguments("a]]b]]]]", "a]]b]]]]")]
+    [Arguments("[x] [ y", "[x] [ y")]
+    [Arguments("[[[[[ model ]]]]]", "[&lt;value&gt;]")]
+    [Arguments("[[[[[% var x = 1; %]]]]][[ x ]]", "[]1")]
     public async Task OrdinaryBrackets_InBody_RenderAsLiterals(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -37,36 +41,16 @@ public sealed class BlockSyntaxTests
     }
 
     [Test]
-    [Arguments(@"\[[1, 2]]", "[[1, 2]]")]
-    [Arguments(@"\[% x %]", "[% x %]")]
-    [Arguments(@"\[* x *]", "[* x *]")]
-    [Arguments(@"\\[[ model ]]", @"\&lt;value&gt;")]
-    [Arguments(@"\\\[[ model ]]", @"\[[ model ]]")]
-    [Arguments(@"\\\\[[ model ]]", @"\\&lt;value&gt;")]
-    [Arguments(@"end \[[", "end [[")]
-    [Arguments(@"[[ model ]]\[[x]]", "&lt;value&gt;[[x]]")]
-    [Arguments(@"\[[[[ model ]]", "[[&lt;value&gt;")]
-    [Arguments(@"\[[\[%\[*", "[[[%[*")]
-    [Arguments(@"\[[- x -]]", "[[- x -]]")]
+    [Arguments(@"\[[ model ]]", @"\&lt;value&gt;")]
+    [Arguments(@"\[% var x = 1; %]", @"\")]
+    [Arguments(@"\[* c *]", @"\")]
+    [Arguments(@"\\[[ model ]]", @"\\&lt;value&gt;")]
+    [Arguments(@"C:\out\[[ model ]]", @"C:\out\&lt;value&gt;")]
     [Arguments(@"C:\temp\file \\", @"C:\temp\file \\")]
-    [Arguments(@"C:\out\\[[ model ]]", @"C:\out\&lt;value&gt;")]
-    [Arguments("a\r\n\\[[x]]\r\nb", "a\r\n[[x]]\r\nb")]
-    [Arguments("a\n\\[[x]]\nb", "a\n[[x]]\nb")]
-    [Arguments(@"const grid = \[[1, 2], [3, 4]];", "const grid = [[1, 2], [3, 4]];")]
-    [Arguments(@"if \[[ -f ""$file"" ]]; then", @"if [[ -f ""$file"" ]]; then")]
-    [Arguments(@"\[[servers]]", "[[servers]]")]
-    [Arguments(@"/\[*+?]/", "/[*+?]/")]
-    [Arguments(@"See \[[Home]].", "See [[Home]].")]
-    // Trim markers next to an escaped opener trim only whitespace
-    [Arguments("[[ model -]] \r\n \\[[x]] \r\n [[- model ]]", "&lt;value&gt;[[x]]&lt;value&gt;")]
-    [Arguments("[[ model -]] \n \\\\[[- model ]]", @"&lt;value&gt;\&lt;value&gt;")]
-    [Arguments("[[ model -]]\\[[x]]", "&lt;value&gt;[[x]]")]
-    [Arguments("\\[[x]] \n [[- model ]]", "[[x]]&lt;value&gt;")]
-    [Arguments(" \\[[x]] [*- *]", " [[x]]")]
-    public async Task EscapedOpener_InBody_WritesOpenerLiterally(string body, string expected)
+    public async Task Backslash_BeforeBlock_WritesBackslashThenBlock(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -74,54 +58,94 @@ public sealed class BlockSyntaxTests
     }
 
     [Test]
-    // Brackets in a C# variable balance before "]]" closes it
-    [Arguments("[% var grid = new[] { 7 }; var row = new[] { 0 }; %][[ grid[row[0]] ]]", "7")]
-    [Arguments("[[ model[0..1]]]", "&lt;")]
-    // Closers inside strings, character literals, and /* */ comments don't end the block
-    [Arguments("[% var s = \"%]\"; %][[ s ]]", "%]")]
-    [Arguments("[[ \"]]\" ]]", "]]")]
+    [Arguments("[[ \"[[\" ]]x[[[ \"]]\" ]]]", "[[x]]")]
+    [Arguments("[[ \"[% x %]\" ]]", "[% x %]")]
+    [Arguments("[[[[ \"]]]\" ]]]]", "]]]")]
+    [Arguments("const grid = [[ \"[[\" ]]1, 2], [3, 4]];", "const grid = [[1, 2], [3, 4]];")]
+    [Arguments("[% WriteRaw(\"[[\", writer); %]", "[[")]
+    public async Task LiteralOpener_ThroughVariable_WritesOpener(string body, string expected)
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    // A higher bracket level keeps a closer inside C# from ending the block; the parser ends a block at its first exact closer
+    [Arguments("[% var grid = new[] { 7 }; var row = new[] { 0 }; %][[[ grid[row[0]] ]]]", "7")]
+    [Arguments("[[[ model[0..1] ]]]", "&lt;")]
+    [Arguments("[[% var s = \"%]\"; %]][[ s ]]", "%]")]
+    [Arguments("[[[ \"]]\" ]]]", "]]")]
     [Arguments("[[ ']' ]]", "]")]
     [Arguments("[% var c = '%'; %][[ c ]]", "%")]
-    [Arguments("[[ @\"]]\" ]][[ \"\"\"%]\"\"\" ]]", "]]%]")]
-    [Arguments("[% var n = \"%]\"u8.Length; %][[ n ]]", "2")]
-    [Arguments("[% var s = $\"{model[0..1]}%]\"; %][[ s ]]", "&lt;%]")]
-    [Arguments("[% var s = $$\"\"\"{{model.Length}}]]\"\"\"; %][[ s ]]", "7]]")]
-    [Arguments("[% var s = \"\"\"\r\n    a %]\r\n    \"\"\"; %][[ s ]]", "a %]")]
-    [Arguments("[[ /* ]] */ model.Length ]]", "7")]
-    [Arguments("[% /* %] */ %]x", "x")]
-    // Braces inside strings don't change the generated indentation, which is cosmetic anyway
+    [Arguments("[[[ @\"]]\" ]]][[ \"\"\"%]\"\"\" ]]", "]]%]")]
+    [Arguments("[[% var n = \"%]\"u8.Length; %]][[ n ]]", "2")]
+    [Arguments("[[% var s = $\"{model[0..1]}%]\"; %]][[ s ]]", "&lt;%]")]
+    [Arguments("[[[% var s = $$\"\"\"{{model.Length}}]]\"\"\"; %]]][[ s ]]", "7]]")]
+    [Arguments("[[% var s = \"\"\"\r\n    a %]\r\n    \"\"\"; %]][[ s ]]", "a %]")]
+    [Arguments("[[[ /* ]] */ model.Length ]]]", "7")]
+    [Arguments("[[% /* %] */ %]]x", "x")]
+    // The writer doesn't look at braces, so a brace inside a C# string changes nothing
     [Arguments("[% if (model.Length > 0) { var s = \"}\"; %][[ s ]][% } %]", "}")]
-    // A // comment or # directive line ends at its first closer
     [Arguments("[% // note %]tail", "tail")]
     [Arguments("a[% #if DEBUG %]b[% #endif %]c", "ac")]
     [Arguments("a[% #if !DEBUG %]b[% #endif %]c", "abc")]
-    [Arguments("a[% #if DEBUG\r\n var s = \"%]\"; %]b[% #endif %]c", "ac")]
-    // A C# variable that ends in a // comment still gets its closing parenthesis
-    [Arguments("[[ model // note ]]", "&lt;value&gt;")]
-    [Arguments("[[ model.Length // note\r\n]]", "7")]
-    [Arguments("a[[ model // ]]b", "a&lt;value&gt;b")]
-    public async Task CSharpScanner_ClosersInsideCSharp_RenderLikeCSharp(string body, string expected)
+    [Arguments("a[[% #if DEBUG\r\n var s = \"%]\"; %]]b[% #endif %]c", "ac")]
+    public async Task HigherLevel_ClosersInsideCSharp_RenderLikeCSharp(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
     }
 
-    // The scanner's last window holds 16 closers, so a block can hide 15 before its own; DiagnosticTests covers 16
     [Test]
-    public async Task CSharpScanner_FifteenHiddenClosers_RendersLikeCSharp()
+    [MethodDataSource(nameof(LevelEquivalenceCases))]
+    public async Task LevelEquivalence_AllLevels_RenderTheSame(string body, string expected)
     {
-        var hidden = string.Concat(Enumerable.Repeat("\"%]\", ", 15));
-        var body = $"[% var codes = new[] {{ {hidden}\"x\" }}; %][[ codes.Length ]]:[[ codes[14] ]]";
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
-        await Assert.That(output.text).IsEqualTo("16:%]");
-        await Assert.That(output.bytes.SequenceEqual("16:%]"u8.ToArray())).IsTrue();
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    public static IEnumerable<(string body, string expected)> LevelEquivalenceCases()
+    {
+        for (var level = 2; level <= 4; level++)
+        {
+            yield return (new string('[', level) + " model " + new string(']', level), "&lt;value&gt;");
+        }
+
+        for (var level = 1; level <= 4; level++)
+        {
+            yield return (new string('[', level) + "% var x = 1; %" + new string(']', level) + "[[ x ]]", "1");
+            yield return (new string('[', level) + "* c *" + new string(']', level), string.Empty);
+        }
+    }
+
+    [Test]
+    [Arguments("[% var s = @\"a\r\n  b\"; WriteRaw(s, writer); %]", "a\r\n  b")]
+    [Arguments("[% var s = @\"a\n  b\"; WriteRaw(s, writer); %]", "a\n  b")]
+    [Arguments("[% var s = @\"x\ry\"; WriteRaw(s, writer); %]", "x\ry")]
+    [Arguments("[% var s = \"\"\"\r\n    a\r\n    \"\"\"; %][[ s ]]", "a")]
+    [Arguments("[[% var s = $\"\"\"\r\n    {model.Length} %]\r\n    \"\"\"; %]][[ s ]]", "7 %]")]
+    [Arguments("[% #if NEVER\r\n var x = 1;\r\n#endif %]ok", "ok")]
+    public async Task MultiLineCSharp_InBlocks_KeepsBytesAndCompiles(string body, string expected)
+    {
+        // A string holding a line break goes through WriteRaw, because the default HTML encoder writes CR and LF as character references
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
+
+        await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
+        await Assert.That(output.text).IsEqualTo(expected);
+        await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
     }
 
     [Test]
@@ -129,7 +153,7 @@ public sealed class BlockSyntaxTests
     public async Task EmptyBlock_WithTrimFlags_RendersNothingButTrims(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
@@ -137,7 +161,13 @@ public sealed class BlockSyntaxTests
 
     public static IEnumerable<(string body, string expected)> EmptyBlockCases()
     {
-        foreach (var (open, close) in new[] { ("[[", "]]"), ("[%", "%]"), ("[*", "*]") })
+        // Variables at levels 2 to 4, then code and comments at levels 1 to 4
+        foreach (var (open, close) in new[]
+        {
+            ("[[", "]]"), ("[[[", "]]]"), ("[[[[", "]]]]"),
+            ("[%", "%]"), ("[[%", "%]]"), ("[[[%", "%]]]"), ("[[[[%", "%]]]]"),
+            ("[*", "*]"), ("[[*", "*]]"), ("[[[*", "*]]]"), ("[[[[*", "*]]]]"),
+        })
         {
             foreach (var newline in new[] { "\n", "\r\n" })
             {
@@ -165,16 +195,29 @@ public sealed class BlockSyntaxTests
     [Arguments("x [%%]\n[%- var c = 1; %]", "x ")]
     [Arguments("[% var c = 1; -%] [* n *] y", " y")]
     [Arguments("[% var c = 1; -%] a [* n *] b [%- var d = 2; %]", "a  b")]
-    [Arguments("[% var c = 1; -%] \\[[x]] [* n *] y", "[[x]]  y")]
-    [Arguments("[% var c = 1; -%] x [* n *] \\[[y]] \n[%- var d = 2; %]", "x  [[y]]")]
+    [Arguments("[% var c = 1; -%] [[[* n *]]] y", " y")]
+    [Arguments("[% var c = 1; -%] x [[* n *]] y \n[%- var d = 2; %]", "x  y")]
     [Arguments("[% var c = 1; -%] [* n *] [* m *] \n[%- var d = 2; %]", " ")]
-    public async Task MergedLiteralRun_NextToTrimMarker_TrimsOnlyAdjacentLiterals(string body, string expected)
+    public async Task Literal_NextToTrimMarker_TrimsOnlyAdjacentWhitespace(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
+    }
+
+    [Test]
+    [Arguments("a[* comment *]b[%%]c[[]]d", "abcd")]
+    [Arguments("[* first *][%%][[]]a[* last *]", "a")]
+    [Arguments("[% if (model.Length > 0) { %]a[* comment *]b[%%]c[[]]d[% } %]", "abcd")]
+    [Arguments("[% if (model.Length == 0) { %]a[* comment *]b[%%]c[[]]d[% } %]", "")]
+    [Arguments("[% for (var i = 0; i < 3; i++) { %]a[* comment *]b[%%]c[[]]d[% } %]", "abcdabcdabcd")]
+    public async Task Literals_SeparatedByCommentsAndEmptyBlocks_KeepOutput(string body, string expected)
+    {
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
+
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", expected);
     }
 
     [Test]
@@ -187,7 +230,7 @@ public sealed class BlockSyntaxTests
     public async Task AdjacentBlocks_WithTrimMarkers_KeepTrimAndNegativeExpressions(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
@@ -205,7 +248,7 @@ public sealed class BlockSyntaxTests
         try
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
-            output = RenderingTestHelper.Render(result.Compilation);
+            output = await RenderingTestHelper.RenderAsync(result.Compilation);
         }
         finally
         {
@@ -239,8 +282,8 @@ public sealed class BlockSyntaxTests
         var withoutNullVariable = "a" + value + "b";
         var withNullVariable = value is null ? "a&lt;null&gt;b" : withoutNullVariable;
 
-        var plain = RenderingTestHelper.Render(result.Compilation, model: model);
-        var substituted = RenderingTestHelper.Render(result.Compilation, model: model, nullVariable: "<null>");
+        var plain = await RenderingTestHelper.RenderAsync(result.Compilation, model: model);
+        var substituted = await RenderingTestHelper.RenderAsync(result.Compilation, model: model, nullVariable: "<null>");
 
         await Assert.That(plain.text).IsEqualTo(withoutNullVariable);
         await Assert.That(plain.bytes.SequenceEqual(Encoding.UTF8.GetBytes(withoutNullVariable))).IsTrue();
@@ -255,7 +298,7 @@ public sealed class BlockSyntaxTests
         const string expected = "&lt;value&gt;&lt;value&gt;11;--;33;";
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
 
-        var output = RenderingTestHelper.Render(result.Compilation, nullVariable: "-");
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation, nullVariable: "-");
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();

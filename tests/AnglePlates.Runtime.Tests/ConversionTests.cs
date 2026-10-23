@@ -14,7 +14,7 @@ using TUnit.Core;
 namespace SlusserLabs.AnglePlates.Runtime.Tests;
 
 // The output-parity matrix: how a C# variable of each type becomes text on both targets and in RenderAsync.
-// Every expected value was captured from the pre-1.0 conversion, Convert.ToString with the invariant culture,
+// Every expected value was captured from the prototype's conversion, Convert.ToString with the invariant culture,
 // so a new conversion must reproduce these strings exactly.
 [ExcludeFromCodeCoverage]
 public sealed class ConversionTests
@@ -271,7 +271,7 @@ public sealed class ConversionTests
         yield return (true, (int?)7, "7");
     }
 
-    // The tests below pin the 1.0 overload set, where it differs from the captured conversion or decides which conversion runs
+    // The tests below pin the overload set, where it differs from the captured conversion or decides which conversion runs
 
     [Test]
     [Arguments(true, null, "|")]
@@ -288,9 +288,9 @@ public sealed class ConversionTests
     [Arguments(true, "<a>")]
     [Arguments(false, "<a>")]
     [Arguments(true, null)]
-    public async Task Render_ImplicitStringConversion_UsesToStringLikePre10(bool encoded, string? text)
+    public async Task Render_ImplicitStringConversion_UsesToStringLikePrototype(bool encoded, string? text)
     {
-        // Write<T> is an exact match, so it beats the user-defined conversion to Write(string?), as Convert.ToString did before 1.0
+        // Write<T> is an exact match, so it beats the user-defined conversion to Write(string?), as the prototype's Convert.ToString did
         await AssertConvertsAsync(
             o => new ConversionImplicitStringTextTemplate(o), o => new ConversionImplicitStringUtf8Template(o), encoded, new ImplicitText(text), "ToString", "<null>");
     }

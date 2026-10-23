@@ -5,43 +5,42 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace SlusserLabs.AnglePlates;
 
-// Splits template text into directives and body tokens; CSharpBlockScanner finds where C# variables and C# blocks end
+// Splits template text into directives and body tokens; a block ends at the first exact match of its closer
 internal static class TemplateParser
 {
-    // Every opener starts with the same character, so the text scan looks for that one first
-    private static readonly char[] _blockStarts = [TemplateSyntax.VariableOpen[0], TemplateSyntax.CodeOpen[0], TemplateSyntax.CommentOpen[0]];
     private static readonly (DirectiveKind Kind, string Prefix)[] _directivePrefixes = CreateDirectivePrefixes();
 
     public static ParsedTemplate Parse(string text, CancellationToken cancellationToken)
     {
-        var reader = new TemplateReader(text.AsSpan());
         var directives = new List<DirectiveToken>();
         var tokens = new List<Token>();
         var errors = new List<TemplateError>();
+        int position = 0;
 
         // Directives come first, one per line, and end at the first line that doesn't start with a known directive
-        while (TryParseDirective(ref reader, out var directive))
+        while (TryParseDirective(text, ref position, out var directive))
         {
             directives.Add(directive);
         }
 
-        int bodyStart = reader.Position;
-
-        // Escaped openers can split literal text into several tokens, so a text run may add more than one
+        int bodyStart = position;
+        int literalStart = position;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (TryParseText(ref reader, tokens))
+            if (!TryFindOpener(text, ref position, out int openerStart, out var type, out int level))
             {
-                continue;
+                AddLiteral(tokens, literalStart, text.Length);
+                break;
             }
 
-            if (!TryParseBlock(text, ref reader, errors, out var token))
+            AddLiteral(tokens, literalStart, openerStart);
+            if (!TryParseBlock(text, openerStart, type, level, ref position, tokens, errors))
             {
                 break;
             }
 
-            tokens.Add(token);
+            literalStart = position;
         }
 
         return new ParsedTemplate(text, directives, tokens, errors, bodyStart);
@@ -59,145 +58,73 @@ internal static class TemplateParser
         return prefixes;
     }
 
-    private static bool TryParseBlock(string text, ref TemplateReader reader, List<TemplateError> errors, out Token token)
+    // A run of '[' opens a block with its last MaxBracketLevel brackets, and the brackets before those stay literal text.
+    // On success, position is where the block's content starts.
+    private static bool TryFindOpener(string text, ref int position, out int openerStart, out TokenType type, out int level)
     {
-        token = default;
-        int openingStart = reader.Position;
-        TokenType type;
-        string closer;
-        if (reader.IsNext(TemplateSyntax.VariableOpen, advancePast: true))
+        while (true)
         {
-            type = TokenType.Variable;
-            closer = TemplateSyntax.VariableClose;
-        }
-        else if (reader.IsNext(TemplateSyntax.CodeOpen, advancePast: true))
-        {
-            type = TokenType.Code;
-            closer = TemplateSyntax.CodeClose;
-        }
-        else if (reader.IsNext(TemplateSyntax.CommentOpen, advancePast: true))
-        {
-            type = TokenType.Comment;
-            closer = TemplateSyntax.CommentClose;
-        }
-        else
-        {
-            return false;
-        }
-
-        // A marker right after the opener trims whitespace before the block
-        int openingLength = reader.Position - openingStart;
-        bool trimPrevious = reader.IsNext(TemplateSyntax.TrimMarker, advancePast: true);
-
-        // C# variables and C# blocks end where the scanner says, skipping closers inside C# strings and comments. Comments
-        // aren't C#, so they end at the first closer. A block with no closer reports the opener and consumes the rest.
-        int start = reader.Position;
-        bool closed;
-        if (type == TokenType.Comment)
-        {
-            closed = reader.TryAdvanceTo(closer);
-        }
-        else
-        {
-            int closerStart = CSharpBlockScanner.FindCloser(text, start, type);
-            closed = closerStart >= 0;
-            if (closed)
+            int runStart = text.IndexOf(TemplateSyntax.OpenBracket, position);
+            if (runStart < 0)
             {
-                reader.Advance(closerStart - start);
+                (openerStart, type, level) = (text.Length, TokenType.Literal, 0);
+                return false;
+            }
+
+            int runEnd = runStart + 1;
+            while (runEnd < text.Length && text[runEnd] == TemplateSyntax.OpenBracket)
+            {
+                runEnd++;
+            }
+
+            level = Math.Min(runEnd - runStart, TemplateSyntax.MaxBracketLevel);
+            openerStart = runEnd - level;
+            char marker = runEnd < text.Length ? text[runEnd] : '\0';
+            type = marker switch
+            {
+                TemplateSyntax.CodeMarker => TokenType.Code,
+                TemplateSyntax.CommentMarker => TokenType.Comment,
+                _ => TokenType.Variable,
+            };
+
+            // A marker belongs to the opener; a C# variable has none
+            position = type == TokenType.Variable ? runEnd : runEnd + 1;
+            if (type != TokenType.Variable || level >= TemplateSyntax.MinVariableLevel)
+            {
+                return true;
             }
         }
+    }
 
-        if (!closed)
+    // A block ends at the first exact match of its closer. Nothing inside it is read, so a closer inside a C# string
+    // ends the block too; a higher bracket level is how a template avoids that.
+    private static bool TryParseBlock(
+        string text, int openerStart, TokenType type, int level, ref int position, List<Token> tokens, List<TemplateError> errors)
+    {
+        int contentStart = position;
+        string closer = TemplateSyntax.GetCloser(type, level);
+
+        // A marker right after the opener trims whitespace before the block
+        bool trimPrevious = contentStart < text.Length && text[contentStart] == TemplateSyntax.TrimMarker;
+        int start = trimPrevious ? contentStart + 1 : contentStart;
+        int closerStart = text.IndexOf(closer, start, StringComparison.Ordinal);
+        if (closerStart < 0)
         {
-            errors.Add(new TemplateError(DiagnosticDescriptors.UnclosedBlock, new TextSpan(openingStart, openingLength), closer));
-            reader.AdvanceToEnd();
+            // The rest of the text is consumed and the error makes the generator skip the template
+            errors.Add(new TemplateError(DiagnosticDescriptors.UnclosedBlock, TextSpan.FromBounds(openerStart, contentStart), closer));
+            position = text.Length;
             return false;
         }
 
         // A marker right before the closer trims whitespace after the block and isn't part of the content
-        int end = reader.Position;
-        bool trimNext = end > start && reader.Text[end - 1] == TemplateSyntax.TrimMarker;
-        if (trimNext)
-        {
-            end--;
-        }
-
-        reader.Advance(closer.Length);
-        token = new Token(type, Trim(reader.Text, start, end), trimPrevious, trimNext);
+        bool trimNext = closerStart > start && text[closerStart - 1] == TemplateSyntax.TrimMarker;
+        tokens.Add(new Token(type, Trim(text, start, trimNext ? closerStart - 1 : closerStart), trimPrevious, trimNext));
+        position = closerStart + closer.Length;
 
         return true;
     }
 
-    private static bool TryParseText(ref TemplateReader reader, List<Token> tokens)
-    {
-        int count = tokens.Count;
-        int start = reader.Position;
-        while (true)
-        {
-            if (!reader.TryAdvanceToAny(_blockStarts))
-            {
-                reader.AdvanceToEnd();
-                break;
-            }
-
-            // The first character matched, but the next one decides whether this is an opener
-            int openerLength = GetOpenerLength(ref reader);
-            if (openerLength == 0)
-            {
-                reader.Advance(1);
-                continue;
-            }
-
-            // Backslashes right before an opener escape it in pairs: each pair writes one backslash, and an odd one
-            // left over makes the opener literal. Dropping the first half of the run keeps every token a slice of the text.
-            int opener = reader.Position;
-            int backslashes = CountBackslashes(reader.Text, start, opener);
-            int runStart = opener - backslashes;
-            int kept = backslashes / 2;
-            if (backslashes % 2 == 0)
-            {
-                AddLiteral(tokens, start, runStart + kept);
-                start = opener;
-                break;
-            }
-
-            // The escaped opener starts the next literal after the surviving backslashes, and scanning resumes past it
-            AddLiteral(tokens, start, runStart);
-            start = opener - kept;
-            reader.Advance(openerLength);
-        }
-
-        AddLiteral(tokens, start, reader.Position);
-
-        return tokens.Count > count;
-    }
-
-    private static int GetOpenerLength(ref TemplateReader reader)
-    {
-        if (reader.IsNext(TemplateSyntax.VariableOpen))
-        {
-            return TemplateSyntax.VariableOpen.Length;
-        }
-
-        if (reader.IsNext(TemplateSyntax.CodeOpen))
-        {
-            return TemplateSyntax.CodeOpen.Length;
-        }
-
-        return reader.IsNext(TemplateSyntax.CommentOpen) ? TemplateSyntax.CommentOpen.Length : 0;
-    }
-
-    private static int CountBackslashes(ReadOnlySpan<char> text, int start, int end)
-    {
-        int index = end;
-        while (index > start && text[index - 1] == '\\')
-        {
-            index--;
-        }
-
-        return end - index;
-    }
-
+    // Adds the literal text between two blocks, if there is any
     private static void AddLiteral(List<Token> tokens, int start, int end)
     {
         if (start < end)
@@ -206,37 +133,35 @@ internal static class TemplateParser
         }
     }
 
-    private static bool TryParseDirective(ref TemplateReader reader, out DirectiveToken directive)
+    private static bool TryParseDirective(string text, ref int position, out DirectiveToken directive)
     {
         directive = default;
         foreach (var (kind, prefix) in _directivePrefixes)
         {
-            if (!reader.IsNext(prefix))
+            if (!text.AsSpan(position).StartsWith(prefix.AsSpan(), StringComparison.Ordinal))
             {
                 continue;
             }
 
             // A known name only counts when whitespace or the end of the text follows it
-            int nameStart = reader.Position;
-            int nameEnd = nameStart + prefix.Length;
-            if (nameEnd < reader.Text.Length && TemplateSyntax.Whitespace.IndexOf(reader.Text[nameEnd]) < 0)
+            int nameEnd = position + prefix.Length;
+            if (nameEnd < text.Length && TemplateSyntax.Whitespace.IndexOf(text[nameEnd]) < 0)
             {
                 continue;
             }
 
-            reader.Advance(prefix.Length);
-
-            // Consume the whole line, including its terminator, so the body starts on the next line
-            reader.AdvancePastLine();
-
-            // Trimming a blank value runs past the line break, so keep its empty span right after the name
-            var value = Trim(reader.Text, nameEnd, reader.Position);
+            // The value runs to the end of the line, and a blank one is an empty span right after the name
+            int lineEnd = TemplateSyntax.LineEnd(text, nameEnd);
+            var value = Trim(text, nameEnd, lineEnd);
             if (value.IsEmpty)
             {
                 value = new TextSpan(nameEnd, 0);
             }
 
-            directive = new DirectiveToken(kind, TextSpan.FromBounds(nameStart, nameEnd), value);
+            directive = new DirectiveToken(kind, TextSpan.FromBounds(position, nameEnd), value);
+
+            // The body starts on the next line
+            position = TemplateSyntax.NextLineStart(text, lineEnd);
 
             return true;
         }
@@ -245,7 +170,7 @@ internal static class TemplateParser
     }
 
     // Returns the bounds without whitespace at either end
-    private static TextSpan Trim(ReadOnlySpan<char> text, int start, int end)
+    private static TextSpan Trim(string text, int start, int end)
     {
         while (start < end && TemplateSyntax.Whitespace.IndexOf(text[start]) >= 0)
         {

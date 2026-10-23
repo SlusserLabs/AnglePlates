@@ -1,1 +1,0 @@
-Notes/notes.txt(1,1): error SLAP008: A file added with an AnglePlate Include must be a template, but this one is empty, unreadable, or doesn't start with a directive (https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap008)

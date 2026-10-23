@@ -24,7 +24,7 @@ public static class TemplateExtensions
     public static string RenderToString<TModel>(this TextTemplate<TModel> template, TModel model)
     {
         global::System.ArgumentNullException.ThrowIfNull(template);
-        using var writer = new global::System.IO.StringWriter(global::System.Globalization.CultureInfo.InvariantCulture);
+        using var writer = new global::System.IO.StringWriter(template.Options.Culture);
         template.Render(model, writer);
 
         return writer.ToString();

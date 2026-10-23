@@ -1,0 +1,18 @@
+#model SlusserLabs.AnglePlates.Samples.HelloWorldApi.ItemModel
+#generate Utf8
+
+            <li class="[[ model.IsComplete ? "complete" : "pending" ]]">
+                [%- if (model.IsComplete) { %]
+                <strong>Done</strong>
+                [%- } else { %]
+                <strong>To do</strong>
+                [%- } %]
+                <span>[[ model.Title ]]</span>
+                [%- if (model.Tags.Length > 0) { %]
+                <ul class="tags">
+                    [%- foreach (var tag in model.Tags) { %]
+                    <li>[[ tag ]]</li>
+                    [%- } %]
+                </ul>
+                [%- } %]
+            </li>

@@ -93,7 +93,7 @@ public sealed class AccessibilityTests
         var consumer = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([RenderingTestHelper.Template("app")]));
         var warnings = consumer.Compilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning).ToArray();
         using var generated = GeneratedAssembly.Load(consumer.Compilation, [libraryImage]);
-        var receipt = generated.Assembly.GetType("App.ReceiptRenderer", throwOnError: true)!.GetMethod("Render")!.Invoke(null, ["<value>"]);
+        var receipt = generated.GetDelegate<Func<string, string>>("App.ReceiptRenderer", "Render")("<value>");
 
         await Assert.That(consumer.RunResult.Diagnostics.Length).IsEqualTo(0);
         // The consumer's own templates bind to its own support types over the library's public copies

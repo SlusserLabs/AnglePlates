@@ -4,7 +4,8 @@
 #namespace MyApp.Templates
 <h1>Order [[ model.Number ]]</h1>
 <ul>
+[% var lineTemplate = new OrderLineTextTemplate(Options); -%]
 [% foreach (var line in model.Lines) { -%]
-[% Line.Render(line, writer); -%]
+[% lineTemplate.Render(line, writer); -%]
 [% } -%]
 </ul>

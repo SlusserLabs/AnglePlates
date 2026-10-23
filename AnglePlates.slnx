@@ -17,35 +17,23 @@
   </Folder>
   <Folder Name="/.github/">
     <File Path=".github/dependabot.yml" />
-    <File Path=".github/pull_request_template.md" />
-  </Folder>
-  <Folder Name="/.github/ISSUE_TEMPLATE/">
-    <File Path=".github/ISSUE_TEMPLATE/bug.yml" />
-    <File Path=".github/ISSUE_TEMPLATE/config.yml" />
-    <File Path=".github/ISSUE_TEMPLATE/feature.yml" />
   </Folder>
   <Folder Name="/.github/workflows/">
     <File Path=".github/workflows/ci.yml" />
     <File Path=".github/workflows/release.yml" />
   </Folder>
   <Folder Name="/docs/">
-    <File Path="docs/configuration.md" />
     <File Path="docs/development.md" />
     <File Path="docs/diagnostics.md" />
-    <File Path="docs/lexicon.md" />
-    <File Path="docs/releasing.md" />
-    <File Path="docs/rendering.md" />
+    <File Path="docs/glossary.md" />
     <File Path="docs/templates.md" />
-    <File Path="docs/testing.md" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AnglePlates/AnglePlates.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
-  </Folder>
-  <Folder Name="/benchmarks/">
-    <Project Path="benchmarks/AnglePlates.Benchmarks/AnglePlates.Benchmarks.csproj" />
+    <Project Path="samples/HelloWorldApi/HelloWorldApi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AnglePlates.Runtime.Tests/AnglePlates.Runtime.Tests.csproj" />

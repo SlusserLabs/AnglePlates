@@ -23,7 +23,7 @@ public sealed class RenderToStringTests
     [Test]
     public async Task RenderToString_NonAsciiLiterals_MatchesStreamingRender()
     {
-        var template = new LiteralsTextTemplate(TemplateOptions.Unencoded);
+        var template = new LiteralsTextTemplate(new TemplateOptions { Encoder = null });
 
         await Assert.That(template.RenderToString("unused")).IsEqualTo(TemplateOutput.RenderText(template, "unused"));
     }

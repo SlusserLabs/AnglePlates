@@ -18,29 +18,39 @@ public sealed class TemplateSnapshotTests
     }
 
     [Test]
-    public Task Snapshot_EscapedOpeners_MatchesReviewedSources()
+    public Task Snapshot_BracketLevels_MatchesReviewedSources()
     {
-        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Text\r\nlet a = \\[[1]];\r\n\\\\[% var b = 2; %]\\[*c*]"));
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(
+            "#generate Text\r\n[[[ \"]]\" ]]][[% var b = \"%]\"; %]][[[* c *]]][[[[[ model ]]]]]\\[[ model ]]"));
 
-        return GeneratorSnapshot.Verify(result.RunResult, "EscapedOpeners", source => !GeneratedSources.IsSupportType(source));
+        return GeneratorSnapshot.Verify(result.RunResult, "BracketLevels", source => !GeneratedSources.IsSupportType(source));
     }
 
     [Test]
-    public Task Snapshot_MergedLiteralRuns_MatchesReviewedSources()
+    public Task Snapshot_MultiLineCSharp_MatchesReviewedSources()
     {
-        // A comment, empty blocks, and an escaped opener between literals write one literal; the trim marker ends the run.
-        // #encode none makes the constructor fall back to the Unencoded preset.
-        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Text\r\n#encode none\r\na[* c *]b[%%]c\\[[d[[]]e [*- x *]f"));
+        // Multi-line C# keeps its line breaks and columns under one #line mapping per token, with every line at column 0
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(
+            "#generate Utf8\r\n[% var s = @\"a\r\n  b\";\r\n  var r = \"\"\"\r\n    x\r\n    \"\"\"; %][[ s +\r\n  r ]][% if (true) { %]a[% { %]b[% } } %][[[% var t = \"]]\"; %]]][[ t ]]"));
 
-        return GeneratorSnapshot.Verify(result.RunResult, "MergedLiteralRuns", source => !GeneratedSources.IsSupportType(source));
+        return GeneratorSnapshot.Verify(result.RunResult, "MultiLineCSharp", source => !GeneratedSources.IsSupportType(source));
+    }
+
+    [Test]
+    public Task Snapshot_SeparateLiterals_MatchesReviewedSources()
+    {
+        // Comments and empty blocks leave separate literal writes; trim markers affect only adjacent whitespace
+        var result = GeneratorTestHelper.Run(RenderingTestHelper.Template("#generate Text\r\na[* c *]b[%%]c[[[* d *]]]e[[]]f [*- x *]g"));
+
+        return GeneratorSnapshot.Verify(result.RunResult, "SeparateLiterals", source => !GeneratedSources.IsSupportType(source));
     }
 
     [Test]
     public Task Snapshot_RenderAsync_MatchesReviewedSources()
     {
-        // Literals, C# variables, a loop, brace-less C#, a comment after a block, and a trimmed literal that disappears
+        // Literals, variables, braced C# branches, comments, and a literal that disappears after trimming
         const string body = "#generate Utf8\r\n<ul>[% foreach (var c in model) { %]<li>[[ c ]]</li>[% } %][* note *][[ model ]]" +
-            "[% if (model.Length > 0) %]a[% else %][[ model.Length ]][% var n = 1; -%]  \r\n[%- n++; %]";
+            "[% if (model.Length > 0) { %]a[% } else { %][[ model.Length ]][% } %][% var n = 1; -%]  \r\n[%- n++; %]";
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
 
         return GeneratorSnapshot.Verify(result.RunResult, "RenderAsync", source => !GeneratedSources.IsSupportType(source));

@@ -44,7 +44,7 @@ public sealed class MSBuildOptionTests
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(6);
-        await Assert.That(RenderingTestHelper.Render(result.Compilation).text).IsEqualTo("tagged");
+        await Assert.That((await RenderingTestHelper.RenderAsync(result.Compilation)).text).IsEqualTo("tagged");
     }
 
     [Test]

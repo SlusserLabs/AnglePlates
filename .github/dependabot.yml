@@ -1,15 +1,15 @@
-# Weekly update pull requests for the solution's NuGet packages and the workflow actions.
+# Monthly updates for project packages and workflow actions.
 version: 2
 updates:
   - package-ecosystem: nuget
-    # The projects in AnglePlates.slnx. The package consumers are left out, because they reference the freshly packed AnglePlates.
+    # Include the optional benchmark project; the package smoke app uses the freshly packed version.
     directories:
       - /src/AnglePlates
       - /tests/AnglePlates.Tests
       - /tests/AnglePlates.Runtime.Tests
       - /benchmarks/AnglePlates.Benchmarks
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       # TUnit and Verify release together often, and Verify.TUnit tracks TUnit, so they update in one pull request
       tunit-and-verify:
@@ -24,4 +24,4 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly

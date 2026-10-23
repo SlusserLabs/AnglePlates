@@ -1,1 +1,0 @@
-Templates/my-emails/welcome.html(1,1): error SLAP002: The template's namespace can't be derived, because the folder 'my-emails' isn't a C# identifier; add a directive such as '#namespace MyApp.Templates' (https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap002)

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -19,34 +18,6 @@ namespace SlusserLabs.AnglePlates.Tests;
 // help anchors in docs/diagnostics.md and which templates still generate
 public sealed class DiagnosticTests
 {
-    [Test]
-    public async Task Slap001_UnderivableClassName_ReportsAtFirstLine()
-    {
-        const string path = "Templates/2fa-code.html";
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText("#model string\r\n#namespace Consumer\r\nbody", path)).RunResult;
-        var diagnostic = result.Diagnostics.Single();
-
-        await AssertRule(diagnostic, "SLAP001", DiagnosticSeverity.Error, "Template class name can't be derived");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo(
-            "The file name gives the class name '2faCode', which isn't a C# identifier; add a directive such as '#type MyTemplate'");
-        await AssertLineSpan(diagnostic, path, 0, 0, 0, 13);
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
-    }
-
-    [Test]
-    public async Task Slap002_UnderivableNamespace_ReportsAtFirstLine()
-    {
-        // Hand-built compilations supply no RootNamespace, so there's nothing to derive the namespace from
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText("#type Example\r\n#model string\r\nbody")).RunResult;
-        var diagnostic = result.Diagnostics.Single();
-
-        await AssertRule(diagnostic, "SLAP002", DiagnosticSeverity.Error, "Template namespace can't be derived");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo(
-            "The template's namespace can't be derived, because RootNamespace is empty; add a directive such as '#namespace MyApp.Templates'");
-        await AssertLineSpan(diagnostic, TemplateText.Path, 0, 0, 0, 13);
-        await Assert.That(result.GeneratedTrees.Length).IsEqualTo(4);
-    }
-
     [Test]
     // The section ends at the first body line. When the text ends on a directive line, the empty span sits at its end.
     [Arguments("#type Example\r\n#namespace Consumer\r\nHello", 2, 0, 5)]
@@ -73,42 +44,44 @@ public sealed class DiagnosticTests
 
         await AssertRule(diagnostic, "SLAP004", DiagnosticSeverity.Error, "Unclosed template block");
         await Assert.That(diagnostic.GetMessage()).IsEqualTo(UnclosedBlockMessage(close));
-        await Assert.That(diagnostic.Location.SourceSpan).IsEqualTo(new TextSpan(header.Length + 7, 2));
-        await AssertLineSpan(diagnostic, template.Path, 3, 7, 3, 9);
+        await Assert.That(diagnostic.Location.SourceSpan).IsEqualTo(new TextSpan(header.Length + 7, open.Length));
+        await AssertLineSpan(diagnostic, template.Path, 3, 7, 3, 7 + open.Length);
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
     }
 
-    // Closers the scanner skips don't close the block, so C# that hides every closer it has reports SLAP004 at the opener
-    // and consumes the rest of the template, which leaves no generated code for the compiler to report
+    // A closer of another level doesn't close the block, and extra brackets before a four-bracket opener are literal text
     [Test]
-    [MethodDataSource(nameof(HiddenCloserCases))]
-    public async Task Slap004_OnlyHiddenClosers_ReportsAtOpeningDelimiter(string block, string close)
+    [Arguments("prefix [[[[[ model", 8, 4, "]]]]")]
+    [Arguments("prefix [[[ model ]]", 7, 3, "]]]")]
+    public async Task Slap004_UnclosedLevel_ReportsAtOpener(string body, int column, int length, string closer)
     {
-        var template = new TemplateAdditionalText(TemplateText.Header + "prefix " + block + "\r\n<p>tail</p>");
+        var template = new TemplateAdditionalText(TemplateText.Header + body);
         var result = GeneratorTestHelper.Run(template);
         var diagnostic = result.RunResult.Diagnostics.Single();
 
         await AssertRule(diagnostic, "SLAP004", DiagnosticSeverity.Error, "Unclosed template block");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo(UnclosedBlockMessage(close));
-        await AssertLineSpan(diagnostic, template.Path, 3, 7, 3, 9);
+        await Assert.That(diagnostic.GetMessage()).IsEqualTo(UnclosedBlockMessage(closer));
+        await Assert.That(diagnostic.Location.SourceSpan).IsEqualTo(new TextSpan(TemplateText.Header.Length + column, length));
+        await AssertLineSpan(diagnostic, template.Path, 3, column, 3, column + length);
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(4);
-    }
-
-    public static IEnumerable<(string block, string close)> HiddenCloserCases()
-    {
-        // An unmatched "[" in a C# variable, and closers that sit only inside C# strings or comments
-        yield return ("[[ model[0 ]]", "]]");
-        yield return ("[[ \"]]\" + model", "]]");
-        yield return ("[% var s = \"%]\"; /* %] */", "%]");
-
-        // The last window holds 16 closers, so 16 hidden ones leave the real closer outside it
-        var hidden = string.Concat(Enumerable.Repeat("\"%]\", ", 16));
-        yield return ($"[% var codes = new[] {{ {hidden}\"x\" }}; %]", "%]");
     }
 
     public static IEnumerable<(string header, string open, string contents, string close)> UnclosedBlockCases()
     {
-        foreach (var (open, close) in new[] { ("[[", "]]"), ("[%", "%]"), ("[*", "*]") })
+        // Every opener level with its matching closer: variables at 2 to 4, code and comments at 1 to 4
+        var pairs = new List<(string, string)>();
+        for (int level = 2; level <= 4; level++)
+        {
+            pairs.Add((new string('[', level), new string(']', level)));
+        }
+
+        for (int level = 1; level <= 4; level++)
+        {
+            pairs.Add((new string('[', level) + "%", "%" + new string(']', level)));
+            pairs.Add((new string('[', level) + "*", "*" + new string(']', level)));
+        }
+
+        foreach (var (open, close) in pairs)
         {
             foreach (var newline in new[] { "\n", "\r\n", "\r" })
             {
@@ -178,7 +151,7 @@ public sealed class DiagnosticTests
 
         await Assert.That(discovered.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(discovered.RunResult.GeneratedTrees.Length).IsEqualTo(6);
-        await Assert.That(RenderingTestHelper.Render(discovered.Compilation).text).IsEqualTo("valid");
+        await Assert.That((await RenderingTestHelper.RenderAsync(discovered.Compilation)).text).IsEqualTo("valid");
 
         var diagnostic = explicitFile.Diagnostics.Single();
         await AssertRule(diagnostic, "SLAP008", DiagnosticSeverity.Error, "File isn't a template");
@@ -215,50 +188,30 @@ public sealed class DiagnosticTests
     }
 
     [Test]
-    public async Task Slap011_PossibleMisspelledDirective_WarnsAtLine()
+    [Arguments("#modal { color: red; }")]
+    [Arguments("#modle x")]
+    public async Task UnknownDirectiveAfterHeader_IsLiteralText(string body)
     {
-        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(TemplateText.Header + "#modle x\r\nbody"));
-        var diagnostic = result.RunResult.Diagnostics.Single();
+        var result = GeneratorTestHelper.Run(new TemplateAdditionalText(TemplateText.Header + body));
 
-        await AssertRule(diagnostic, "SLAP011", DiagnosticSeverity.Warning, "Possible misspelled directive");
-        await Assert.That(diagnostic.GetMessage()).IsEqualTo("'#modle' isn't a directive. Did you mean '#model'?");
-        await AssertLineSpan(diagnostic, TemplateText.Path, 3, 0, 3, 8);
-        // A warning doesn't stop the template from generating
-        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", "#modle x\r\nbody");
+        await Assert.That(result.RunResult.Diagnostics).IsEmpty();
+        await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", body);
     }
 
     [Test]
-    public async Task Registry_EveryDescriptor_HasDocumentedHelpAnchor()
+    [Arguments("SLAP001")]
+    [Arguments("SLAP002")]
+    [Arguments("SLAP011")]
+    public async Task Registry_RetiredRule_HasDocumentationButNoReleaseEntry(string id)
     {
-        // Each rule's heading is exactly "## SLAPnnn", which GitHub turns into the #slapnnn anchor the help link names,
-        // and the next line repeats the descriptor's title in bold. DocumentationLinkTests uses the same anchor rules.
-        var path = RepositoryFiles.GetPath("docs/diagnostics.md");
-        var lines = File.ReadAllLines(path);
-        var anchors = MarkdownDocument.Load(path).Anchors;
-        var descriptors = AllDescriptors();
-
-        await Assert.That(descriptors.Length).IsEqualTo(11);
-        await Assert.That(descriptors.Select(descriptor => descriptor.Id).Distinct().Count()).IsEqualTo(descriptors.Length);
-        foreach (var descriptor in descriptors)
-        {
-            var heading = Array.IndexOf(lines, "## " + descriptor.Id);
-            await Assert.That(heading).IsGreaterThan(0);
-            await Assert.That(lines[heading + 2]).IsEqualTo($"**{descriptor.Title}**");
-            await Assert.That(descriptor.HelpLinkUri).IsEqualTo(HelpLink(descriptor.Id));
-            await Assert.That(anchors).Contains(new Uri(descriptor.HelpLinkUri).Fragment.TrimStart('#'));
-        }
-    }
-
-    [Test]
-    public async Task Registry_EveryDescriptor_IsInAnalyzerReleases()
-    {
+        // IDs retired before any release stay documented and are never reused, but have no AnalyzerReleases entry
+        var lines = File.ReadAllLines(RepositoryFiles.GetPath("docs/diagnostics.md"));
         var unshipped = File.ReadAllText(RepositoryFiles.GetPath("src/AnglePlates/AnalyzerReleases.Unshipped.md"));
+        var heading = Array.IndexOf(lines, "## " + id);
 
-        foreach (var descriptor in AllDescriptors())
-        {
-            var severity = descriptor.DefaultSeverity.ToString();
-            await Assert.That(unshipped).Contains($"{descriptor.Id} | {descriptor.Category} | {severity} |");
-        }
+        await Assert.That(heading).IsGreaterThan(0);
+        await Assert.That(lines[heading + 4]).Contains("Retired in 1.1");
+        await Assert.That(unshipped).DoesNotContain(id);
     }
 
     [Test]
@@ -277,12 +230,12 @@ public sealed class DiagnosticTests
         templates.Add(RenderingTestHelper.Template("[% unclosed", "Bad", path: "Templates/bad.html"));
         templates.Add(new TemplateAdditionalText(TemplateText.Header + "#type Other\r\nbad", "Templates/duplicate.html"));
         var result = GeneratorTestHelper.Run(templates.ToArray());
-        var first = RenderingTestHelper.Render(result.Compilation, type: "Consumer.First");
-        var second = RenderingTestHelper.Render(result.Compilation, type: "Consumer.Second");
+        var first = await RenderingTestHelper.RenderAsync(result.Compilation, type: "Consumer.First");
+        var second = await RenderingTestHelper.RenderAsync(result.Compilation, type: "Consumer.Second");
 
         // Missing directives, unclosed blocks, and directive errors each skip only their own template
         await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id).Order(StringComparer.Ordinal)))
-            .IsEqualTo("SLAP002,SLAP003,SLAP004,SLAP004,SLAP006");
+            .IsEqualTo("SLAP003,SLAP004,SLAP004,SLAP006");
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(8);
         await Assert.That(first.text).IsEqualTo("first &lt;value&gt;");
         await Assert.That(second.text).IsEqualTo("second &lt;value&gt;");
@@ -315,13 +268,5 @@ public sealed class DiagnosticTests
     private static string HelpLink(string id)
     {
         return "https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#" + id.ToLowerInvariant();
-    }
-
-    private static DiagnosticDescriptor[] AllDescriptors()
-    {
-        return typeof(DiagnosticDescriptors).GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(field => field.FieldType == typeof(DiagnosticDescriptor))
-            .Select(field => (DiagnosticDescriptor)field.GetValue(null)!)
-            .ToArray();
     }
 }

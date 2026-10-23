@@ -13,7 +13,6 @@ internal sealed class TemplateDirectives
         GenerationTarget generationTarget,
         string accessModifier,
         TextSpan accessSpan,
-        TemplateEncoding encoding,
         IReadOnlyList<string> usings)
     {
         Type = type;
@@ -22,7 +21,6 @@ internal sealed class TemplateDirectives
         GenerationTarget = generationTarget;
         AccessModifier = accessModifier;
         AccessSpan = accessSpan;
-        Encoding = encoding;
         Usings = usings;
     }
 
@@ -40,8 +38,6 @@ internal sealed class TemplateDirectives
     // Where SLAP005 points when the template is public; an empty span when #access is left out
     public TextSpan AccessSpan { get; }
 
-    public TemplateEncoding Encoding { get; }
-
-    // In template order, without repeats
+    // In template order, repeats included
     public IReadOnlyList<string> Usings { get; }
 }

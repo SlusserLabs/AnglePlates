@@ -60,11 +60,6 @@ end_of_line = unset
 insert_final_newline = unset
 trim_trailing_whitespace = false
 
-[tests/AnglePlates.PackageTests/{CustomViews,Explicit}/**]
-end_of_line = unset
-insert_final_newline = unset
-trim_trailing_whitespace = false
-
 [*.verified.cs]
 end_of_line = lf
 insert_final_newline = true

@@ -1,1 +1,0 @@
-Templates/typo.html(4,1): error SLAP011: '#generat' isn't a directive. Did you mean '#generate'? (https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#slap011)
