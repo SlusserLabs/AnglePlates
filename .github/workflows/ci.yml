@@ -38,17 +38,17 @@ jobs:
       - run: dotnet restore AnglePlates.slnx
       - run: dotnet build AnglePlates.slnx -c Release --no-restore -warnaserror -p:Version=$PACKAGE_VERSION
       - name: Test the generator
-        run: dotnet test --project tests/AnglePlates.Tests -c Release --no-build --results-directory TestResults --coverage --coverage-output-format cobertura --coverage-output generator.cobertura.xml --coverage-settings tests/AnglePlates.Tests/code-coverage.settings.xml
+        run: dotnet test --project tests/AnglePlates.Tests -c Release --no-build --results-directory TestResults
       - name: Test rendering
-        run: dotnet test --project tests/AnglePlates.Runtime.Tests -c Release --no-build --results-directory TestResults --coverage --coverage-output-format cobertura --coverage-output runtime.cobertura.xml --coverage-settings tests/AnglePlates.Runtime.Tests/code-coverage.settings.xml
+        run: dotnet test --project tests/AnglePlates.Runtime.Tests -c Release --no-build --results-directory TestResults
       - run: dotnet run --project samples/HelloWorld -c Release --no-build --no-launch-profile
       - run: dotnet pack src/AnglePlates/AnglePlates.csproj -c Release --no-build -o artifacts/package -p:Version=$PACKAGE_VERSION
       - name: Install Native AOT prerequisites
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
       - name: Validate the installed package and Native AOT
         shell: pwsh
-        run: ./eng/validate-package.ps1 -Version $env:PACKAGE_VERSION
-      - name: Upload test results and coverage
+        run: ./scripts/validate-package.ps1 -Version $env:PACKAGE_VERSION
+      - name: Upload test results and failed snapshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

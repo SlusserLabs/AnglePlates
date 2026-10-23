@@ -17,12 +17,6 @@
   </Folder>
   <Folder Name="/.github/">
     <File Path=".github/dependabot.yml" />
-    <File Path=".github/pull_request_template.md" />
-  </Folder>
-  <Folder Name="/.github/ISSUE_TEMPLATE/">
-    <File Path=".github/ISSUE_TEMPLATE/bug.yml" />
-    <File Path=".github/ISSUE_TEMPLATE/config.yml" />
-    <File Path=".github/ISSUE_TEMPLATE/feature.yml" />
   </Folder>
   <Folder Name="/.github/workflows/">
     <File Path=".github/workflows/ci.yml" />
@@ -31,7 +25,7 @@
   <Folder Name="/docs/">
     <File Path="docs/development.md" />
     <File Path="docs/diagnostics.md" />
-    <File Path="docs/lexicon.md" />
+    <File Path="docs/glossary.md" />
     <File Path="docs/templates.md" />
   </Folder>
   <Folder Name="/src/">

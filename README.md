@@ -72,6 +72,7 @@ var german = new GreetingTextTemplate(new TemplateOptions
 ## Learn more
 
 - [Template reference](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/templates.md): directives, syntax, child templates, rendering, and MSBuild settings.
+- [Glossary](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/glossary.md): template terminology, generation, and rendering.
 - [Diagnostics](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md): build errors and their fixes.
 - [HelloWorld sample](https://github.com/SlusserLabs/AnglePlates/tree/main/samples/HelloWorld): a console page and plain-text email.
 - [Contributing](https://github.com/SlusserLabs/AnglePlates/blob/main/CONTRIBUTING.md) and [development](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/development.md): build, test, and release commands.

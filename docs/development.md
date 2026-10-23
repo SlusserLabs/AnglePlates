@@ -34,7 +34,7 @@ dotnet test --project tests/AnglePlates.Runtime.Tests -c Release --no-build
 
 `AnglePlates.Runtime.Tests` compiles real templates and checks exact text and UTF-8 output, encoding, culture, and async rendering. Preserve intentional fixture line endings. Add a focused regression test for a bug; don't repeat the same case in every layer.
 
-Coverage is useful for finding missing cases, but there is no percentage threshold or 100% release requirement. CI uploads Cobertura reports from both test projects. To collect them locally:
+Coverage is useful for finding missing cases, but there is no percentage threshold or 100% release requirement. Collect Cobertura reports locally when you need them:
 
 ```shell
 dotnet test --project tests/AnglePlates.Tests -c Release --no-build --coverage --coverage-output-format cobertura --coverage-settings tests/AnglePlates.Tests/code-coverage.settings.xml
@@ -66,7 +66,7 @@ dotnet pack src/AnglePlates/AnglePlates.csproj -c Release -o artifacts/package -
 Run the validation script in PowerShell 7.4 or later:
 
 ```powershell
-./eng/validate-package.ps1 -Version 1.1.0-local.20261022.1
+./scripts/validate-package.ps1 -Version 1.1.0-local.20261022.1
 ```
 
 The script copies `tests/AnglePlates.PackageTests` outside the repository, restores the packed version into a fresh cache, and checks text, UTF-8, async, and plain-text rendering. It then publishes and runs the same app with Native AOT. The project stays outside the solution so source references and repository imports can't substitute for the installed package.
@@ -77,7 +77,7 @@ Package metadata, symbols, and Source Link use the .NET SDK's tooling.
 
 ## CI and releases
 
-CI uses one Ubuntu job and the SDK from `global.json`. It restores, builds, tests, runs the sample, packs, and validates the package, including Native AOT. Test results and coverage are uploaded for inspection.
+CI uses one Ubuntu job and the SDK from `global.json`. It restores, builds, tests, runs the sample, packs, and validates the package, including Native AOT. Test results and failed snapshots are uploaded for inspection. CI runs on pushes to `main` and on pull requests; pull requests are optional for solo development.
 
 The release workflow runs when the owner publishes a GitHub Release. It calls CI with the release version, then publishes the exact package CI validated. It doesn't rebuild the package in the publish job.
 
@@ -90,7 +90,7 @@ Before the first release, the owner must:
 For each release:
 
 1. Review the changes and update `CHANGELOG.md` and `VersionPrefix` in `Directory.Build.props`.
-2. Merge the changes through a pull request and check CI.
+2. Push the changes to `main`, directly or through a pull request, and check that CI passes for the intended release commit.
 3. Create a stable `vX.Y.Z` tag on the intended `main` commit and publish its GitHub Release. The tag must match `VersionPrefix`.
 4. Approve the `nuget-org` deployment after validation succeeds.
 

@@ -24,14 +24,14 @@ AnglePlates is a small compile-time C# template engine published as `SlusserLabs
 - Edit generator sources, not files under `obj`.
 - Review snapshot diffs manually; never automatically accept them.
 - Test consumer behavior and compiler diagnostics, not internal structure through reflection. Limit runtime reflection to binding public entry points in dynamically compiled test consumers.
-- For code changes, restore and build `AnglePlates.slnx`, run relevant tests, and run the sample when generation changes. For packaging changes, pack and run `eng/validate-package.ps1`; its Native AOT check needs the native toolchain.
+- For code changes, restore and build `AnglePlates.slnx`, run relevant tests, and run the sample when generation changes. For packaging changes, pack and run `scripts/validate-package.ps1`; its Native AOT check needs the native toolchain.
 - Coverage reports help find missing tests; no percentage is a release requirement.
 - Keep package smoke tests outside the solution and validate them from an isolated folder against the packed package.
 - Keep local build output in ignored `artifacts/`. Don't commit agent orchestration, scratch scripts, or verification reports.
 - Keep docs consistent with implemented behavior:
   - `docs/development.md` has contributor and release commands
   - `docs/templates.md` is the consumer reference
-  - `docs/lexicon.md` defines essential terms
+  - `docs/glossary.md` defines essential terms
   - `docs/diagnostics.md` for diagnostic IDs; don't reuse retired IDs.
 - README links and images use absolute `https://` URLs for nuget.org.
 - Treat requests to update project rules as edits to this file.

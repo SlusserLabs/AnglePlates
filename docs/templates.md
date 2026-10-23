@@ -1,6 +1,6 @@
 # Template reference
 
-AnglePlates compiles text templates into C# classes. Put templates in your project's `Templates` folder, build, and call their render methods. See the [quick start](../README.md#quick-start) for a complete first template.
+AnglePlates compiles text templates into C# classes. Put templates in your project's `Templates` folder, build, and call their render methods. See the [quick start](../README.md#quick-start) for a complete first template and the [glossary](glossary.md) for template terminology.
 
 ## Directives
 
