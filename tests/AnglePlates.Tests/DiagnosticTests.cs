@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -152,7 +151,7 @@ public sealed class DiagnosticTests
 
         await Assert.That(discovered.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(discovered.RunResult.GeneratedTrees.Length).IsEqualTo(6);
-        await Assert.That(RenderingTestHelper.Render(discovered.Compilation).text).IsEqualTo("valid");
+        await Assert.That((await RenderingTestHelper.RenderAsync(discovered.Compilation)).text).IsEqualTo("valid");
 
         var diagnostic = explicitFile.Diagnostics.Single();
         await AssertRule(diagnostic, "SLAP008", DiagnosticSeverity.Error, "File isn't a template");
@@ -200,30 +199,10 @@ public sealed class DiagnosticTests
     }
 
     [Test]
-    public async Task Registry_EveryDescriptor_HasDocumentedHelpAnchor()
-    {
-        // Each rule's heading is exactly "## SLAPnnn", which GitHub turns into the #slapnnn anchor the help link names,
-        // and the next line repeats the descriptor's title in bold. Retired IDs keep their headings.
-        var path = RepositoryFiles.GetPath("docs/diagnostics.md");
-        var lines = File.ReadAllLines(path);
-        var descriptors = AllDescriptors();
-
-        await Assert.That(descriptors.Length).IsEqualTo(8);
-        await Assert.That(descriptors.Select(descriptor => descriptor.Id).Distinct().Count()).IsEqualTo(descriptors.Length);
-        foreach (var descriptor in descriptors)
-        {
-            var heading = Array.IndexOf(lines, "## " + descriptor.Id);
-            await Assert.That(heading).IsGreaterThan(0);
-            await Assert.That(lines[heading + 2]).IsEqualTo($"**{descriptor.Title}**");
-            await Assert.That(descriptor.HelpLinkUri).IsEqualTo(HelpLink(descriptor.Id));
-        }
-    }
-
-    [Test]
     [Arguments("SLAP001")]
     [Arguments("SLAP002")]
     [Arguments("SLAP011")]
-    public async Task Registry_RetiredRule_IsDocumentedAndNeverUsed(string id)
+    public async Task Registry_RetiredRule_HasDocumentationButNoReleaseEntry(string id)
     {
         // IDs retired before any release stay documented and are never reused, but have no AnalyzerReleases entry
         var lines = File.ReadAllLines(RepositoryFiles.GetPath("docs/diagnostics.md"));
@@ -232,20 +211,7 @@ public sealed class DiagnosticTests
 
         await Assert.That(heading).IsGreaterThan(0);
         await Assert.That(lines[heading + 4]).Contains("Retired in 1.1");
-        await Assert.That(AllDescriptors().Any(descriptor => descriptor.Id == id)).IsFalse();
         await Assert.That(unshipped).DoesNotContain(id);
-    }
-
-    [Test]
-    public async Task Registry_EveryDescriptor_IsInAnalyzerReleases()
-    {
-        var unshipped = File.ReadAllText(RepositoryFiles.GetPath("src/AnglePlates/AnalyzerReleases.Unshipped.md"));
-
-        foreach (var descriptor in AllDescriptors())
-        {
-            var severity = descriptor.DefaultSeverity.ToString();
-            await Assert.That(unshipped).Contains($"{descriptor.Id} | {descriptor.Category} | {severity} |");
-        }
     }
 
     [Test]
@@ -264,8 +230,8 @@ public sealed class DiagnosticTests
         templates.Add(RenderingTestHelper.Template("[% unclosed", "Bad", path: "Templates/bad.html"));
         templates.Add(new TemplateAdditionalText(TemplateText.Header + "#type Other\r\nbad", "Templates/duplicate.html"));
         var result = GeneratorTestHelper.Run(templates.ToArray());
-        var first = RenderingTestHelper.Render(result.Compilation, type: "Consumer.First");
-        var second = RenderingTestHelper.Render(result.Compilation, type: "Consumer.Second");
+        var first = await RenderingTestHelper.RenderAsync(result.Compilation, type: "Consumer.First");
+        var second = await RenderingTestHelper.RenderAsync(result.Compilation, type: "Consumer.Second");
 
         // Missing directives, unclosed blocks, and directive errors each skip only their own template
         await Assert.That(string.Join(",", result.RunResult.Diagnostics.Select(d => d.Id).Order(StringComparer.Ordinal)))
@@ -302,13 +268,5 @@ public sealed class DiagnosticTests
     private static string HelpLink(string id)
     {
         return "https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md#" + id.ToLowerInvariant();
-    }
-
-    private static DiagnosticDescriptor[] AllDescriptors()
-    {
-        return typeof(DiagnosticDescriptors).GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(field => field.FieldType == typeof(DiagnosticDescriptor))
-            .Select(field => (DiagnosticDescriptor)field.GetValue(null)!)
-            .ToArray();
     }
 }

@@ -118,7 +118,7 @@ public sealed class NameCollisionTests
         var compilation = GeneratorTestHelper.CreateCompilation(consumerSource.Length == 0 ? [] : [consumerSource]);
         var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([new TemplateAdditionalText(template)]));
         var warnings = result.Compilation.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning);
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(result.RunResult.GeneratedTrees.Length).IsEqualTo(6);

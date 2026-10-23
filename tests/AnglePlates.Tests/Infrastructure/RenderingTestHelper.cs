@@ -1,17 +1,15 @@
 using System;
-using System.Buffers;
-using System.IO;
-using System.IO.Pipelines;
+using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
 
 namespace SlusserLabs.AnglePlates.Tests.Infrastructure;
 
-// Loads a generated assembly and renders its templates through the text, UTF-8, and pipe paths
+// Compiles ordinary consumer calls and checks text, UTF-8, and async rendering
 internal static class RenderingTestHelper
 {
     public static TemplateAdditionalText Template(
@@ -20,81 +18,52 @@ internal static class RenderingTestHelper
         return new TemplateAdditionalText($"#type {type}\r\n#model string\r\n#namespace {ns}\r\n#using System\r\n{body}", path, anglePlate);
     }
 
-    public static (string text, byte[] bytes) Render(Compilation compilation, string? model = "<value>", string type = "Consumer.Example", string? nullVariable = null)
+    public static async Task<(string text, byte[] bytes)> RenderAsync(
+        Compilation compilation, string? model = "<value>", string type = "Consumer.Example", string? nullVariable = null)
     {
+        // Callers use metadata names, so escape namespace keywords when writing the consumer's C# names
+        type = string.Join(".", type.Split('.').Select(part => "@" + part.TrimStart('@')));
+        var consumer = $$"""
+            namespace AnglePlatesTestConsumer;
+
+            public static class EntryPoint
+            {
+                public static async global::System.Threading.Tasks.Task<(string, byte[])> RenderAsync(string? model, string? nullVariable)
+                {
+                    var options = new global::SlusserLabs.AnglePlates.TemplateOptions { NullVariable = nullVariable };
+                    using var text = new global::System.IO.StringWriter();
+                    new global::{{type}}TextTemplate(options).Render(model!, text);
+                    var bytes = new global::System.Buffers.ArrayBufferWriter<byte>();
+                    var utf8 = new global::{{type}}Utf8Template(options);
+                    utf8.Render(model!, bytes);
+
+                    using var stream = new global::System.IO.MemoryStream();
+                    var pipe = global::System.IO.Pipelines.PipeWriter.Create(
+                        stream, new global::System.IO.Pipelines.StreamPipeWriterOptions(leaveOpen: true));
+                    await utf8.RenderAsync(model!, pipe);
+                    await pipe.CompleteAsync();
+                    if (!global::System.MemoryExtensions.SequenceEqual<byte>(bytes.WrittenSpan, stream.ToArray()))
+                    {
+                        throw new global::System.InvalidOperationException("RenderAsync wrote different bytes than Render.");
+                    }
+
+                    return (text.ToString(), bytes.WrittenSpan.ToArray());
+                }
+            }
+            """;
+        var parseOptions = (CSharpParseOptions)compilation.SyntaxTrees.First().Options;
+        compilation = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(consumer, parseOptions));
         using var generated = GeneratedAssembly.Load(compilation);
+        var render = generated.GetDelegate<Func<string?, string?, Task<(string, byte[])>>>("AnglePlatesTestConsumer.EntryPoint", "RenderAsync");
 
-        // Without a NullVariable the templates fall back to default options.
-        // Reflection can still call the init accessor.
-        object? options = null;
-        if (nullVariable is not null)
-        {
-            options = Activator.CreateInstance(generated.Assembly.GetType("SlusserLabs.AnglePlates.TemplateOptions", throwOnError: true)!)!;
-            options.GetType().GetProperty("NullVariable")!.SetValue(options, nullVariable);
-        }
-
-        using var writer = new StringWriter();
-        var buffer = new ArrayBufferWriter<byte>();
-        Render(generated, type + "TextTemplate", model, writer, options);
-        Render(generated, type + "Utf8Template", model, buffer, options);
-
-        // Every rendering case also checks that RenderAsync writes the same bytes as Render
-        var streamed = RenderToPipe(generated, type + "Utf8Template", model, options);
-        if (!streamed.AsSpan().SequenceEqual(buffer.WrittenSpan))
-        {
-            throw new InvalidOperationException("RenderAsync wrote different bytes than Render.");
-        }
-
-        return (writer.ToString(), buffer.WrittenSpan.ToArray());
+        return await render(model, nullVariable);
     }
 
-    // Checks both rendering paths against the same expected text
     public static async Task AssertRendersAsync(Compilation compilation, string type, string expected)
     {
-        var (text, bytes) = Render(compilation, type: type);
+        var (text, bytes) = await RenderAsync(compilation, type: type);
 
         await Assert.That(text).IsEqualTo(expected);
         await Assert.That(bytes).IsEquivalentTo(Encoding.UTF8.GetBytes(expected));
-    }
-
-    public static void Render(GeneratedAssembly generated, string typeName, string? model, object writer, object? options = null)
-    {
-        var type = generated.Assembly.GetType(typeName, throwOnError: true)!;
-        var instance = Activator.CreateInstance(type, [options]);
-        type.GetMethod("Render")!.Invoke(instance, [model, writer]);
-    }
-
-    public static ValueTask RenderAsync(
-        GeneratedAssembly generated, string typeName, string? model, PipeWriter writer, object? options = null, CancellationToken cancellationToken = default)
-    {
-        var type = generated.Assembly.GetType(typeName, throwOnError: true)!;
-        var instance = Activator.CreateInstance(type, [options]);
-
-        return (ValueTask)type.GetMethod("RenderAsync")!.Invoke(instance, [model, writer, cancellationToken])!;
-    }
-
-    // A pipe without backpressure completes every flush synchronously, so the render finishes before this returns
-    public static byte[] RenderToPipe(GeneratedAssembly generated, string typeName, string? model, object? options = null)
-    {
-        var pipe = new Pipe(new PipeOptions(pauseWriterThreshold: 0, useSynchronizationContext: false));
-        var render = RenderAsync(generated, typeName, model, pipe.Writer, options);
-        if (!render.IsCompleted)
-        {
-            throw new InvalidOperationException("RenderAsync didn't complete on a pipe without backpressure.");
-        }
-
-        // The render already completed, so this only rethrows a failure
-        render.GetAwaiter().GetResult();
-        pipe.Writer.Complete();
-        if (!pipe.Reader.TryRead(out var result))
-        {
-            throw new InvalidOperationException("The completed pipe had nothing to read.");
-        }
-
-        var bytes = result.Buffer.ToArray();
-        pipe.Reader.AdvanceTo(result.Buffer.End);
-        pipe.Reader.Complete();
-
-        return bytes;
     }
 }

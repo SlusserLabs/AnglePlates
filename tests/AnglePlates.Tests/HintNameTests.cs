@@ -91,8 +91,8 @@ public sealed class HintNameTests
         await Assert.That(result.GeneratedSource("Two.ExampleUtf8Template.g.cs").SourceText.ToString()).Contains("namespace Two;");
         await Assert.That(result.HintNames()).IsEqualTo(reversed.HintNames());
         await Assert.That(result.HintNames()).IsEqualTo(changed.HintNames());
-        await Assert.That(RenderingTestHelper.Render(result.Compilation, type: "One.Example").text).IsEqualTo("one");
-        await Assert.That(RenderingTestHelper.Render(result.Compilation, type: "Two.Example").text).IsEqualTo("two");
+        await Assert.That((await RenderingTestHelper.RenderAsync(result.Compilation, type: "One.Example")).text).IsEqualTo("one");
+        await Assert.That((await RenderingTestHelper.RenderAsync(result.Compilation, type: "Two.Example")).text).IsEqualTo("two");
     }
 
     [Test]

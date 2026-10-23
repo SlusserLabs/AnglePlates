@@ -33,7 +33,7 @@ public sealed class BlockSyntaxTests
     public async Task OrdinaryBrackets_InBody_RenderAsLiterals(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -50,7 +50,7 @@ public sealed class BlockSyntaxTests
     public async Task Backslash_BeforeBlock_WritesBackslashThenBlock(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -66,7 +66,7 @@ public sealed class BlockSyntaxTests
     public async Task LiteralOpener_ThroughVariable_WritesOpener(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -97,7 +97,7 @@ public sealed class BlockSyntaxTests
     public async Task HigherLevel_ClosersInsideCSharp_RenderLikeCSharp(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -109,7 +109,7 @@ public sealed class BlockSyntaxTests
     public async Task LevelEquivalence_AllLevels_RenderTheSame(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -141,7 +141,7 @@ public sealed class BlockSyntaxTests
     {
         // A string holding a line break goes through WriteRaw, because the default HTML encoder writes CR and LF as character references
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -153,7 +153,7 @@ public sealed class BlockSyntaxTests
     public async Task EmptyBlock_WithTrimFlags_RendersNothingButTrims(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
@@ -201,7 +201,7 @@ public sealed class BlockSyntaxTests
     public async Task MergedLiteralRun_NextToTrimMarker_TrimsOnlyAdjacentLiterals(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
@@ -217,7 +217,7 @@ public sealed class BlockSyntaxTests
     public async Task AdjacentBlocks_WithTrimMarkers_KeepTrimAndNegativeExpressions(string body, string expected)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();
@@ -235,7 +235,7 @@ public sealed class BlockSyntaxTests
         try
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
-            output = RenderingTestHelper.Render(result.Compilation);
+            output = await RenderingTestHelper.RenderAsync(result.Compilation);
         }
         finally
         {
@@ -269,8 +269,8 @@ public sealed class BlockSyntaxTests
         var withoutNullVariable = "a" + value + "b";
         var withNullVariable = value is null ? "a&lt;null&gt;b" : withoutNullVariable;
 
-        var plain = RenderingTestHelper.Render(result.Compilation, model: model);
-        var substituted = RenderingTestHelper.Render(result.Compilation, model: model, nullVariable: "<null>");
+        var plain = await RenderingTestHelper.RenderAsync(result.Compilation, model: model);
+        var substituted = await RenderingTestHelper.RenderAsync(result.Compilation, model: model, nullVariable: "<null>");
 
         await Assert.That(plain.text).IsEqualTo(withoutNullVariable);
         await Assert.That(plain.bytes.SequenceEqual(Encoding.UTF8.GetBytes(withoutNullVariable))).IsTrue();
@@ -285,7 +285,7 @@ public sealed class BlockSyntaxTests
         const string expected = "&lt;value&gt;&lt;value&gt;11;--;33;";
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
 
-        var output = RenderingTestHelper.Render(result.Compilation, nullVariable: "-");
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation, nullVariable: "-");
 
         await Assert.That(output.text).IsEqualTo(expected);
         await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(expected))).IsTrue();

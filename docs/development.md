@@ -19,7 +19,7 @@ The generator targets `netstandard2.0` and uses Roslyn 4.14.0. Consumers need .N
 - `src/AnglePlates` contains the generator. `Parsing` handles delimiters, `Directives` reads settings, `Pipeline` holds values used by incremental generation, and `Emit` writes the consumer code.
 - `src/AnglePlates/build` contains NuGet's props and targets. They discover `AnglePlate` files and tag them as compiler `AdditionalFiles`. The generator ignores untagged files.
 - `samples/HelloWorld` shows text rendering and plain-text options.
-- `benchmarks/AnglePlates.Benchmarks` contains optional performance comparisons. Run them when investigating a performance change; they aren't release requirements.
+- `benchmarks/AnglePlates.Benchmarks` measures text and UTF-8 rendering of an encoded list. It stays outside the solution; run it separately when investigating performance.
 
 The generator doesn't interpret embedded C#. It copies blocks unchanged, adds line mappings, and lets the consumer's compiler check them.
 
@@ -30,7 +30,7 @@ dotnet test --project tests/AnglePlates.Tests -c Release --no-build
 dotnet test --project tests/AnglePlates.Runtime.Tests -c Release --no-build
 ```
 
-`AnglePlates.Tests` runs the generator with Roslyn, checks diagnostics and generated compilations, and keeps representative Verify snapshots. `GeneratorTestHelper` supplies the compilation and driver; `RenderingTestHelper` can execute generated templates. Review each changed snapshot before accepting it.
+`AnglePlates.Tests` runs the generator with Roslyn, checks diagnostics and generated compilations, and keeps representative Verify snapshots. `GeneratorTestHelper` supplies the compilation and driver; `RenderingTestHelper` compiles ordinary consumer calls and executes them from memory. Reflection is limited to binding the compiled consumer's public entry point to a delegate; assertions use rendered output or compiler diagnostics. Review each changed snapshot before accepting it.
 
 `AnglePlates.Runtime.Tests` compiles real templates and checks exact text and UTF-8 output, encoding, culture, and async rendering. Preserve intentional fixture line endings. Add a focused regression test for a bug; don't repeat the same case in every layer.
 
@@ -41,7 +41,17 @@ dotnet test --project tests/AnglePlates.Tests -c Release --no-build --coverage -
 dotnet test --project tests/AnglePlates.Runtime.Tests -c Release --no-build --coverage --coverage-output-format cobertura --coverage-settings tests/AnglePlates.Runtime.Tests/code-coverage.settings.xml
 ```
 
-Keep the collector settings: the generator report excludes dynamically compiled test assemblies, and the runtime report includes generated code in the test assembly. They avoid instrumentation failures and make the reports useful.
+The collector settings limit generator coverage to the generator assembly and include emitted code in the runtime test assembly. Test consumers are emitted in memory and don't need source files or PDBs on disk.
+
+## Benchmarks
+
+Run the optional benchmarks directly:
+
+```shell
+dotnet run --project benchmarks/AnglePlates.Benchmarks -c Release -- --filter "*"
+```
+
+The two methods render the same list to a reused `StringWriter` or UTF-8 buffer. There are no handwritten renderers to keep in sync. Add `--job Dry` for a quick execution check; use a normal run for measurements.
 
 ## Validate the package
 

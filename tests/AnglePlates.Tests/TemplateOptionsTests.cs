@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Text;
 using SlusserLabs.AnglePlates.Tests.Infrastructure;
@@ -12,6 +13,7 @@ public sealed class TemplateOptionsTests
 {
     [Test]
     [Arguments("Encoder", "null")]
+    [Arguments("NullVariable", "null")]
     [Arguments("Culture", "global::System.Globalization.CultureInfo.InvariantCulture")]
     public async Task Options_AssignedThroughDefault_ReportsInitOnlyError(string property, string value)
     {
@@ -24,8 +26,8 @@ public sealed class TemplateOptionsTests
                 public static void Run() => global::Consumer.ExampleTextTemplate.Default.Options.{{property}} = {{value}};
             }
             """;
-        // Both property names have seven letters, so the assigned member has the same span in each row
-        var span = new LinePositionSpan(new LinePosition(4, 32), new LinePosition(4, 92));
+        // The diagnostic covers the assignment target, including the chosen property
+        var span = new LinePositionSpan(new LinePosition(4, 32), new LinePosition(4, 85 + property.Length));
         var expected = ExpectedCompilerDiagnostic.Source(
             "CS8852", $"Init-only property or indexer 'TemplateOptions.{property}' can only be assigned in an object initializer, or on 'this' or 'base' in an instance constructor or an 'init' accessor.",
             "Consumer0.cs", span);
@@ -54,7 +56,7 @@ public sealed class TemplateOptionsTests
         var result = GeneratorTestHelper.Run(compilation, GeneratorTestHelper.CreateDriver([RenderingTestHelper.Template("#generate Text\r\n<p>[[ model ]]</p>")]));
         using var generated = GeneratedAssembly.Load(result.Compilation);
 
-        var output = generated.Assembly.GetType("App.Renderer", throwOnError: true)!.GetMethod("Render")!.Invoke(null, ["<value>"]);
+        var output = generated.GetDelegate<Func<string, string>>("App.Renderer", "Render")("<value>");
 
         await Assert.That(output).IsEqualTo("<p>&lt;value&gt;</p>");
     }

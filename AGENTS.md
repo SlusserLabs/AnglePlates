@@ -23,6 +23,7 @@ AnglePlates is a small compile-time C# template engine published as `SlusserLabs
 - Use `uv run python` for Python commands.
 - Edit generator sources, not files under `obj`.
 - Review snapshot diffs manually; never automatically accept them.
+- Test consumer behavior and compiler diagnostics, not internal structure through reflection. Limit runtime reflection to binding public entry points in dynamically compiled test consumers.
 - For code changes, restore and build `AnglePlates.slnx`, run relevant tests, and run the sample when generation changes. For packaging changes, pack and run `eng/validate-package.ps1`; its Native AOT check needs the native toolchain.
 - Coverage reports help find missing tests; no percentage is a release requirement.
 - Keep package smoke tests outside the solution and validate them from an isolated folder against the packed package.

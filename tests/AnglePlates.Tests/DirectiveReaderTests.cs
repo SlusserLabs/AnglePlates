@@ -52,7 +52,7 @@ public sealed class DirectiveReaderTests
     public async Task DirectiveSection_NonDirectiveLine_EndsSectionAsLiteral(string body)
     {
         var result = GeneratorTestHelper.Run(RenderingTestHelper.Template(body));
-        var output = RenderingTestHelper.Render(result.Compilation, model: string.Empty);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation, model: string.Empty);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(body);
@@ -64,7 +64,7 @@ public sealed class DirectiveReaderTests
     public async Task DirectiveSection_DirectiveLines_AreConsumedWithTheirLineBreaks(string template, string expected)
     {
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         await Assert.That(output.text).IsEqualTo(expected);
@@ -390,7 +390,7 @@ public sealed class DirectiveReaderTests
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
         if (!line.StartsWith("#generate", StringComparison.Ordinal))
         {
-            var output = RenderingTestHelper.Render(result.Compilation, type: type);
+            var output = await RenderingTestHelper.RenderAsync(result.Compilation, type: type);
             await Assert.That(output.text).IsEqualTo("&lt;value&gt;");
             await Assert.That(output.bytes.SequenceEqual(Encoding.UTF8.GetBytes(output.text))).IsTrue();
         }
@@ -422,7 +422,7 @@ public sealed class DirectiveReaderTests
         var template = "#type Example\r\n#using System.Text\r\n#model IEnumerable<char>\r\n#using System.Collections.Generic\r\n#namespace Consumer\r\n" +
             "[% foreach (var c in model) { %][[ c ]][% } %][[ new StringBuilder(\"!\") ]]";
         var result = GeneratorTestHelper.Run(new TemplateAdditionalText(template));
-        var output = RenderingTestHelper.Render(result.Compilation);
+        var output = await RenderingTestHelper.RenderAsync(result.Compilation);
         var sources = result.TemplateSources;
 
         await Assert.That(result.RunResult.Diagnostics.Length).IsEqualTo(0);
