@@ -8,6 +8,8 @@ Unknown directives start ordinary body text. A missing `#model` reports `SLAP003
 
 An error skips its template. Invalid project settings (`SLAP009`) or an old C# version (`SLAP010`) stop all generation.
 
+The rules below ship in 1.1.0. IDs `SLAP001`, `SLAP002`, and `SLAP011` are retired or reserved and must not be reused.
+
 ## SLAP003
 
 **Template has no #model directive**

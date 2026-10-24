@@ -4,7 +4,9 @@ Every change you'd notice as a consumer of AnglePlates ends up here. The format 
 
 ## Unreleased
 
-Planned for 1.1.0, the first release on nuget.org.
+## 1.1.0 - 2026-10-24
+
+First release on nuget.org.
 
 ### Added
 
