@@ -90,52 +90,59 @@ Use the exact version you packed. The command installs the package into NuGet's 
 
 ## CI and releases
 
-There are two workflows:
+[CI](../.github/workflows/ci.yml) runs on branch pushes, pull requests, and manual dispatch. Its build job restores, builds, tests, runs the console sample, packs, and validates the installed package, including Native AOT. Only branch pushes from a repository that isn't a fork publish to int.nugettest.org. Versions use VersionPrefix plus -ci.<run_number>, such as 1.1.0-ci.42.
 
-- `ci.yml` runs on every push and pull request. One Ubuntu job uses the SDK from `global.json` to restore, build, test, run the console sample, pack, and validate the package, including Native AOT. Test results and failed snapshots are uploaded for inspection. On pushes, a second job publishes the validated package to the [NuGet test feed](#publish-to-the-nuget-test-feed).
-- `release.yml` only runs when you start it from **Actions → Release → Run workflow** on `main`. It calls CI with the stable `VersionPrefix` version, publishes the exact package CI validated to nuget.org, then creates the matching tag and GitHub Release. It doesn't rebuild the package in the publish job.
+[Release](../.github/workflows/release.yml) runs only by manual dispatch on the default branch. Enter a version such as 1.1.0 or 1.1.0-rc.1. It builds and validates at that version, then waits for the nuget environment approval. Publication uses the validated artifacts. After NuGet accepts them, the workflow creates v<version> on the built commit and a GitHub Release with generated notes and both package files attached.
 
-Before the first release, the owner must:
+Actions are pinned to commit SHAs. [Dependabot](../.github/dependabot.yml) checks their versions weekly.
 
-1. Configure the `nuget-org` GitHub environment with an owner approval requirement.
-2. Add `NUGET_USER`, the NuGet profile name, as a repository secret.
-3. Create a [NuGet trusted-publishing policy](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) for owner `SlusserLabs`, repository `AnglePlates`, workflow `release.yml`, and environment `nuget-org`.
+### Owner setup
 
-For each release:
+Complete this setup before merging or pushing these workflows. Only the owner changes repository settings and NuGet policies.
 
-1. Review the changes and update `CHANGELOG.md` and `VersionPrefix` in `Directory.Build.props`.
-2. Push the changes to `main`, directly or through a pull request, and check that CI passes for the intended release commit.
-3. Run the `Release` workflow on `main`.
-4. Approve the `nuget-org` deployment after validation succeeds. The publish job allows an existing `vX.Y.Z` tag only if it points to the built commit; a missing tag is created with the GitHub Release. Tag lookup errors other than HTTP 404 stop the job. It publishes to nuget.org, then creates a GitHub Release with generated notes. Duplicate package versions fail publication. If publication succeeds but tagging or release creation fails, the owner must create the missing tag or release for that exact commit separately; rerunning the job will fail on the duplicate package.
+1. Open **Settings → Environments** in the repository and create an environment named **int-nugettest**. Leave required reviewers disabled and allow all branches, since CI publishes on every branch push.
+2. Add the environment secret **NUGET_INT_USER** with your int.nugettest.org profile name. The test site uses a separate account from nuget.org. Secret values can't be read back from GitHub; enter the profile name again.
+3. Create an environment named **nuget**. Add a required reviewer and disable administrator bypass. Under deployment branches and tags, choose selected branches and tags, and add only the branch **main**. If you're the only reviewer, leave prevention of self-review disabled so you can approve a release you started. If your repository plan doesn't support required reviewers, resolve that before enabling production publication.
+4. Add the nuget environment secret **NUGET_USER** with your nuget.org profile name, not your email.
+5. On each site's **Trusted Publishing** page, add or update a policy using the values below. Use the workflow filename alone. Scope each policy to SlusserLabs.AnglePlates, permit new versions, and permit creating the package if it doesn't yet exist on that site.
 
-Only the owner performs release actions or changes repository and NuGet settings. Local packages aren't published.
+   | Field | int.nugettest.org | nuget.org |
+   | --- | --- | --- |
+   | Repository Owner | SlusserLabs | SlusserLabs |
+   | Repository | AnglePlates | AnglePlates |
+   | Workflow File | ci.yml | release.yml |
+   | Environment | int-nugettest | nuget |
 
-### Publish to the NuGet test feed
+6. In the repository's branch protection or ruleset for main, require the CI **build** status check. Keep other required checks. Replace the former CI **validate** requirement if present; the release workflow also has a job named build, so select the check from a CI run. You may need a first CI run before GitHub offers the new check.
 
-Every push runs the `publish-nugettest` job in `ci.yml` after validation, and it publishes the validated artifact to [int.nugettest.org](https://int.nugettest.org/). Pull requests don't publish. Versions use `VersionPrefix` plus `-beta.<run-number>.<run-attempt>`, such as `1.1.0-beta.42.1`. Rerunning all jobs produces a new version; retrying only the publish job reuses the validated artifact.
+See the [NuGet Trusted Publishing instructions](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) for the policy form. Both feeds use short-lived credentials from NuGet/login. The integration login uses token service https://int.nugettest.org/api/v2/token and audience https://int.nugettest.org; check these against the test site's current guidance if token exchange fails.
 
-Before the first push, the owner must:
+### Remove the old setup
 
-1. Create the `nuget-test` GitHub environment. Restrict deployments to the branches you intend to publish from. Don't require approval unless you want to approve every push.
-2. Add an environment secret named `NUGET_USER` containing the test site's profile name, not an email address. This overrides a repository secret with the same name if the production username differs.
-3. Sign in to the test site and create a trusted-publishing policy with these values:
+The previous workflows used GitHub environments named nuget-test and nuget-org, each with an environment secret named NUGET_USER.
 
-   | Field | Value |
-   | --- | --- |
-   | Repository Owner | `SlusserLabs` |
-   | Repository | `AnglePlates` |
-   | Workflow File | `ci.yml` |
-   | Environment | `nuget-test` |
+1. Cancel or finish runs using the old workflow definitions before migration. Don't approve a pending old production deployment.
+2. Configure the new environments, secrets, and policies above. Before merging, remove or update the old publishing policies so obsolete workflow runs can't authenticate.
+3. After the new workflow definitions are on main, delete the old nuget-test and nuget-org environments from **Settings → Environments**. Deleting an environment also deletes its environment secrets and protection rules. Enter the usernames in the new environments before deleting the old ones.
+4. On both NuGet sites, delete any superseded policies bound to nuget-test or nuget-org, or old policies without an environment restriction. Keep the two policies listed above. Don't remove policies used by other repositories.
+5. Remove obsolete NuGet API-key secrets and revoke their corresponding keys only if they were dedicated to these workflows. The workflows need only the two profile-name secrets above. Keep unrelated credentials and existing packages, tags, and releases.
 
-The job uses the test site's token endpoint and OIDC audience to obtain a short-lived API key through `NuGet/login`. It pushes to `https://apiint.nugettest.org/v3/index.json`; production publishing continues to use `release.yml` and `nuget-org`. No long-lived API key is needed.
+### Release a version
 
-Check the package on the test site after publishing. For a consumer outside this repository, use the published version and the test feed as the source:
+1. Review the changes and update CHANGELOG.md. Keep VersionPrefix in Directory.Build.props at the next planned version so CI prereleases sort above the last release.
+2. Push to main and check that CI passes for the intended commit. Check the first integration publication on [int.nugettest.org](https://int.nugettest.org/).
+3. Open **Actions → Release → Run workflow**, select main, and enter the intended package version.
+4. After validation succeeds, review the commit and version, then approve the nuget deployment.
 
-```shell
-dotnet package add SlusserLabs.AnglePlates --version 1.1.0-beta.42.1 --source https://apiint.nugettest.org/v3/index.json
-```
+Duplicate package versions fail by design, including reruns of the same CI run. If publication succeeds but tag or release creation fails, the owner must create the missing tag or release for that exact commit separately; rerunning publication fails on the duplicate. If a multi-package publication ever fails partway, release a new version.
 
-This command works in PowerShell and Bash. The test site is for publishing rehearsals; [Microsoft doesn't guarantee that uploaded packages will be preserved](https://learn.microsoft.com/nuget/nuget-org/nuget-org-faq#is-it-recommended-to-upload-my-test-packages-to-nugetorg).
+To try an integration package from a consumer outside this repository, this command works in PowerShell and Bash:
+
+~~~shell
+dotnet package add SlusserLabs.AnglePlates --version 1.1.0-ci.42 --source https://apiint.nugettest.org/v3/index.json
+~~~
+
+The test feed may delete packages at any time. Only the owner creates release tags or GitHub Releases and approves NuGet publication.
 
 ## Diagnostics
 
