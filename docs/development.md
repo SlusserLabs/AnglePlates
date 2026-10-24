@@ -98,13 +98,13 @@ Actions are pinned to commit SHAs. [Dependabot](../.github/dependabot.yml) check
 
 ### Owner setup
 
-Complete this setup before merging or pushing these workflows. Only the owner changes repository settings and NuGet policies.
+Complete this setup before the first publishing run. Only the owner changes repository settings and NuGet policies.
 
 1. Open **Settings → Environments** in the repository and create an environment named **int-nugettest**. Leave required reviewers disabled and allow all branches, since CI publishes on every branch push.
-2. Add the environment secret **NUGET_INT_USER** with your int.nugettest.org profile name. The test site uses a separate account from nuget.org. Secret values can't be read back from GitHub; enter the profile name again.
+2. Add the environment secret **NUGET_INT_USER** with your int.nugettest.org profile name. The test site uses a separate account from nuget.org.
 3. Create an environment named **nuget**. Add a required reviewer and disable administrator bypass. Under deployment branches and tags, choose selected branches and tags, and add only the branch **main**. If you're the only reviewer, leave prevention of self-review disabled so you can approve a release you started. If your repository plan doesn't support required reviewers, resolve that before enabling production publication.
 4. Add the nuget environment secret **NUGET_USER** with your nuget.org profile name, not your email.
-5. On each site's **Trusted Publishing** page, add or update a policy using the values below. Use the workflow filename alone. Scope each policy to SlusserLabs.AnglePlates, permit new versions, and permit creating the package if it doesn't yet exist on that site.
+5. On each site's **Trusted Publishing** page, create a policy using the values below. Use the workflow filename alone. Scope each policy to SlusserLabs.AnglePlates, permit new versions, and permit creating the package for its first publication.
 
    | Field | int.nugettest.org | nuget.org |
    | --- | --- | --- |
@@ -113,19 +113,9 @@ Complete this setup before merging or pushing these workflows. Only the owner ch
    | Workflow File | ci.yml | release.yml |
    | Environment | int-nugettest | nuget |
 
-6. In the repository's branch protection or ruleset for main, require the CI **build** status check. Keep other required checks. Replace the former CI **validate** requirement if present; the release workflow also has a job named build, so select the check from a CI run. You may need a first CI run before GitHub offers the new check.
+6. In the repository's branch protection or ruleset for main, require the CI **build** status check. The release workflow also has a job named build, so select the check from a CI run. You may need a first CI run before GitHub offers the new check.
 
 See the [NuGet Trusted Publishing instructions](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) for the policy form. Both feeds use short-lived credentials from NuGet/login. The integration login uses token service https://int.nugettest.org/api/v2/token and audience https://int.nugettest.org; check these against the test site's current guidance if token exchange fails.
-
-### Remove the old setup
-
-The previous workflows used GitHub environments named nuget-test and nuget-org, each with an environment secret named NUGET_USER.
-
-1. Cancel or finish runs using the old workflow definitions before migration. Don't approve a pending old production deployment.
-2. Configure the new environments, secrets, and policies above. Before merging, remove or update the old publishing policies so obsolete workflow runs can't authenticate.
-3. After the new workflow definitions are on main, delete the old nuget-test and nuget-org environments from **Settings → Environments**. Deleting an environment also deletes its environment secrets and protection rules. Enter the usernames in the new environments before deleting the old ones.
-4. On both NuGet sites, delete any superseded policies bound to nuget-test or nuget-org, or old policies without an environment restriction. Keep the two policies listed above. Don't remove policies used by other repositories.
-5. Remove obsolete NuGet API-key secrets and revoke their corresponding keys only if they were dedicated to these workflows. The workflows need only the two profile-name secrets above. Keep unrelated credentials and existing packages, tags, and releases.
 
 ### Release a version
 
