@@ -12,7 +12,7 @@ dotnet build AnglePlates.slnx -c Release --no-restore -warnaserror
 dotnet run --project samples/HelloWorld -c Release --no-build --no-launch-profile
 ```
 
-The solution build includes both samples. To start the web server, use the command in the [HelloWorldApi sample](../samples/HelloWorldApi/README.md).
+The solution build includes both samples.
 
 The generator targets `netstandard2.0` and uses Roslyn 4.14.0. Consumers need .NET 10 and C# 11 or later. Keep these constraints separate when changing generated APIs.
 
@@ -90,9 +90,9 @@ Use the exact version you packed. The command installs the package into NuGet's 
 
 ## CI and releases
 
-[CI](../.github/workflows/ci.yml) runs on branch pushes, pull requests, and manual dispatch. Its build job restores, builds, tests, runs the console sample, packs, and validates the installed package, including Native AOT. Only branch pushes from a repository that isn't a fork publish to int.nugettest.org. Versions use VersionPrefix plus -ci.<run_number>, such as 1.1.0-ci.42.
+[CI](../.github/workflows/ci.yml) runs on branch pushes, pull requests, and manual dispatch. Its build job restores, builds, tests, runs the console sample, packs, and validates the installed package, including Native AOT. Only branch pushes from a repository that isn't a fork publish to int.nugettest.org. Versions use VersionPrefix plus `-ci.<run_number>`, such as `1.1.0-ci.42`.
 
-[Release](../.github/workflows/release.yml) runs only by manual dispatch on the default branch. Enter a version such as 1.1.0 or 1.1.0-rc.1. It builds and validates at that version, then waits for the nuget environment approval. Publication uses the validated artifacts. After NuGet accepts them, the workflow creates v<version> on the built commit and a GitHub Release with generated notes and both package files attached.
+[Release](../.github/workflows/release.yml) runs only by manual dispatch on the default branch. Enter a version such as `1.1.0` or `1.1.0-rc.1`. It builds and validates at that version, then waits for the nuget environment approval. Publication uses the validated artifacts. After NuGet accepts them, the workflow creates `v<version>` on the built commit and a GitHub Release with generated notes and both package files attached.
 
 Actions are pinned to commit SHAs. [Dependabot](../.github/dependabot.yml) checks their versions weekly.
 

@@ -2,9 +2,9 @@
 
 <!-- This README also ships in the NuGet package; its repository links stay absolute so they work on nuget.org. -->
 
-AnglePlates is like T4 templates for modern .NET. Give it a template and any model you want to render, and it generates the C# classes at compile time. The compiled templates write straight to a `TextWriter` or UTF-8 buffer, so there is no runtime package to drag along. That's it! You can make it fancier, but you don't have to.
+AnglePlates is a .NET source generator for rendering templates. Think of it like T4 templates for modern .NET.
 
-Templates use C# expressions, loops, and conditions. They compile with your application, work with Native AOT, and need .NET 10 and C# 11 or later.
+Templates are created at compile time, do not require reflection, are AOT friendly, yield excellent performance, and you get to use the C# skills you already know instead of learning a specific template language. The compiled templates write synchronously to a `TextWriter` or an `IBufferWriter<byte>`. For asynchronous UTF-8 streaming, render to a `PipeWriter`, such as an HTTP response body.
 
 ## Quick start
 
@@ -14,7 +14,7 @@ Add the package:
 dotnet package add SlusserLabs.AnglePlates
 ```
 
-Write a model:
+Create a model (or use an object you already have):
 
 ```csharp
 namespace MyApp;
@@ -26,9 +26,8 @@ public sealed record GreetingModel
 }
 ```
 
-Add `Templates/greeting.html`. `#model` is the only required directive:
+Make a template, e.g. `Templates/greeting.html`:
 
-<!-- sample: Templates/Readme/greeting.html -->
 ```text
 #model MyApp.GreetingModel
 
@@ -37,11 +36,14 @@ Add `Templates/greeting.html`. `#model` is the only required directive:
 <h1>Hello, [[ model.Name ]]!</h1>
 
 [% if (!string.IsNullOrEmpty(model.Message)) { %]
-    <p>[[ model.Message ]]</p>
+<p>[[ model.Message ]]</p>
 [% } %]
 ```
 
-Build, then render the generated class. In a project whose `RootNamespace` is `MyApp`:
+> [!NOTE]
+> `#model` is the only required directive. The `Templates/` folder is the default location for processing templates but that is customizable. Documentation of options and the full template syntax are linked below.
+
+Build, then render the generated class. In a project whose `RootNamespace` is `MyApp`, the source generator will have created a type named `MyApp.Templates.GreetingTextTemplate` with a default instance for you to pass your model to and render:
 
 ```csharp
 using MyApp;
@@ -49,17 +51,23 @@ using MyApp.Templates;
 using SlusserLabs.AnglePlates;
 
 var model = new GreetingModel { Name = "Ada & Grace", Message = "Welcome!" };
-GreetingTextTemplate.Default.Render(model, Console.Out);
 string html = GreetingTextTemplate.Default.RenderToString(model);
 ```
 
-The name becomes `Ada &amp; Grace`. C# variables are HTML-encoded; literal text and its line breaks stay unchanged. Comments and C# blocks don't write output, but the line breaks around them do. Trim markers such as `[[- model.Name -]]` remove adjacent whitespace.
+Output (blank lines omitted):
+```html
+<h1>Hello, Ada &amp; Grace!</h1>
+<p>Welcome!</p>
+```
+
+> [!NOTE]
+> The string `Ada & Grace` is rendered as `Ada &amp; Grace` because variable output is HTML-encoded to protect against Cross-Site Scripting (XSS). Options exist of course to customize or disable this behavior.
 
 ## Rendering and options
 
-Each template generates a `TextTemplate` class for `TextWriter` and a `Utf8Template` class for `IBufferWriter<byte>`. The UTF-8 class also has `RenderAsync` for `PipeWriter`, including ASP.NET Core's `HttpResponse.BodyWriter`. Set `#generate Text` or `#generate Utf8` to generate just one class.
+Each template generates a `*TextTemplate` class for `TextWriter` and a `*Utf8Template` class for `IBufferWriter<byte>`. The UTF-8 class also has `RenderAsync` for easy `PipeWriter` usage, including ASP.NET Core's `HttpResponse.BodyWriter`.
 
-Use `Default` for a shared instance, or pass options to the constructor:
+Use the static `Default` for a shared instance, or pass options to the constructor:
 
 ```csharp
 var email = new GreetingTextTemplate(new TemplateOptions { Encoder = null });
@@ -69,7 +77,9 @@ var german = new GreetingTextTemplate(new TemplateOptions
 });
 ```
 
-`TemplateOptions.Encoder` starts as `HtmlEncoder.Default`; `null` turns encoding off. `TemplateOptions.Culture` starts as `CultureInfo.InvariantCulture`. `TemplateOptions.NullVariable` controls what a null value writes; `null` writes nothing.
+- `TemplateOptions.Encoder` controls the encoder to use for text output; the default is `HtmlEncoder.Default`; `null` turns encoding off.
+- `TemplateOptions.Culture` controls the culture used when the renderer is converting objects to string; the default is `CultureInfo.InvariantCulture`.
+- `TemplateOptions.NullVariable` controls what is rendered when a variable evaluates to `null`; the default is nothing.
 
 ## Samples
 
@@ -85,11 +95,12 @@ Both [samples](https://github.com/SlusserLabs/AnglePlates/tree/main/samples) are
 - [Diagnostics](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/diagnostics.md): build errors and their fixes.
 - [Contributing](https://github.com/SlusserLabs/AnglePlates/blob/main/CONTRIBUTING.md) and [development](https://github.com/SlusserLabs/AnglePlates/blob/main/docs/development.md): build, test, and release commands.
 
-Templates are trusted C# source. Only compile templates you'd trust as part of your application. AnglePlates doesn't support T4 syntax, runtime compilation, or IntelliSense inside templates. It doesn't parse embedded C#: blocks end at their matching delimiter.
+> [!WARNING]
+> Templates are trusted C# source. Only compile templates you'd trust as part of your application.
 
 ## AI Disclosure
 
-This project was built with the help of Codex 5.6 Sol for code generation. As with any tool I use for coding, I am fully responsible for the end result and only put forward this project with full confidence that I have reviewed every line. Whether a line of code in this project was fully AI generated, AI assisted, or entirely from my own Muppet fingers on the keyboard, it is held to the same expectations.
+This project was built with the help of AI. As with any tool I use for coding, I am fully responsible for the end result and only put forward this project with full confidence that I have reviewed every line. Whether a line of code in this project was fully AI generated, AI assisted, or entirely from my own Muppet fingers on the keyboard, it is held to the same expectations.
 
 ## License
 

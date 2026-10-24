@@ -162,6 +162,7 @@ public sealed class TemplateGenerator : IIncrementalGenerator
 
         // Roslyn compares hint names ignoring case, so names that differ only by case are numbered too
         var hintNameCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         // AddTemplateSources reports SLAP005 for a public class that internal support types can't hold
         foreach (var source in duplicates.Sources.Where(source => !source.IsPublic || settings.HasPublicSupportTypes))
         {
@@ -178,6 +179,7 @@ public sealed class TemplateGenerator : IIncrementalGenerator
             .Select(group => group.Select(source => source.HintPrefix).OrderBy(prefix => prefix, StringComparer.Ordinal).First())
             .OrderBy(prefix => prefix, StringComparer.Ordinal)
             .ToArray();
+
         if (prefixes.Length == 0)
         {
             return new DuplicateTemplates([], []);
@@ -271,8 +273,7 @@ public sealed class TemplateGenerator : IIncrementalGenerator
         return new TemplateResult(template, diagnostics, sources, publicAccess);
     }
 
-    private static TemplateDiagnostic CreateDiagnostic(
-        DiagnosticDescriptor descriptor, string path, TextLineCollection lines, TextSpan span, params string[] arguments)
+    private static TemplateDiagnostic CreateDiagnostic(DiagnosticDescriptor descriptor, string path, TextLineCollection lines, TextSpan span, params string[] arguments)
     {
         return new TemplateDiagnostic(descriptor, path, span, lines.GetLinePositionSpan(span), new EquatableArray<string>(arguments));
     }

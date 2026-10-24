@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using SlusserLabs.AnglePlates.Samples.HelloWorldApi;
@@ -16,14 +17,8 @@ app.MapGet("/", async (HttpContext context) =>
         new ItemModel { Title = "Add an <html> template", Tags = new[] { "HTML", "encoding" } },
         new ItemModel { Title = "Stream the result" }
     };
-    int completedItemCount = 0;
-    foreach (var item in items)
-    {
-        if (item.IsComplete)
-        {
-            completedItemCount++;
-        }
-    }
+
+    int completedItemCount = items.Count(item => item.IsComplete);
 
     var model = new GreetingModel
     {

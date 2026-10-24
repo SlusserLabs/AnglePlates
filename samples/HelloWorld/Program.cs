@@ -13,8 +13,9 @@ internal static class Program
             Name = "Ada & Grace",
             ProjectName = "My first template",
             IsFirstVisit = true,
-            Tasks = new[] { "Write a model", "Add a template", "Render the result" }
+            Items = new[] { "Write a model", "Add a template", "Render the result" }
         };
+
         var template = new GreetingTextTemplate(new TemplateOptions { Encoder = null });
         template.Render(model, Console.Out);
     }

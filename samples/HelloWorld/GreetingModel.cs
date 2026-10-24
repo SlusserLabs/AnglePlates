@@ -11,5 +11,5 @@ internal sealed record GreetingModel
 
     public bool IsFirstVisit { get; init; }
 
-    public string[] Tasks { get; init; } = Array.Empty<string>();
+    public string[] Items { get; init; } = Array.Empty<string>();
 }

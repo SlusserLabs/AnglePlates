@@ -2,18 +2,44 @@
 
 AnglePlates compiles text templates into C# classes. Put templates in your project's `Templates` folder, build, and call their render methods. See the [quick start](../README.md#quick-start) for a complete first template and the [glossary](glossary.md) for template terminology.
 
+## Overview
+
+A full template looks like this, with all directives included, even the optional ones:
+
+```html
+#model String
+#type Greeting
+#namespace MyApp.Templates
+#generate Text
+#access internal
+#using System
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Greeting</title>
+</head>
+<body>
+    <h1>Hello, [[ model ]]!</h1>
+</body>
+</html>
+```
+
+This template takes a string as its model and generates `MyApp.Templates.GreetingTextTemplate`. Only `#model` is required; the other directives configure generation and imports.
+
 ## Directives
 
 Directives occupy consecutive lines at the top of the file. Names are case-sensitive. A blank line, unknown directive, or ordinary text starts the body; everything after it is template content. Directive lines don't reach the output.
 
-| Directive | Value and default |
-| --- | --- |
-| `#model` | Required C# model type. Fully qualify it or add a `#using`. |
-| `#type` | Class name prefix. Omit it to derive the prefix from the file name. |
-| `#namespace` | Namespace. Omit it to use `RootNamespace` plus the template's folders. |
-| `#generate` | `Text` or `Utf8`, case-insensitively. Omit it to generate both. |
-| `#access` | `public` or `internal`, case-insensitively. Omit it for `internal`. |
-| `#using` | A C# import. May repeat; all other directives may appear once. |
+| Directive | Required | Value and default |
+| --- | --- | --- |
+| `#model` | Yes | C# model type. Fully qualify it or add a `#using`. |
+| `#type` | No | Class name prefix. Defaults to a prefix derived from the file name. |
+| `#namespace` | No | Namespace. Defaults to `RootNamespace` plus the template's folders. |
+| `#generate` | No | `Text` or `Utf8`, case-insensitively. Defaults to both. |
+| `#access` | No | `public` or `internal`, case-insensitively. Defaults to `internal`. |
+| `#using` | No | A C# import. May repeat; all other directives may appear once. |
 
 Directive values can't be blank. AnglePlates checks its own choices (`#generate` and `#access`); the C# compiler checks names, types, and imports. Unknown directive names aren't spellchecked. A misspelled `#model` can produce a missing-model error or leave a discovered file without any recognized directives.
 
@@ -21,42 +47,57 @@ The file name before its first dot supplies `#type`: split on hyphens, underscor
 
 ## Syntax
 
-| Syntax | What it does |
-| --- | --- |
-| `[[ model.Title ]]` | Converts a C# expression to text, encodes it, and writes it. |
-| `[% foreach (var item in model.Items) { %]` | Copies C# into each render method, for loops, conditions, or locals. |
-| `[* comment *]` | Writes nothing. |
-| `[% WriteRaw(model.Html, writer); %]` | Writes a string without encoding. |
+Behold the simplicity of the syntax:
 
-The model is available as `model` or `Model`. C# blocks can call `Write(value, writer)` to encode a value. Don't reuse `model`, `Model`, `writer`, or `cancellationToken` as local names.
+| Name | Syntax | What it does |
+| --- | --- | --- |
+| Comment | `[* comment *]` | Writes nothing. |
+| Variable | `[[ model.Title ]]` | Converts a C# expression to text, encodes it, and writes it. |
+| Block | `[% foreach (var item in model.Items) { %]` | Copies C# into each render method, for loops, conditions, or locals. |
 
-Prepare data and calculations in your application and pass the results through the model. Keep template C# focused on presentation: choosing markup, looping over prepared items, and rendering child templates. For example, calculate a completed-item count in the request handler, then output that model property in the template.
+### Comments
 
-C# blocks are copied as written. Each piece of literal text and each C# variable becomes its own write statement; comments and empty blocks don't join neighboring text. Use braces around loops and conditional bodies that contain template output.
+I think you can figure out how this one works.
 
-Blocks end at the first matching closer, even inside C# strings or comments. When an expression contains `]]`, use more brackets: `[[[ grid[row[0]] ]]]`. Variables allow two to four brackets; C# blocks and comments allow one to four. A C# block containing `%]` can use `[[% ... %]]`.
+### Variables
 
-<!-- sample: Templates/Readme/levels.html -->
+The model variable is available as `model` or `Model` (PascalCase). Variable output is encoded by default according to `TemplateOptions.Encoder`; see [Encoding](#encoding). If you need the same encoding behavior from a C# block, you can call the underlying method exposed by the template using `Write(value, writer)`.
+
+It's recommended that you prepare data and calculations in your application and pass the results through the model. Keep template C# focused on presentation: choosing markup, looping over prepared items, and rendering child templates. For example, calculate a completed-item count in the request handler, then output that model property in the template.
+
+> [!IMPORTANT]
+> Don't reuse `model`, `Model`, `writer`, or `cancellationToken` as local names.
+
+### Blocks
+
+C# blocks are copied as written. Each piece of literal text and each C# variable becomes its own write statement; comments and empty blocks don't join neighboring text. Use braces around loops and conditional bodies that contain template output. For example, `[% foreach (var item in model.Items) { %]` needs a later `[% } %]` block to close the loop.
+
+### Escaping
+
+Blocks end at the first matching closer (i.e. `*]`, `]]`, `%]`), even when those closers appear as part of the C# code. Instead of using an escape character, AnglePlates lets you add brackets at the beginning and end of a sequence to avoid collisions like `[[[ grid[row[0]] ]]]`.
+
+Bracket levels go up to four. Extra opening brackets remain literal text.
+
+These examples are functionally identical:
+
 ```text
-#model string
-[[% var closer = "%]"; %]]<p>[[[ model[0..1] ]]] is the first letter of [[ model ]].</p>
-<p>A level-2 block ends at [[ closer ]].</p>
+[[[[ model.Title ]]]]
+[[[% foreach (var item in model.Items) { %]]]
+```
+```text
+[[ model.Title ]]
+[% foreach (var item in model.Items) { %]
 ```
 
-With model `"Ada"`, this writes:
+To write a literal opener, use a C# expression such as `[[ "[[" ]]`. Ordinary text, including line endings, is preserved. Use `-text` in `.gitattributes` for template files whose exact bytes matter.
 
-```html
-<p>A is the first letter of Ada.</p>
-<p>A level-2 block ends at %].</p>
-```
-
-There are no backslash escapes. To write a literal opener, use a C# expression such as `[[ "[[" ]]`. Ordinary text, including line endings, is preserved. Use `-text` in `.gitattributes` for template files whose exact bytes matter.
+### Whitespace control
 
 Put `-` right after an opener or before a closer to trim adjacent literal spaces, tabs, and line breaks: `[[- model.Title -]]`. This works for variables, code, and comments. Leave a space around a C# minus sign or decrement so it isn't taken as a trim marker: `[[ -1 ]]` or `[[ count-- ]]`.
 
 ## Rendering
 
-Compiled classes are `sealed partial`. A template named `Greeting` produces these methods:
+Compiled classes are `sealed partial`. By default, a template named `Greeting` produces these methods:
 
 | Class | Method |
 | --- | --- |
@@ -64,7 +105,7 @@ Compiled classes are `sealed partial`. A template named `Greeting` produces thes
 | `GreetingUtf8Template` | `Render(model, IBufferWriter<byte>)` |
 | `GreetingUtf8Template` | `RenderAsync(model, PipeWriter, CancellationToken)` |
 
-`Default` is a shared instance created with `new TemplateOptions()`. The constructor accepts your options. `RenderToString(model)` is an extension method for text templates; add `using SlusserLabs.AnglePlates;`. It buffers the output, so use `Render` when you already have a writer.
+`Default` is a shared instance created with `new TemplateOptions()`. To override options, use the constructor instead of the shared instance. `RenderToString(model)` in the `SlusserLabs.AnglePlates` namespace is an extension method for simple string output.
 
 Synchronous rendering doesn't flush or dispose the writer. `RenderAsync` flushes as output grows, checks cancellation at the first write after each C# block, and flushes once at the end. It doesn't complete the pipe. Cancellation or a completed pipe reader stops rendering with `OperationCanceledException`. Exceptions from your C# or writer propagate.
 
@@ -93,7 +134,9 @@ Strings keep their text. Other values convert through `IConvertible`, then `IFor
 
 Generated render methods hold no state between calls. Shared instances require thread-safe encoders, read-only cultures, and thread-safe members in your partial classes.
 
-### HTML encoding and context
+### Encoding
+
+Any class derived from `System.Text.Encodings.Web.TextEncoder` is supported by the `TemplateOptions.Encoder` property. Encoders shipped with .NET: [HtmlEncoder](https://learn.microsoft.com/en-us/dotnet/api/system.text.encodings.web.htmlencoder), [JavaScriptEncoder](https://learn.microsoft.com/en-us/dotnet/api/system.text.encodings.web.javascriptencoder), [UrlEncoder](https://learn.microsoft.com/en-us/dotnet/api/system.text.encodings.web.urlencoder).
 
 The default `HtmlEncoder.Default` encodes model values for HTML text and quoted attribute values, such as `<p>[[ model.Name ]]</p>` and `<input value="[[ model.Name ]]">`. Always quote attribute values. Pass the original text to the template; pre-encoded text gets encoded again.
 
@@ -101,13 +144,24 @@ HTML encoding doesn't validate URLs. For example, `<a href="[[ model.Url ]]">` s
 
 Keep model values out of JavaScript, CSS, and event-handler attributes such as `onclick`. HTML encoding doesn't make values safe in those contexts. To pass text to JavaScript, put it in a quoted `data-*` attribute, read it through `element.dataset`, and use `textContent` when displaying it. See ASP.NET Core's [XSS guidance](https://learn.microsoft.com/aspnet/core/security/cross-site-scripting) for more context.
 
-Use `WriteRaw` only for trusted HTML. Setting `TemplateOptions.Encoder = null` disables encoding for the whole template instance; reserve that for plain text or other output where you've handled encoding yourself.
+### Escape hatches
+
+The templates have dedicated syntax for outputting variables, `[[ model.Title ]]`, but a C# block can also be used for writing directly to the output using the protected `Write(value, writer)` and `WriteRaw(value, writer)` methods. The `Write` method passes values through the encoding (HTML by default) while `WriteRaw` bypasses encoding.
+
+A common use case for calling these directly is when you want to bypass encoding for a simple output without changing the behavior of encoding for the whole template. In this example, the HTML output would not be encoded:
+
+```html
+<p>Writes a string without encoding.</p>
+[% WriteRaw(model.Html, writer); %]
+```
+
+> [!WARNING]
+> Use `WriteRaw` only for trusted HTML. Setting `TemplateOptions.Encoder = null` disables encoding for the whole template instance; reserve that for plain text or other output where you've handled encoding yourself.
 
 ## Child templates
 
 A C# block can render another template into the same writer. Start with `Templates/order-line.html`:
 
-<!-- sample: Templates/Readme/order-line.html -->
 ```text
 #generate Text
 #type OrderLine
@@ -118,7 +172,6 @@ A C# block can render another template into the same writer. Start with `Templat
 
 Then `Templates/order.html`:
 
-<!-- sample: Templates/Readme/order.html -->
 ```text
 #generate Text
 #type Order
@@ -126,10 +179,13 @@ Then `Templates/order.html`:
 #namespace MyApp.Templates
 <h1>Order [[ model.Number ]]</h1>
 <ul>
-[% var lineTemplate = new OrderLineTextTemplate(Options); -%]
-[% foreach (var line in model.Lines) { -%]
-[% lineTemplate.Render(line, writer); -%]
-[% } -%]
+[%
+var lineTemplate = new OrderLineTextTemplate(Options);
+foreach (var line in model.Lines)
+{
+    lineTemplate.Render(line, writer);
+}
+-%]
 </ul>
 ```
 

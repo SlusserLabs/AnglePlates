@@ -28,8 +28,7 @@ internal static class TemplatePath
         var projectSegments = normalizedProjectDir.Split('/');
         var rootLength = isUnc ? Math.Min(4, projectSegments.Length) : 1;
         var common = 0;
-        while (common < projectSegments.Length && common < pathSegments.Length - 1
-            && string.Equals(pathSegments[common], projectSegments[common], comparison))
+        while (common < projectSegments.Length && common < pathSegments.Length - 1 && string.Equals(pathSegments[common], projectSegments[common], comparison))
         {
             common++;
         }

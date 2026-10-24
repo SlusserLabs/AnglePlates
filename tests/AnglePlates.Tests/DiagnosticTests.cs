@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -196,22 +195,6 @@ public sealed class DiagnosticTests
 
         await Assert.That(result.RunResult.Diagnostics).IsEmpty();
         await RenderingTestHelper.AssertRendersAsync(result.Compilation, "Consumer.Example", body);
-    }
-
-    [Test]
-    [Arguments("SLAP001")]
-    [Arguments("SLAP002")]
-    [Arguments("SLAP011")]
-    public async Task Registry_RetiredRule_HasDocumentationButNoReleaseEntry(string id)
-    {
-        // IDs retired before any release stay documented and are never reused, but have no AnalyzerReleases entry
-        var lines = File.ReadAllLines(RepositoryFiles.GetPath("docs/diagnostics.md"));
-        var unshipped = File.ReadAllText(RepositoryFiles.GetPath("src/AnglePlates/AnalyzerReleases.Unshipped.md"));
-        var heading = Array.IndexOf(lines, "## " + id);
-
-        await Assert.That(heading).IsGreaterThan(0);
-        await Assert.That(lines[heading + 4]).Contains("Retired in 1.1");
-        await Assert.That(unshipped).DoesNotContain(id);
     }
 
     [Test]

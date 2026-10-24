@@ -20,10 +20,9 @@ AnglePlates is a small compile-time C# template engine published as `SlusserLabs
   - `/docs` for guides
   - `/humanizer` for human-facing prose and comments.
 - Follow `.editorconfig`, preserve template fixture bytes, and avoid unrelated changes.
-- Use `uv run python` for Python commands.
 - Edit generator sources, not files under `obj`.
 - Review snapshot diffs manually; never automatically accept them.
-- Test consumer behavior and compiler diagnostics, not internal structure through reflection. Limit runtime reflection to binding public entry points in dynamically compiled test consumers.
+- Test consumer behavior and compiler diagnostics, not internal structure through reflection.
 - For code changes, restore and build `AnglePlates.slnx`, run relevant tests, and run the sample when generation changes. For packaging changes, pack and run `scripts/validate-package.ps1`; its Native AOT check needs the native toolchain.
 - Coverage reports help find missing tests; no percentage is a release requirement.
 - Keep package smoke tests outside the solution and validate them from an isolated folder against the packed package.
@@ -38,7 +37,7 @@ AnglePlates is a small compile-time C# template engine published as `SlusserLabs
 
 ## Writing voice
 
-> AnglePlates is like T4 templates for modern .NET. Give it a template and any model you want to render, and it generates the C# classes at compile time. The compiled templates write straight to a `TextWriter` or UTF-8 buffer, so there is no runtime package to drag along. That's it! You can make it fancier, but you don't have to.
+> AnglePlates is like T4 templates for modern .NET. Give it a template and any model you want to render, and it generates the C# classes at compile time. The compiled templates write straight to a `TextWriter` or UTF-8 buffer, so there is no runtime package to drag along. That's it!
 
 Use conversational American English, contractions, concrete examples, and ordinary verbs. Name the setting that changes a documented default.
 

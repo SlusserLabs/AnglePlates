@@ -2,19 +2,11 @@
 
 AnglePlates reports build errors for template structure and project settings. C# mistakes are left to the compiler. Errors in C# variables and blocks map back to the template; invalid directive values that are copied into C# can point at the generated file.
 
+Invalid C# class names and namespaces are left to the compiler. Use `#type` or `#namespace` to override derived names. Empty directive values and file names that produce an empty class name report `SLAP007`.
+
+Unknown directives start ordinary body text. A missing `#model` reports `SLAP003`.
+
 An error skips its template. Invalid project settings (`SLAP009`) or an old C# version (`SLAP010`) stop all generation.
-
-## SLAP001
-
-**Template class name can't be derived**
-
-Retired in 1.1. Invalid C# names are compiler errors. Set `#type` to choose another name.
-
-## SLAP002
-
-**Template namespace can't be derived**
-
-Retired in 1.1. Invalid C# namespaces are compiler errors. Set `#namespace` to choose another namespace.
 
 ## SLAP003
 
@@ -63,9 +55,3 @@ Set `AnglePlateBaseAccessModifier` to `public` or `internal`.
 **C# version too old**
 
 Use C# 11 or later. Set `LangVersion` to `11` or a newer supported version.
-
-## SLAP011
-
-**Possible misspelled directive**
-
-Retired in 1.1. Unknown directives are ordinary body text. A missing `#model` still reports `SLAP003`.

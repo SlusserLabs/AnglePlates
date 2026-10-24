@@ -12,11 +12,11 @@ Welcome back! Here's what's next.
 
 [% } -%]
 
-[% if (model.Tasks.Length > 0) { -%]
-## Next steps ([[ model.Tasks.Length ]])
+[% if (model.Items.Length > 0) { -%]
+## Next steps ([[ model.Items.Length ]])
 
-[% for (int i = 0; i < model.Tasks.Length; i++) { -%]
-[[ i + 1 ]]. [[ model.Tasks[i] ]]
+[% for (int i = 0; i < model.Items.Length; i++) { -%]
+[[ i + 1 ]]. [[ model.Items[i] ]]
 [% } -%]
 [% } else { -%]
 You're all caught up!

@@ -48,11 +48,11 @@ internal static class TemplateParser
 
     private static (DirectiveKind Kind, string Prefix)[] CreateDirectivePrefixes()
     {
-        var prefixes = new (DirectiveKind Kind, string Prefix)[DirectiveKindExtensions.All.Length];
+        var prefixes = new (DirectiveKind Kind, string Prefix)[DirectiveKindHelper.All.Length];
         for (int i = 0; i < prefixes.Length; i++)
         {
-            var kind = DirectiveKindExtensions.All[i];
-            prefixes[i] = (kind, TemplateSyntax.DirectivePrefix + kind.GetName());
+            var kind = DirectiveKindHelper.All[i];
+            prefixes[i] = (kind, TemplateSyntax.DirectivePrefix + DirectiveKindHelper.GetName(kind));
         }
 
         return prefixes;

@@ -7,8 +7,7 @@ internal static class UnexpectedValue
 {
     // Every switch handles every value of its enum, so no test can reach a call to this. These calls are the one
     // accepted gap in generator coverage, and routing them through here keeps the gap in one place.
-    public static ArgumentOutOfRangeException Exception<TEnum>(TEnum value, string parameterName)
-        where TEnum : struct, Enum
+    public static ArgumentOutOfRangeException Exception<TEnum>(TEnum value, string parameterName) where TEnum : struct, Enum
     {
         return new ArgumentOutOfRangeException(parameterName, value, $"Unexpected {typeof(TEnum).Name} value.");
     }

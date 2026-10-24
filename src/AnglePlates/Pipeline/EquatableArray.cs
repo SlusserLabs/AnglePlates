@@ -6,8 +6,7 @@ namespace SlusserLabs.AnglePlates;
 
 // An array compared by its elements, so pipeline values holding one can be cached between generator runs. It keeps the
 // array it's given without copying, so the caller hands over ownership and must not change the array afterward.
-internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IReadOnlyList<T>
-    where T : IEquatable<T>
+internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IReadOnlyList<T> where T : IEquatable<T>
 {
     private readonly T[]? _items;
 

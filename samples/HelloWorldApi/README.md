@@ -16,4 +16,4 @@ Open [the greeting page](http://localhost:5080/?name=Ada%20%26%20Grace&message=%
 
 The child receives the parent's options and owns the indentation of each item card inside the list. Whitespace controls keep template control lines out of the HTML output.
 
-See [child templates](../../docs/templates.md#child-templates), [rendering](../../docs/templates.md#rendering), and [HTML encoding and context](../../docs/templates.md#html-encoding-and-context) in the reference, or the [samples overview](../README.md) for the Markdown console sample.
+See [child templates](../../docs/templates.md#child-templates), [rendering](../../docs/templates.md#rendering), and [Encoding](../../docs/templates.md#encoding) in the reference, or the [samples overview](../README.md) for the Markdown console sample.

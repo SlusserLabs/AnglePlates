@@ -1,6 +1,5 @@
 #model SlusserLabs.AnglePlates.Samples.HelloWorldApi.GreetingModel
 #generate Utf8
-[% var itemTemplate = new ItemCardUtf8Template(Options); -%]
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -17,7 +16,7 @@
         <p>[[ model.CompletedItemCount ]] of [[ model.Items.Length ]] items complete.</p>
         <ul class="items">
             [%- foreach (var item in model.Items) { %]
-                [%- itemTemplate.Render(item, writer); %]
+                [%- model.ItemTemplate.Render(item, writer); %]
             [%- } %]
         </ul>
         [%- } else { %]

@@ -72,7 +72,13 @@ internal sealed class DirectiveReader
         }
 
         return new TemplateDirectives(
-            reader._type!, reader._namespace!, reader._modelType!, reader._generationTarget, reader._accessModifier, reader._accessSpan, [.. reader._usings]);
+            reader._type!,
+            reader._namespace!,
+            reader._modelType!,
+            reader._generationTarget,
+            reader._accessModifier,
+            reader._accessSpan,
+            [.. reader._usings]);
     }
 
     private void ReadDirective(DirectiveToken directive)
@@ -82,7 +88,7 @@ internal sealed class DirectiveReader
         // Every #using is kept in order; other directives may appear only once
         if (directive.Kind != DirectiveKind.Using && !_seen.Add(directive.Kind))
         {
-            var name = directive.Kind.GetName();
+            var name = DirectiveKindHelper.GetName(directive.Kind);
             _errors.Add(new TemplateError(DiagnosticDescriptors.DuplicateDirective, TextSpan.FromBounds(directive.Name.Start, directive.Value.End), $"#{name}"));
             return;
         }
@@ -190,7 +196,7 @@ internal sealed class DirectiveReader
         else
         {
             errors.Add(new TemplateError(
-                DiagnosticDescriptors.InvalidDirectiveValue, FirstLine(), DirectiveKind.Type.GetName(), type, "a file name that gives a class name; add #type"));
+                DiagnosticDescriptors.InvalidDirectiveValue, FirstLine(), DirectiveKindHelper.GetName(DirectiveKind.Type), type, "a file name that gives a class name; add #type"));
         }
     }
 
@@ -212,7 +218,7 @@ internal sealed class DirectiveReader
     private void AddInvalidValue(DirectiveToken directive, string value, string expected)
     {
         var span = value.Length == 0 ? directive.Name : directive.Value;
-        _errors.Add(new TemplateError(DiagnosticDescriptors.InvalidDirectiveValue, span, directive.Kind.GetName(), value, expected));
+        _errors.Add(new TemplateError(DiagnosticDescriptors.InvalidDirectiveValue, span, DirectiveKindHelper.GetName(directive.Kind), value, expected));
     }
 
     // Reports a blank value at the directive name and returns true, so the caller skips the assignment

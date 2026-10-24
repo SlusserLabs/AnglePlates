@@ -5,6 +5,7 @@ namespace SlusserLabs.AnglePlates;
 // Every diagnostic the generator reports, in ID order; docs/diagnostics.md has a section for each ID
 internal static class DiagnosticDescriptors
 {
+    // SLAP001, SLAP002, and SLAP011 are deprecated/reserved and must not be reused
     private const string _category = "SlusserLabs.AnglePlates";
 
     public static readonly DiagnosticDescriptor MissingModel = Create(

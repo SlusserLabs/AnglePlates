@@ -1,7 +1,7 @@
 namespace SlusserLabs.AnglePlates;
 
 // Lists the directives in the order the parser tries them and spells each one's name
-internal static class DirectiveKindExtensions
+internal static class DirectiveKindHelper
 {
     public static readonly DirectiveKind[] All =
     [
@@ -13,7 +13,7 @@ internal static class DirectiveKindExtensions
         DirectiveKind.Using
     ];
 
-    public static string GetName(this DirectiveKind kind)
+    public static string GetName(DirectiveKind kind)
     {
         return kind switch
         {
