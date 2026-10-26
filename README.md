@@ -6,6 +6,9 @@ AnglePlates is a .NET source generator for rendering templates. Think of it like
 
 Templates are created at compile time, do not require reflection, are AOT friendly, yield excellent performance, and you get to use the C# skills you already know instead of learning a specific template language. The compiled templates write synchronously to a `TextWriter` or an `IBufferWriter<byte>`. For asynchronous UTF-8 streaming, render to a `PipeWriter`, such as an HTTP response body.
 
+> [!TIP]
+> HTML templates are the most common use-case and is assumed throughout the project documentation and default options, but AnglePlates can be used to template any kind of text.
+
 ## Quick start
 
 Add the package:
